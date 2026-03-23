@@ -64,8 +64,18 @@ async function handleConnection(ws: WebSocket, req: IncomingMessage): Promise<vo
 }
 
 async function resolveSession(req: IncomingMessage): Promise<AuthSession | null> {
-  const authHeader = req.headers["authorization"];
+  let authHeader = req.headers["authorization"];
   const cookieHeader = req.headers["cookie"];
+
+  if (!authHeader) {
+    const protocols = (req.headers["sec-websocket-protocol"] ?? "") as string;
+    for (const proto of protocols.split(",").map((s) => s.trim())) {
+      if (proto.startsWith("bearer-")) {
+        authHeader = `Bearer ${proto.slice("bearer-".length)}`;
+        break;
+      }
+    }
+  }
 
   const fakeReq = {
     headers: { authorization: authHeader, cookie: cookieHeader },
