@@ -63,9 +63,14 @@ export function playDiamondToMine(
   }
 
   const player = state.players[playerId]!;
+  if (player.hasPlayedDiamondThisTurn) {
+    return err("You can only take one Diamond action per turn");
+  }
+
   const updated: PlayerState = {
     ...removeFromHand(player, cardId),
     mine: [...player.mine, cardId],
+    hasPlayedDiamondThisTurn: true,
   };
 
   return ok({
@@ -91,7 +96,14 @@ export function discardDiamondToDraw(
   }
 
   const player = state.players[playerId]!;
-  const withoutCard: PlayerState = removeFromHand(player, cardId);
+  if (player.hasPlayedDiamondThisTurn) {
+    return err("You can only take one Diamond action per turn");
+  }
+
+  const withoutCard: PlayerState = {
+    ...removeFromHand(player, cardId),
+    hasPlayedDiamondThisTurn: true,
+  };
 
   const afterDiscard: GameState = {
     ...state,
@@ -119,8 +131,12 @@ export function discardDiamondForBoost(
   }
 
   const player = state.players[playerId]!;
+  if (player.hasPlayedDiamondThisTurn) {
+    return err("You can only take one Diamond action per turn");
+  }
+
   const withoutCard = removeFromHand(player, cardId);
-  const boosted = addTempBoost(withoutCard, card.pipValue);
+  const boosted = addTempBoost({ ...withoutCard, hasPlayedDiamondThisTurn: true }, card.pipValue);
 
   return ok({
     ...state,

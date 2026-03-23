@@ -15,6 +15,7 @@ export function makePlayer(
     court: [],
     mine: [],
     vault: { tempBoost: 0, spent: 0 },
+    hasPlayedDiamondThisTurn: false,
     ...overrides,
   };
 }

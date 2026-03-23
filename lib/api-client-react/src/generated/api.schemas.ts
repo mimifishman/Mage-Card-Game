@@ -165,6 +165,8 @@ export interface PlayerGameView {
   turnOrder: string[];
   players: PlayerGameViewPlayers;
   myHand: string[];
+  /** Whether the current viewer has already taken a Diamond action this turn */
+  myDiamondPlayed: boolean;
   /** Number of cards remaining in the deck */
   deck: number;
   abyss: string[];

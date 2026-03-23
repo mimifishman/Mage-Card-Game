@@ -614,7 +614,7 @@ components:
           nullable: true
     PlayerGameView:
       type: object
-      required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, deck, abyss, attacks]
+      required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, myDiamondPlayed, deck, abyss, attacks]
       properties:
         matchId:
           type: string
@@ -637,6 +637,9 @@ components:
           type: array
           items:
             type: string
+        myDiamondPlayed:
+          type: boolean
+          description: Whether the current viewer has already taken a Diamond action this turn
         deck:
           type: integer
           description: Number of cards remaining in the deck

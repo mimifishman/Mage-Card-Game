@@ -23,6 +23,7 @@ export interface PlayerGameView {
   turnOrder: string[];
   players: Record<string, PublicPlayerState>;
   myHand: string[];
+  myDiamondPlayed: boolean;
   deck: number;
   abyss: string[];
   attacks: AttackDeclaration[];
@@ -61,6 +62,7 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
     turnOrder: state.turnOrder,
     players,
     myHand,
+    myDiamondPlayed: myPlayer?.hasPlayedDiamondThisTurn ?? false,
     deck: state.deck.length,
     abyss: state.abyss,
     attacks: state.attacks,

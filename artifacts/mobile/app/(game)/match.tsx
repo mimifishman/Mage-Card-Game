@@ -60,11 +60,9 @@ export default function MatchScreen() {
   const [selectedTargetRoyalId, setSelectedTargetRoyalId] = useState<string | null>(null);
   const [pendingAttackerRoyalId, setPendingAttackerRoyalId] = useState<string | null>(null);
   const [selectingAttacker, setSelectingAttacker] = useState(false);
-  const [hasTakenDiamondAction, setHasTakenDiamondAction] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnecting, setWsReconnecting] = useState(false);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
-  const lastActionTypeRef = useRef<string | null>(null);
 
   const pulseOpacity = useSharedValue(1);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
@@ -104,11 +102,6 @@ export default function MatchScreen() {
     }
   }, [matchData]);
 
-  // Reset diamond gating when the active player or turn changes
-  useEffect(() => {
-    setHasTakenDiamondAction(false);
-  }, [gameState?.activePlayerId, gameState?.turnNumber]);
-
   const { mutate: submitAction, isPending: isSubmitting } = useSubmitGameAction({
     mutation: {
       onSuccess: (data) => {
@@ -117,11 +110,6 @@ export default function MatchScreen() {
         setSelectedTargetRoyalId(null);
         setPendingAttackerRoyalId(null);
         setSelectingAttacker(false);
-        const diamondActions = ["play_diamond_to_mine", "discard_diamond_to_draw", "discard_diamond_for_boost"];
-        if (lastActionTypeRef.current && diamondActions.includes(lastActionTypeRef.current)) {
-          setHasTakenDiamondAction(true);
-        }
-        lastActionTypeRef.current = null;
         if (data.winnerUserId) {
           router.replace({
             pathname: "/(game)/game-over",
@@ -195,7 +183,6 @@ export default function MatchScreen() {
             cardId: params.cardId,
           };
       }
-      lastActionTypeRef.current = body.type;
       submitAction({ matchId, data: body });
     },
     [matchId, submitAction],
@@ -336,6 +323,21 @@ export default function MatchScreen() {
 
   const handleOwnRoyalPress = (royalId: string) => {
     if (!isMyTurn || !inMainPhase) return;
+
+    if (selectedCardId) {
+      const card = parseCardId(selectedCardId);
+      if (card.suit === "H" && vault >= card.vaultCost) {
+        handleAction({ cardId: selectedCardId, action: "attach_heart", targetRoyalId: royalId });
+        setSelectedCardId(null);
+        return;
+      }
+      if (card.suit === "S" && vault >= card.vaultCost) {
+        handleAction({ cardId: selectedCardId, action: "attach_spade", targetRoyalId: royalId });
+        setSelectedCardId(null);
+        return;
+      }
+    }
+
     setSelectedTargetRoyalId(royalId === selectedTargetRoyalId ? null : royalId);
   };
 
@@ -619,7 +621,7 @@ export default function MatchScreen() {
           myPlayerId={myId}
           myVault={vault}
           isPending={isSubmitting}
-          hasTakenDiamondAction={hasTakenDiamondAction}
+          hasTakenDiamondAction={gameState.myDiamondPlayed}
           onClose={() => setSelectedCardId(null)}
           onAction={handleAction}
         />

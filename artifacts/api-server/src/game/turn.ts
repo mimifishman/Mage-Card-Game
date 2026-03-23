@@ -42,7 +42,8 @@ export function advanceTurn(state: GameState): Result<GameState> {
   const nextIdx = (currentIdx + 1) % active.length;
   const nextPlayerId = active[nextIdx]!;
 
-  const nextPlayer = resetVaultForTurn(state.players[nextPlayerId]!);
+  const nextPlayerBase = resetVaultForTurn(state.players[nextPlayerId]!);
+  const nextPlayer = { ...nextPlayerBase, hasPlayedDiamondThisTurn: false };
 
   return ok({
     ...state,
