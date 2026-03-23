@@ -181,6 +181,23 @@ export async function finishMatch(matchId: string, winnerUserId: string): Promis
     .where(eq(matchesTable.id, matchId));
 }
 
+export async function resetMatchForRematch(matchId: string): Promise<void> {
+  await db
+    .update(matchesTable)
+    .set({
+      status: "waiting",
+      startedAt: null,
+      finishedAt: null,
+      winnerUserId: null,
+      currentTurnPlayerId: null,
+      turnNumber: undefined,
+    })
+    .where(eq(matchesTable.id, matchId));
+
+  await db.delete(gameStateTable).where(eq(gameStateTable.matchId, matchId));
+  await db.delete(gameActionsLogTable).where(eq(gameActionsLogTable.matchId, matchId));
+}
+
 export async function getActiveMatchForUser(userId: string): Promise<string | null> {
   const rows = await db
     .select({ matchId: matchPlayersTable.matchId })

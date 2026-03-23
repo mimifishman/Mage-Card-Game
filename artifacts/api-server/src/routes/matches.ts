@@ -11,6 +11,7 @@ import {
   loadEngineState,
   saveEngineState,
   finishMatch,
+  resetMatchForRematch,
   logAction,
 } from "../repositories/matchRepository";
 import { createInitialGameState, determineFirstPlayer, dealInitialHands } from "../game";
@@ -263,6 +264,38 @@ router.get("/:id/state", async (req: Request, res: Response) => {
   } catch (err) {
     req.log.error({ err }, "Failed to get match state");
     res.status(500).json({ error: "Failed to get match state" });
+  }
+});
+
+router.post("/:id/rematch", async (req: Request, res: Response) => {
+  const userId = req.user!.internalUserId;
+  const { id } = req.params as { id: string };
+
+  try {
+    const player = await isMatchPlayer(id, userId);
+    if (!player) {
+      res.status(403).json({ error: "You are not a participant in this match" });
+      return;
+    }
+
+    const data = await getMatchWithPlayers(id);
+    if (!data) {
+      res.status(404).json({ error: "Match not found" });
+      return;
+    }
+    if (data.match.status !== "finished") {
+      res.status(400).json({ error: "Match is not finished yet" });
+      return;
+    }
+
+    await resetMatchForRematch(id);
+
+    broadcastToMatch(id, { type: "rematch", matchId: id });
+
+    res.json({ ok: true, matchId: id });
+  } catch (err) {
+    req.log.error({ err }, "Failed to initiate rematch");
+    res.status(500).json({ error: "Failed to initiate rematch" });
   }
 });
 

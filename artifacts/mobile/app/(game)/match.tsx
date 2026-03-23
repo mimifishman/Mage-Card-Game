@@ -286,6 +286,11 @@ export default function MatchScreen() {
               pathname: "/(game)/game-over",
               params: { matchId, winnerUserId: msg.winnerUserId ?? "" },
             });
+          } else if (msg.type === "rematch") {
+            router.replace({
+              pathname: "/(game)/waiting-room",
+              params: { matchId },
+            });
           }
         } catch (e) {
           console.warn("WS parse error:", e);

@@ -1152,3 +1152,82 @@ export function useGetMatchState<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Request a rematch (resets match to waiting state for all players)
+ */
+export const getRematchMatchUrl = (matchId: string) => {
+  return `/api/matches/${matchId}/rematch`;
+};
+
+export const rematchMatch = async (
+  matchId: string,
+  options?: RequestInit,
+): Promise<{ ok: boolean; matchId: string }> => {
+  return customFetch<{ ok: boolean; matchId: string }>(getRematchMatchUrl(matchId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify({}),
+  });
+};
+
+export const getRematchMatchMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rematchMatch>>,
+    TError,
+    { matchId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rematchMatch>>,
+  TError,
+  { matchId: string },
+  TContext
+> => {
+  const mutationKey = ["rematchMatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rematchMatch>>,
+    { matchId: string }
+  > = (props) => {
+    const { matchId } = props ?? {};
+    return rematchMatch(matchId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RematchMatchMutationResult = NonNullable<Awaited<ReturnType<typeof rematchMatch>>>;
+export type RematchMatchMutationError = ErrorType<ErrorEnvelope>;
+
+export const useRematchMatch = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rematchMatch>>,
+    TError,
+    { matchId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rematchMatch>>,
+  TError,
+  { matchId: string },
+  TContext
+> => {
+  return useMutation(getRematchMatchMutationOptions(options));
+};
