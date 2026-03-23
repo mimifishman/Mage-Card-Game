@@ -16,6 +16,7 @@ import {
   declareAttack,
   beginDeclareBlocks,
   declareBlock,
+  passBlock,
   resolveCombat,
   endTurn,
 } from "./index";
@@ -82,8 +83,11 @@ export function dispatchAction(
     case "declare_block":
       return declareBlock(state, playerId, action.blockerRoyalId, action.attackerRoyalId);
 
+    case "pass_block":
+      return passBlock(state, playerId, action.attackerRoyalId);
+
     case "resolve_combat":
-      return resolveCombat(state);
+      return resolveCombat(state, playerId);
 
     case "end_turn":
       return endTurn(state);

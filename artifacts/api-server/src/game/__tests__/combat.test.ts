@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { declareAttack, declareBlock, resolveCombat } from "../combat";
+import { declareAttack, declareBlock, passBlock, resolveCombat } from "../combat";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
 
@@ -175,7 +175,7 @@ describe("resolveCombat", () => {
         [P2]: makePlayer(P2, { life: 20 }),
       },
     });
-    const result = resolveCombat(state);
+    const result = resolveCombat(state, P1);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.players[P2]!.life).toBe(16);
@@ -202,7 +202,7 @@ describe("resolveCombat", () => {
         }),
       },
     });
-    const result = resolveCombat(state);
+    const result = resolveCombat(state, P1);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.players[P2]!.life).toBe(20);
@@ -232,11 +232,80 @@ describe("resolveCombat", () => {
         }),
       },
     });
-    const result = resolveCombat(state);
+    const result = resolveCombat(state, P1);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.abyss).toContain("JD");
     expect(result.value.abyss).toContain("3H");
     expect(result.value.abyss).toContain("2S");
+  });
+
+  it("rejects resolve_combat if not called by active player", () => {
+    const state = makeState({
+      phase: "declare_attacks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { life: 20 }),
+      },
+    });
+    const result = resolveCombat(state, P2);
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects resolve_combat in declare_blocks if any attack is undecided", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { life: 20 }),
+      },
+    });
+    const result = resolveCombat(state, P1);
+    expect(result.ok).toBe(false);
+  });
+
+  it("allows resolve_combat in declare_blocks when all attacks are passed", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, passed: true }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { life: 20 }),
+      },
+    });
+    const result = resolveCombat(state, P1);
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("passBlock", () => {
+  it("marks attack as passed", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("QS")] }),
+      },
+    });
+    const result = passBlock(state, P2, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.attacks[0]!.passed).toBe(true);
+  });
+
+  it("rejects pass if attack already has a blocker", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardId: "QS" }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("QS")] }),
+      },
+    });
+    const result = passBlock(state, P2, "KH");
+    expect(result.ok).toBe(false);
   });
 });

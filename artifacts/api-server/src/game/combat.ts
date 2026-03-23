@@ -122,6 +122,36 @@ export function declareBlock(
   return ok({ ...state, attacks: updatedAttacks });
 }
 
+export function passBlock(
+  state: GameState,
+  defenderPlayerId: string,
+  attackerCardId: CardId,
+): Result<GameState> {
+  if (state.phase !== "declare_blocks") {
+    return err(`Can only pass blocks during "declare_blocks" phase`);
+  }
+
+  const attackIdx = state.attacks.findIndex(
+    (a) => a.attackerCardId === attackerCardId && a.targetPlayerId === defenderPlayerId,
+  );
+  if (attackIdx === -1) {
+    return err(`No attack targeting you with attacker ${attackerCardId}`);
+  }
+
+  const attack = state.attacks[attackIdx]!;
+  if (attack.blockerCardId) {
+    return err(`Attack by ${attackerCardId} is already blocked`);
+  }
+  if (attack.passed) {
+    return err(`Attack by ${attackerCardId} already passed`);
+  }
+
+  const updatedAttacks = [...state.attacks];
+  updatedAttacks[attackIdx] = { ...attack, passed: true };
+
+  return ok({ ...state, attacks: updatedAttacks });
+}
+
 function applyDamageToRoyal(
   player: PlayerState,
   cardId: CardId,
@@ -152,9 +182,19 @@ function removeDeadRoyals(
   };
 }
 
-export function resolveCombat(state: GameState): Result<GameState> {
+export function resolveCombat(state: GameState, callerPlayerId: string): Result<GameState> {
   if (state.phase !== "declare_blocks" && state.phase !== "declare_attacks") {
     return err(`Cannot resolve combat during phase "${state.phase}"`);
+  }
+  if (state.activePlayerId !== callerPlayerId) {
+    return err("Only the active player can resolve combat");
+  }
+
+  if (state.phase === "declare_blocks") {
+    const undecided = state.attacks.filter((a) => !a.blockerCardId && !a.passed);
+    if (undecided.length > 0) {
+      return err("All defenders must block or pass before combat can be resolved");
+    }
   }
 
   let players = { ...state.players };

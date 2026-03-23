@@ -44,6 +44,6 @@ export { applyClub, applyClubToRoyal } from "./clubs";
 export { playJokerDestroyRoyal, playJokerDamagePlayer, playJoker } from "./joker";
 export type { JokerMode } from "./joker";
 
-export { beginDeclareBlocks, declareAttack, declareBlock, resolveCombat } from "./combat";
+export { beginDeclareBlocks, declareAttack, declareBlock, passBlock, resolveCombat } from "./combat";
 
 export { endTurn, eliminatePlayerIfNeeded, advanceTurn, isGameOver, getWinner } from "./turn";

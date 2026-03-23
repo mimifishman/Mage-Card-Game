@@ -141,6 +141,7 @@ export interface AttackDeclaration {
   attackerCardId: string;
   targetPlayerId: string;
   blockerCardId?: string | null;
+  passed?: boolean;
 }
 
 export type PlayerGameViewPhase =
@@ -194,6 +195,7 @@ export const GameActionRequestType = {
   declare_attack: "declare_attack",
   begin_declare_blocks: "begin_declare_blocks",
   declare_block: "declare_block",
+  pass_block: "pass_block",
   resolve_combat: "resolve_combat",
   end_turn: "end_turn",
 } as const;

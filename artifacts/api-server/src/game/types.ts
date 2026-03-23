@@ -56,6 +56,7 @@ export interface AttackDeclaration {
   attackerCardId: CardId;
   targetPlayerId: string;
   blockerCardId?: CardId;
+  passed?: boolean;
 }
 
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";

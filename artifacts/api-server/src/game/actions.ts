@@ -74,6 +74,11 @@ export const DeclareBlockActionSchema = z.object({
   attackerRoyalId: z.string(),
 });
 
+export const PassBlockActionSchema = z.object({
+  type: z.literal("pass_block"),
+  attackerRoyalId: z.string(),
+});
+
 export const ResolveCombatActionSchema = z.object({
   type: z.literal("resolve_combat"),
 });
@@ -96,6 +101,7 @@ export const GameActionSchema = z.discriminatedUnion("type", [
   DeclareAttackActionSchema,
   BeginDeclareBlocksActionSchema,
   DeclareBlockActionSchema,
+  PassBlockActionSchema,
   ResolveCombatActionSchema,
   EndTurnActionSchema,
 ]);

@@ -357,8 +357,11 @@ export default function MatchScreen() {
   // "Done Attacking" button: only valid in declare_attacks phase (after ≥1 attack declared)
   const canDoneAttacking = isMyTurn && inDeclareAttacks;
 
-  // "Resolve Combat" button: active player resolves after blocks are declared
-  const canResolveCombat = isMyTurn && inDeclareBlocks;
+  // "Resolve Combat" button: active player resolves only when all attacks are decided
+  const allAttacksDecided =
+    gameState.attacks.length > 0 &&
+    gameState.attacks.every((a) => !!a.blockerCardId || !!a.passed);
+  const canResolveCombat = isMyTurn && inDeclareBlocks && allAttacksDecided;
 
   // Royal can attack in main OR declare_attacks phase
   const inAttackPhase = inMainPhase || inDeclareAttacks;
@@ -715,9 +718,19 @@ export default function MatchScreen() {
         passedIds={blockingPassedIds}
         isSubmitting={isSubmitting}
         onBlock={handleBlock}
-        onPass={(attackerRoyalId) =>
-          setBlockingPassedIds((prev) => new Set([...prev, attackerRoyalId]))
-        }
+        onPass={(attackerRoyalId) => {
+          if (matchId) {
+            submitAction(
+              { matchId, data: { type: "pass_block", attackerRoyalId } },
+              {
+                onSuccess: (data) => {
+                  setGameState(data.state);
+                  setBlockingPassedIds((prev) => new Set([...prev, attackerRoyalId]));
+                },
+              },
+            );
+          }
+        }}
         onDismiss={() => setBlockingDismissed(true)}
       />
 

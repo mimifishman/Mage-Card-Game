@@ -44,12 +44,12 @@ export default function BlockingModal({
   );
 
   const currentAttack = incomingAttacks.find(
-    (a) => !a.blockerCardId && !passedIds.has(a.attackerCardId),
+    (a) => !a.blockerCardId && !a.passed && !passedIds.has(a.attackerCardId),
   );
 
   const allHandled = incomingAttacks.length > 0 &&
     incomingAttacks.every(
-      (a) => a.blockerCardId || passedIds.has(a.attackerCardId),
+      (a) => a.blockerCardId || a.passed || passedIds.has(a.attackerCardId),
     );
 
   if (!visible || incomingAttacks.length === 0) return null;
@@ -106,7 +106,7 @@ export default function BlockingModal({
                         styles.progressDot,
                         a.blockerCardId
                           ? styles.dotBlocked
-                          : passedIds.has(a.attackerCardId)
+                          : (a.passed || passedIds.has(a.attackerCardId))
                           ? styles.dotPassed
                           : a === currentAttack
                           ? styles.dotActive
