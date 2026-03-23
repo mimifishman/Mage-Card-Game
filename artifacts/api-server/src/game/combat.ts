@@ -2,6 +2,18 @@ import { effectiveAttack, effectiveHealth } from "./cards";
 import type { AttackDeclaration, CardId, GameState, PlayerState, Result, RoyalInCourt } from "./types";
 import { err, ok } from "./types";
 
+export function beginDeclareBlocks(state: GameState): Result<GameState> {
+  if (state.phase !== "declare_attacks") {
+    return err(
+      `Cannot begin block declarations from phase "${state.phase}". Must be "declare_attacks".`,
+    );
+  }
+  if (state.attacks.length === 0) {
+    return err("No attacks declared; cannot begin block declarations");
+  }
+  return ok({ ...state, phase: "declare_blocks" });
+}
+
 function activePlayers(state: GameState): string[] {
   return state.turnOrder.filter((id) => !state.players[id]?.isEliminated);
 }

@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { playDiamondToMine, discardDiamondToDraw, discardDiamondForBoost } from "../diamonds";
+import { calculateVaultFromMine } from "../vault";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 
 function stateWithHand(hand: string[], mine: string[] = [], deck: string[] = []) {
   return makeState({
     players: {
-      [P1]: makePlayer(P1, { hand, mine, vault: { base: 0, tempBoost: 0, spent: 0 } }),
+      [P1]: makePlayer(P1, { hand, mine, vault: { tempBoost: 0, spent: 0 } }),
       [P2]: makePlayer(P2),
     },
     deck,
@@ -20,7 +21,7 @@ describe("playDiamondToMine", () => {
     if (!result.ok) return;
     expect(result.value.players[P1]!.mine).toContain("7D");
     expect(result.value.players[P1]!.hand).not.toContain("7D");
-    expect(result.value.players[P1]!.vault.base).toBe(7);
+    expect(calculateVaultFromMine(result.value.players[P1]!.mine)).toBe(7);
   });
 
   it("rejects non-Diamond cards", () => {

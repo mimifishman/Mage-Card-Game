@@ -25,7 +25,7 @@ export function createInitialGameState(
       hand: [],
       court: [],
       mine: [],
-      vault: { base: 0, tempBoost: 0, spent: 0 },
+      vault: { tempBoost: 0, spent: 0 },
     };
   }
 

@@ -20,7 +20,7 @@ const richP1 = (jokerCard: string = "JOKER1") =>
   makePlayer(P1, {
     hand: [jokerCard],
     mine: ["10D"],
-    vault: { base: 10, tempBoost: 0, spent: 0 },
+    vault: { tempBoost: 0, spent: 0 },
   });
 
 describe("playJokerDestroyRoyal", () => {
@@ -50,7 +50,7 @@ describe("playJokerDestroyRoyal", () => {
         [P1]: makePlayer(P1, {
           hand: ["JOKER1"],
           mine: ["5D"],
-          vault: { base: 5, tempBoost: 0, spent: 0 },
+          vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2, { court: [mkRoyal("KH")] }),
       },
@@ -76,7 +76,7 @@ describe("playJokerDestroyRoyal", () => {
         [P1]: makePlayer(P1, {
           hand: ["10H"],
           mine: ["10D"],
-          vault: { base: 10, tempBoost: 0, spent: 0 },
+          vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2, { court: [mkRoyal("KH")] }),
       },

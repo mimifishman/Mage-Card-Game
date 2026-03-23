@@ -36,7 +36,6 @@ export interface RoyalInCourt {
 }
 
 export interface VaultState {
-  base: number;
   tempBoost: number;
   spent: number;
 }

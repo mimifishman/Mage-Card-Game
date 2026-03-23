@@ -20,7 +20,7 @@ const richP1 = () =>
   makePlayer(P1, {
     hand: ["3C"],
     mine: ["10D"],
-    vault: { base: 10, tempBoost: 0, spent: 0 },
+    vault: { tempBoost: 0, spent: 0 },
   });
 
 describe("applyClubToRoyal", () => {
@@ -48,7 +48,7 @@ describe("applyClubToRoyal", () => {
         [P1]: makePlayer(P1, {
           hand: ["10C"],
           mine: ["10D"],
-          vault: { base: 10, tempBoost: 0, spent: 0 },
+          vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2, {
           court: [
@@ -75,7 +75,7 @@ describe("applyClubToRoyal", () => {
           hand: ["3C"],
           court: [mkRoyal("KH")],
           mine: ["10D"],
-          vault: { base: 10, tempBoost: 0, spent: 0 },
+          vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
       },

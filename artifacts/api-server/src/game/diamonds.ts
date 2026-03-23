@@ -32,10 +32,6 @@ export function playDiamondToMine(
   const updated: PlayerState = {
     ...removeFromHand(player, cardId),
     mine: [...player.mine, cardId],
-    vault: {
-      ...player.vault,
-      base: player.vault.base + card.pipValue,
-    },
   };
 
   return ok({

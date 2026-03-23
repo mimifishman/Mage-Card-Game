@@ -33,10 +33,6 @@ export function addTempBoost(player: PlayerState, amount: number): PlayerState {
 export function resetVaultForTurn(player: PlayerState): PlayerState {
   return {
     ...player,
-    vault: {
-      base: calculateVaultFromMine(player.mine),
-      tempBoost: 0,
-      spent: 0,
-    },
+    vault: { tempBoost: 0, spent: 0 },
   };
 }

@@ -10,7 +10,7 @@ describe("canPlayCard", () => {
         [P1]: makePlayer(P1, {
           hand: ["5H"],
           mine: ["10D"],
-          vault: { base: 10, tempBoost: 0, spent: 0 },
+          vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
       },
@@ -58,7 +58,7 @@ describe("canPlayCard", () => {
         [P1]: makePlayer(P1, {
           hand: ["10S"],
           mine: [],
-          vault: { base: 0, tempBoost: 0, spent: 0 },
+          vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
       },
@@ -75,7 +75,7 @@ describe("canPlayCard", () => {
         [P1]: makePlayer(P1, {
           hand: ["JOKER1"],
           mine: ["10D"],
-          vault: { base: 10, tempBoost: 0, spent: 0 },
+          vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
       },
@@ -90,7 +90,7 @@ describe("canPlayCard", () => {
         [P1]: makePlayer(P1, {
           hand: ["JOKER1"],
           mine: ["5D"],
-          vault: { base: 5, tempBoost: 0, spent: 0 },
+          vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
       },
