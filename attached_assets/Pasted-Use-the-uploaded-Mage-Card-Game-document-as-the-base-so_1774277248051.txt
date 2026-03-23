@@ -1,0 +1,112 @@
+Use the uploaded Mage Card Game document as the base source of truth, plus these implementation clarifications.
+
+MAGE CARD GAME — IMPLEMENTATION CLARIFICATIONS
+
+- Supported players: 2 to 4 only
+- Each player starts with 20 life
+- Last remaining player wins
+- Shared zones: Deck, Mine, Abyss
+- Each player has their own Hand, Court, Vault, and Life
+- Turn order skips eliminated players
+- If the Deck runs out, shuffle the Abyss into a new Deck
+
+CARD VALUES
+- Ace = 1
+- 2–10 = face value
+- Jack = 1
+- Queen = 2
+- King = 3
+- Joker = 10
+
+MINE / VAULT
+- Mine starts empty
+- At the start of a player’s turn, Vault = total value of Diamonds in the Mine
+- A player may use only 1 Diamond per turn
+- A Diamond can be used in 1 of 3 ways:
+  1. put into the Mine
+  2. discard to draw 1 card
+  3. discard to add its value to Vault for that turn only
+- The temporary Diamond Vault boost can be used at any point during the play step, including mid-turn after spending some Vault
+
+ROYALS
+- Royals are Jack, Queen, King
+- Royal stats:
+  - Jack = 1 attack / 1 health
+  - Queen = 2 attack / 2 health
+  - King = 3 attack / 3 health
+- Royals go into the Court
+- A newly played Royal cannot attack that turn
+- A Royal can block on later players’ turns once in play
+- No cap on number of Royals in Court
+
+ATTACKING
+- A player may attack with multiple Royals during the same turn
+- Each Royal may attack only once per turn
+- Each attacking Royal chooses one target opponent
+
+BLOCKING
+- Only the targeted defending player may block that attack
+- For MVP:
+  - one defending Royal blocks one attacking Royal
+  - one attacking Royal can be blocked by only one defending Royal
+  - no multi-blocking in MVP
+
+COMBAT
+- If blocked, attacker and blocker deal damage to each other equal to their attack
+- Damage happens at the same time
+- If a Royal’s health reaches 0 or less, it is destroyed
+- Damage on surviving Royals heals at the end of the turn
+
+HEARTS
+- Discard to heal a player by that value
+- Or attach to any Royal in that player’s Court to add that value to health
+
+SPADES
+- Discard to return a card from the Abyss to hand if that card’s value is <= the Spade’s value
+- Or attach to any Royal in that player’s Court to add that value to attack and health
+
+CLUBS
+- Discard to deal damage to a target player equal to the Club’s value
+- Or apply to a Royal in play to reduce that Royal’s total current attack and total current health by the Club’s value
+- Clubs do not detach Hearts, Spades, or Royal support attachments
+- If the Royal’s health becomes 0 or less, it is destroyed
+- If a Royal is destroyed, all attached cards go to the Abyss with it
+
+JOKERS
+- Joker costs 10 Vault
+- Joker has 2 modes:
+  1. destroy target Royal
+  2. deal 10 damage to target player
+
+ROYAL SUPPORT
+- A Royal can either:
+  1. remain a normal Royal that can attack/block
+  2. be attached as support to another Royal in the same player’s Court
+- If used as support, it is no longer a separate attacker/blocker
+- Support adds its value to the target Royal’s attack and health:
+  - Jack support = +1/+1
+  - Queen support = +2/+2
+  - King support = +3/+3
+- Multiple support Royals may be attached to the same Royal
+- A Royal may also have Hearts and Spades attached in addition to support Royals
+- If a Royal with attached supports is destroyed, all attached supports go to the Abyss with it
+
+IMPLEMENTATION
+- If anything conflicts with the original document, flag it instead of guessing
+- Keep game rules separate from UI
+- Build pure TypeScript rules functions for:
+  - canPlayCard
+  - calculateVaultFromMine
+  - playDiamondToMine
+  - playRoyalToCourt
+  - attachHeart
+  - attachSpade
+  - attachRoyalSupport
+  - applyClubToRoyal
+  - playJoker
+  - declareAttack
+  - declareBlock
+  - resolveCombat
+  - endTurn
+  - eliminatePlayerIfNeeded
+  - advanceTurn
