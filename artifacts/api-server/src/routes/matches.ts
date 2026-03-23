@@ -182,9 +182,19 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
       return;
     }
 
+    const matchData = await getMatchWithPlayers(id);
+    if (!matchData) {
+      res.status(404).json({ error: "Match not found" });
+      return;
+    }
+    if (matchData.match.status !== "in_progress") {
+      res.status(400).json({ error: `Match is not in progress (status: ${matchData.match.status})` });
+      return;
+    }
+
     const engineState = await loadEngineState(id);
     if (!engineState) {
-      res.status(400).json({ error: "Match has not started or state is missing" });
+      res.status(400).json({ error: "Match state is missing" });
       return;
     }
 

@@ -99,16 +99,17 @@ function joinRoom(ws: WebSocket, client: WsClient, matchId: string): void {
   matchRooms.get(matchId)!.add(ws);
 }
 
-async function authorizedJoinAndReconnect(ws: WebSocket, client: WsClient, matchId: string): Promise<void> {
+async function authorizedJoinAndReconnect(ws: WebSocket, client: WsClient, matchId: string): Promise<boolean> {
   const member = await isMatchPlayer(matchId, client.userId);
   if (!member) {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "error", error: "Not a member of this match" }));
     }
-    return;
+    return false;
   }
   joinRoom(ws, client, matchId);
   await pushCurrentState(ws, client.userId, matchId);
+  return true;
 }
 
 async function bootstrapActiveMatch(ws: WebSocket, client: WsClient): Promise<void> {
@@ -156,8 +157,8 @@ async function handleMessage(ws: WebSocket, client: WsClient, raw: string): Prom
   const { type, matchId } = msg as Record<string, unknown>;
 
   if (type === "join_match" && typeof matchId === "string") {
-    await authorizedJoinAndReconnect(ws, client, matchId);
-    if (ws.readyState === WebSocket.OPEN) {
+    const success = await authorizedJoinAndReconnect(ws, client, matchId);
+    if (success && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "joined_match", matchId }));
     }
   }
