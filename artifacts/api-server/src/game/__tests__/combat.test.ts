@@ -308,4 +308,49 @@ describe("passBlock", () => {
     const result = passBlock(state, P2, "KH");
     expect(result.ok).toBe(false);
   });
+
+  it("rejects pass if attack already passed (double-pass)", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, passed: true }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("QS")] }),
+      },
+    });
+    const result = passBlock(state, P2, "KH");
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("block/pass exclusivity", () => {
+  it("rejects declareBlock if attack already passed", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, passed: true }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("QS")] }),
+      },
+    });
+    const result = declareBlock(state, P2, "QS", "KH");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/already passed/);
+  });
+
+  it("rejects passBlock if attack already has a blocker (block-then-pass)", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardId: "QS" }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("QS")] }),
+      },
+    });
+    const result = passBlock(state, P2, "KH");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/already blocked/);
+  });
 });

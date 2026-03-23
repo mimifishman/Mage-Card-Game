@@ -46,7 +46,7 @@ export default function GameOverScreen() {
     let mounted = true;
 
     async function connect() {
-      const domain = process.env.EXPO_PUBLIC_API_DOMAIN ?? "";
+      const domain = process.env.EXPO_PUBLIC_DOMAIN ?? "";
       if (!domain) return;
       const token = await SecureStore.getItemAsync("auth_session_token");
       const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;

@@ -97,6 +97,9 @@ export function declareBlock(
   }
 
   const attack = state.attacks[attackIdx]!;
+  if (attack.passed) {
+    return err(`Attack by ${attackerCardId} was already passed; cannot declare a block`);
+  }
   if (attack.blockerCardId) {
     return err(`Attack by ${attackerCardId} already has a blocker`);
   }

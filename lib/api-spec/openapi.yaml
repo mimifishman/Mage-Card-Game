@@ -342,6 +342,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /matches/{matchId}/rematch:
+    post:
+      tags: [Matches]
+      operationId: rematchMatch
+      summary: Request a rematch (resets match to waiting state)
+      description: Resets the match to waiting state and notifies all players via WebSocket to return to the waiting room.
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rematch initiated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, matchId]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  matchId:
+                    type: string
+        "400":
+          description: Match is not finished.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a member of this match.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Match not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /matches/{matchId}/state:
     get:
       tags: [Matches]
@@ -612,6 +664,9 @@ components:
         blockerCardId:
           type: string
           nullable: true
+        passed:
+          type: boolean
+          description: True when the defending player chose to not block this attack
     PlayerGameView:
       type: object
       required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, myDiamondPlayed, deck, abyss, attacks]
@@ -677,6 +732,7 @@ components:
             - declare_attack
             - begin_declare_blocks
             - declare_block
+            - pass_block
             - resolve_combat
             - end_turn
         cardId:
