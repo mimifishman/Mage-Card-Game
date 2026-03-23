@@ -1,53 +1,661 @@
-import React from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as SecureStore from "expo-secure-store";
+import Animated, {
+  FadeIn,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  useAnimatedStyle,
+} from "react-native-reanimated";
+import {
+  useGetMatchState,
+  useSubmitGameAction,
+  getGetMatchStateQueryKey,
+} from "@workspace/api-client-react";
+import type {
+  PlayerGameView,
+  PublicPlayerState,
+  GameActionRequest,
+  MatchPlayer,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
+import HandTray from "@/components/game/HandTray";
+import CourtZone from "@/components/game/CourtZone";
+import OpponentPanel from "@/components/game/OpponentPanel";
+import MineAbyssRow from "@/components/game/MineAbyssRow";
+import CardActionSheet from "@/components/game/CardActionSheet";
+import type { ActionParams } from "@/components/game/CardActionSheet";
 
 export default function MatchScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
+  const { user } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const wsRef = useRef<WebSocket | null>(null);
   const topInset = Platform.OS === "web" ? 67 : insets.top;
+  const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
+
+  const [gameState, setGameState] = useState<PlayerGameView | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedTargetRoyalId, setSelectedTargetRoyalId] = useState<string | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsReconnecting, setWsReconnecting] = useState(false);
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
+
+  const pulseOpacity = useSharedValue(1);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
+
+  useEffect(() => {
+    pulseOpacity.value = withRepeat(
+      withSequence(withTiming(0.3, { duration: 700 }), withTiming(1, { duration: 700 })),
+      -1,
+    );
+  }, []);
+
+  const { data: stateData, isLoading } = useGetMatchState(matchId ?? "", {
+    query: {
+      queryKey: getGetMatchStateQueryKey(matchId ?? ""),
+      enabled: !!matchId,
+    },
+  });
+
+  useEffect(() => {
+    if (stateData?.state) {
+      setGameState(stateData.state);
+    }
+  }, [stateData]);
+
+  const { mutate: submitAction, isPending: isSubmitting } = useSubmitGameAction({
+    mutation: {
+      onSuccess: (data) => {
+        setGameState(data.state);
+        setSelectedCardId(null);
+        setSelectedTargetRoyalId(null);
+        if (data.winnerUserId) {
+          router.replace({
+            pathname: "/(game)/game-over",
+            params: { matchId, winnerUserId: data.winnerUserId },
+          });
+        }
+      },
+      onError: (err) => {
+        const msg = (err as { data?: { error?: string } })?.data?.error ?? "Action failed";
+        Alert.alert("Action rejected", msg);
+      },
+    },
+  });
+
+  const handleAction = useCallback(
+    (params: ActionParams) => {
+      if (!matchId) return;
+      const body: GameActionRequest = { type: params.action as GameActionRequest["type"] };
+      if (params.targetRoyalId) body.targetRoyalId = params.targetRoyalId;
+      if (params.targetPlayerId) body.targetPlayerId = params.targetPlayerId;
+      if (params.mode) body.mode = params.mode as GameActionRequest["mode"];
+      body.cardId = params.cardId;
+      submitAction({ matchId, data: body });
+    },
+    [matchId, submitAction],
+  );
+
+  const handleEndTurn = useCallback(() => {
+    if (!matchId) return;
+    submitAction({ matchId, data: { type: "end_turn" } });
+  }, [matchId, submitAction]);
+
+  useEffect(() => {
+    if (!matchId) return;
+    const domain = process.env.EXPO_PUBLIC_DOMAIN;
+    if (!domain) return;
+
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+
+    const connect = async () => {
+      const token = await SecureStore.getItemAsync("auth_session_token");
+      const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
+      const protocols = token ? [`bearer-${token}`] : undefined;
+      const ws = new WebSocket(wsUrl, protocols);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setWsConnected(true);
+        setWsReconnecting(false);
+        ws.send(JSON.stringify({ type: "join_match", matchId }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data as string) as {
+            type: string;
+            state?: PlayerGameView;
+            winnerUserId?: string;
+          };
+          if (
+            msg.type === "state_update" ||
+            msg.type === "game_started" ||
+            msg.type === "reconnect_state"
+          ) {
+            if (msg.state) setGameState(msg.state);
+          } else if (msg.type === "game_over") {
+            if (msg.state) setGameState(msg.state);
+            router.replace({
+              pathname: "/(game)/game-over",
+              params: { matchId, winnerUserId: msg.winnerUserId ?? "" },
+            });
+          }
+        } catch (e) {
+          console.warn("WS parse error:", e);
+        }
+      };
+
+      ws.onerror = (e) => {
+        console.warn("WS error:", e);
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+        if (!closed) {
+          setWsReconnecting(true);
+          reconnectTimer = setTimeout(() => {
+            if (!closed) connect();
+          }, 3000);
+        }
+      };
+    };
+
+    connect();
+
+    return () => {
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsRef.current?.close();
+    };
+  }, [matchId]);
+
+  if (isLoading && !gameState) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <LinearGradient colors={["#0A0A0F", "#0C0D18"]} style={StyleSheet.absoluteFill} />
+        <ActivityIndicator size="large" color={Colors.brand} />
+        <Text style={styles.loadingText}>Loading game...</Text>
+      </View>
+    );
+  }
+
+  if (!gameState) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <LinearGradient colors={["#0A0A0F", "#0C0D18"]} style={StyleSheet.absoluteFill} />
+        <Text style={styles.errorText}>Could not load game state.</Text>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>Go Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const myId = user?.id ?? "";
+  const myState: PublicPlayerState | undefined = gameState.players[myId];
+  const opponents = gameState.turnOrder
+    .filter((id) => id !== myId)
+    .map((id) => gameState.players[id])
+    .filter((p): p is PublicPlayerState => !!p && !p.isEliminated);
+
+  const isMyTurn = gameState.activePlayerId === myId;
+  const phase = gameState.phase;
+  const inMainPhase = phase === "main";
+  const inDeclareAttacks = phase === "declare_attacks";
+  const vault = myState?.vault.available ?? 0;
+
+  const canEndTurn =
+    isMyTurn && (inMainPhase || inDeclareAttacks || phase === "end_turn");
+
+  const canDeclareAttack =
+    isMyTurn && inMainPhase &&
+    myState !== undefined &&
+    myState.court.some((r) => !r.hasAttackedThisTurn && !r.hasteLocked);
+
+  const handleCardPress = (cardId: string) => {
+    if (selectedCardId === cardId) {
+      setSelectedCardId(null);
+    } else {
+      setSelectedCardId(cardId);
+    }
+  };
+
+  const handleOwnRoyalPress = (royalId: string) => {
+    if (!isMyTurn || !inMainPhase) return;
+    setSelectedTargetRoyalId(royalId === selectedTargetRoyalId ? null : royalId);
+  };
+
+  const handleOpponentRoyalPress = (royalId: string, targetPlayerId: string) => {
+    if (!selectedCardId || !isMyTurn || !inMainPhase) return;
+    setSelectedCardId(null);
+    setSelectedTargetRoyalId(null);
+  };
+
+  const handleDeclareAttack = (attackerRoyalId: string) => {
+    if (!matchId || !isMyTurn) return;
+    const targets = opponents.filter((o) => !o.isEliminated);
+    if (targets.length === 0) return;
+    const target = targets[0];
+    if (!target) return;
+    submitAction({
+      matchId,
+      data: {
+        type: "declare_attack",
+        attackerCardId: attackerRoyalId,
+        targetPlayerId: target.id,
+      },
+    });
+  };
+
+  const activePlayerName = displayNames[gameState.activePlayerId]
+    ?? (gameState.activePlayerId === myId ? (user?.displayName ?? "You") : gameState.activePlayerId.slice(0, 8));
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={["#0A0A0F", "#0C0D18"]} style={StyleSheet.absoluteFill} />
-      <View style={[styles.content, { paddingTop: topInset + 40 }]}>
-        <Ionicons name="flash" size={48} color={Colors.brand} />
-        <Text style={styles.title}>Match Starting</Text>
-        <Text style={styles.subtitle}>Game board coming in Task #5</Text>
-        <Text style={styles.matchId}>Match: {matchId}</Text>
+      <LinearGradient colors={["#0A0A0F", "#0C0D18", "#0A0A0F"]} style={StyleSheet.absoluteFill} />
+
+      <View style={[styles.header, { paddingTop: topInset + 8 }]}>
+        <View style={styles.headerLeft}>
+          <View style={styles.phaseTag}>
+            <Text style={styles.phaseText}>{phase.replace("_", " ").toUpperCase()}</Text>
+          </View>
+          {wsReconnecting && (
+            <Animated.View style={[styles.reconnectBadge, pulseStyle]}>
+              <Text style={styles.reconnectText}>Reconnecting...</Text>
+            </Animated.View>
+          )}
+        </View>
+
+        <View style={styles.headerCenter}>
+          {isMyTurn ? (
+            <Text style={styles.turnText}>Your Turn</Text>
+          ) : (
+            <Text style={styles.turnText}>
+              {activePlayerName}&apos;s Turn
+            </Text>
+          )}
+          <Text style={styles.turnSub}>Turn {gameState.turnNumber}</Text>
+        </View>
+
+        <View style={styles.headerRight}>
+          <View style={styles.vaultDisplay}>
+            <Text style={styles.vaultIcon}>⚡</Text>
+            <Text style={styles.vaultValue}>{vault}</Text>
+          </View>
+          <View style={styles.lifeDisplay}>
+            <Text style={styles.lifeIcon}>♥</Text>
+            <Text style={styles.lifeValue}>{myState?.life ?? 0}</Text>
+          </View>
+        </View>
       </View>
+
+      <ScrollView
+        style={styles.board}
+        contentContainerStyle={styles.boardContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {opponents.length > 0 && (
+          <Animated.View entering={FadeIn.duration(400)} style={styles.opponentSection}>
+            {opponents.map((opp) => (
+              <OpponentPanel
+                key={opp.id}
+                player={opp}
+                displayName={
+                  displayNames[opp.id] ?? opp.id.slice(0, 8)
+                }
+                isActive={gameState.activePlayerId === opp.id}
+                onRoyalPress={
+                  isMyTurn && inMainPhase && selectedCardId
+                    ? (royalId) => handleOpponentRoyalPress(royalId, opp.id)
+                    : undefined
+                }
+              />
+            ))}
+          </Animated.View>
+        )}
+
+        <MineAbyssRow
+          mine={myState?.mine ?? []}
+          abyss={gameState.abyss}
+          deckCount={gameState.deck}
+        />
+
+        <Animated.View entering={FadeIn.delay(100).duration(400)} style={styles.myCourtSection}>
+          <Text style={styles.sectionLabel}>YOUR COURT</Text>
+          <CourtZone
+            court={myState?.court ?? []}
+            isMyZone
+            isMyTurn={isMyTurn}
+            size="lg"
+            onRoyalPress={
+              isMyTurn && (inMainPhase || inDeclareAttacks)
+                ? (royalId) => {
+                    if (inDeclareAttacks && !myState?.court.find((r) => r.cardId === royalId)?.hasAttackedThisTurn) {
+                      handleDeclareAttack(royalId);
+                    } else if (inMainPhase) {
+                      handleOwnRoyalPress(royalId);
+                    }
+                  }
+                : undefined
+            }
+            selectedTargetId={selectedTargetRoyalId}
+          />
+        </Animated.View>
+
+        {(canEndTurn || canDeclareAttack) && (
+          <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.actionRow}>
+            {canDeclareAttack && (
+              <Pressable
+                onPress={() => {
+                  if (!matchId) return;
+                  submitAction({ matchId, data: { type: "begin_declare_blocks" } });
+                }}
+                style={({ pressed }) => [styles.attackBtn, pressed && { opacity: 0.8 }]}
+                disabled={isSubmitting}
+              >
+                <LinearGradient
+                  colors={[Colors.accentRed, "#8B1A1A"]}
+                  style={styles.attackBtnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="flash" size={18} color="#FFF" />
+                  <Text style={styles.attackBtnText}>Attack</Text>
+                </LinearGradient>
+              </Pressable>
+            )}
+            {canEndTurn && (
+              <Pressable
+                onPress={handleEndTurn}
+                disabled={isSubmitting}
+                style={({ pressed }) => [styles.endTurnBtn, pressed && { opacity: 0.8 }]}
+              >
+                <LinearGradient
+                  colors={[Colors.brand, Colors.brandDim]}
+                  style={styles.endTurnBtnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator size="small" color={Colors.bgDeep} />
+                  ) : (
+                    <>
+                      <Text style={styles.endTurnText}>End Turn</Text>
+                      <Ionicons name="arrow-forward" size={18} color={Colors.bgDeep} />
+                    </>
+                  )}
+                </LinearGradient>
+              </Pressable>
+            )}
+          </Animated.View>
+        )}
+
+        {!isMyTurn && (
+          <View style={styles.waitingBanner}>
+            <ActivityIndicator size="small" color={Colors.textMuted} />
+            <Text style={styles.waitingText}>
+              Waiting for {activePlayerName}...
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+
+      <HandTray
+        cards={gameState.myHand}
+        selectedCardId={selectedCardId}
+        isMyTurn={isMyTurn}
+        phase={phase}
+        onCardPress={handleCardPress}
+      />
+
+      <View style={{ height: bottomInset }} />
+
+      {selectedCardId && (
+        <CardActionSheet
+          cardId={selectedCardId}
+          phase={phase}
+          isMyTurn={isMyTurn}
+          myCourt={myState?.court ?? []}
+          allPlayers={gameState.players}
+          myPlayerId={myId}
+          myVault={vault}
+          isPending={isSubmitting}
+          onClose={() => setSelectedCardId(null)}
+          onAction={handleAction}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bgDeep },
-  content: {
+  container: {
     flex: 1,
+    backgroundColor: Colors.bgDeep,
+  },
+  centered: {
     alignItems: "center",
     justifyContent: "center",
     gap: 16,
-    paddingHorizontal: 24,
   },
-  title: {
-    fontSize: 28,
-    fontFamily: "Inter_700Bold",
-    color: Colors.textPrimary,
+  loadingText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    marginTop: 12,
   },
-  subtitle: {
+  errorText: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
     textAlign: "center",
   },
-  matchId: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
+  backBtn: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    backgroundColor: Colors.bgSurface,
+    borderRadius: 12,
+  },
+  backBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 8,
+    zIndex: 10,
+  },
+  headerLeft: {
+    flex: 1,
+    alignItems: "flex-start",
+    gap: 4,
+  },
+  headerCenter: {
+    alignItems: "center",
+  },
+  headerRight: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+    alignItems: "center",
+  },
+  phaseTag: {
+    backgroundColor: Colors.bgSurface,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  phaseText: {
+    fontSize: 8,
+    fontFamily: "Inter_600SemiBold",
     color: Colors.textMuted,
     letterSpacing: 1,
+  },
+  reconnectBadge: {
+    backgroundColor: "rgba(192,57,43,0.2)",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.accentRed,
+  },
+  reconnectText: {
+    fontSize: 9,
+    fontFamily: "Inter_500Medium",
+    color: Colors.accentRed,
+  },
+  turnText: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textPrimary,
+  },
+  turnSub: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  vaultDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(200,155,60,0.12)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(200,155,60,0.3)",
+  },
+  vaultIcon: {
+    fontSize: 11,
+  },
+  vaultValue: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.brand,
+  },
+  lifeDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(192,57,43,0.12)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(192,57,43,0.3)",
+  },
+  lifeIcon: {
+    fontSize: 11,
+  },
+  lifeValue: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.accentRed,
+  },
+  board: {
+    flex: 1,
+  },
+  boardContent: {
+    paddingVertical: 12,
+    gap: 12,
+  },
+  opponentSection: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  myCourtSection: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  sectionLabel: {
+    fontSize: 9,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textMuted,
+    letterSpacing: 1.5,
+  },
+  actionRow: {
+    flexDirection: "row",
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  attackBtn: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  attackBtnGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+  },
+  attackBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    color: "#FFF",
+  },
+  endTurnBtn: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  endTurnBtnGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+  },
+  endTurnText: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    color: Colors.bgDeep,
+  },
+  waitingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  waitingText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
   },
 });

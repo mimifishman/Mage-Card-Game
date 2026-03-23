@@ -1,0 +1,223 @@
+export type Suit = "H" | "S" | "D" | "C" | "JOKER";
+export type Rank =
+  | "A" | "2" | "3" | "4" | "5" | "6" | "7"
+  | "8" | "9" | "10" | "J" | "Q" | "K" | "JOKER";
+
+export interface ParsedCard {
+  id: string;
+  suit: Suit;
+  rank: Rank;
+  isRoyal: boolean;
+  isJoker: boolean;
+  displayRank: string;
+  displaySuit: string;
+  suitSymbol: string;
+  suitColor: string;
+  vaultCost: number;
+  pipValue: number;
+}
+
+const ROYAL_RANKS: Rank[] = ["J", "Q", "K"];
+
+function pipValue(rank: Rank): number {
+  if (rank === "JOKER") return 0;
+  if (rank === "A") return 1;
+  if (rank === "J") return 11;
+  if (rank === "Q") return 12;
+  if (rank === "K") return 13;
+  return parseInt(rank, 10);
+}
+
+function vaultCost(rank: Rank, suit: Suit, isRoyal: boolean): number {
+  if (suit === "JOKER" || rank === "JOKER") return 10;
+  if (isRoyal) return 0;
+  if (suit === "D") return 0;
+  return pipValue(rank);
+}
+
+export function parseCardId(id: string): ParsedCard {
+  if (id.startsWith("JOKER")) {
+    return {
+      id,
+      suit: "JOKER",
+      rank: "JOKER",
+      isRoyal: false,
+      isJoker: true,
+      displayRank: "JKR",
+      displaySuit: "★",
+      suitSymbol: "★",
+      suitColor: "#C89B3C",
+      vaultCost: 10,
+      pipValue: 0,
+    };
+  }
+
+  let suit: Suit;
+  let rank: Rank;
+
+  if (id.length === 2) {
+    rank = id[0] as Rank;
+    suit = id[1] as Suit;
+  } else {
+    rank = id.slice(0, id.length - 1) as Rank;
+    suit = id[id.length - 1] as Suit;
+  }
+
+  const isRoyal = ROYAL_RANKS.includes(rank);
+
+  const suitMap: Record<Suit, { symbol: string; color: string }> = {
+    H: { symbol: "♥", color: "#C0392B" },
+    S: { symbol: "♠", color: "#8C7E65" },
+    D: { symbol: "♦", color: "#2980B9" },
+    C: { symbol: "♣", color: "#27AE60" },
+    JOKER: { symbol: "★", color: "#C89B3C" },
+  };
+
+  const { symbol, color } = suitMap[suit] ?? { symbol: "?", color: "#FFF" };
+
+  return {
+    id,
+    suit,
+    rank,
+    isRoyal,
+    isJoker: false,
+    displayRank: rank,
+    displaySuit: suit,
+    suitSymbol: symbol,
+    suitColor: color,
+    vaultCost: vaultCost(rank, suit, isRoyal),
+    pipValue: pipValue(rank),
+  };
+}
+
+export function royalBaseAttack(rank: Rank): number {
+  if (rank === "J") return 2;
+  if (rank === "Q") return 3;
+  return 4;
+}
+
+export function royalBaseHealth(rank: Rank): number {
+  if (rank === "J") return 3;
+  if (rank === "Q") return 4;
+  return 5;
+}
+
+export function effectiveAttack(cardId: string, buffAttack: number): number {
+  const card = parseCardId(cardId);
+  if (!card.isRoyal) return 0;
+  return royalBaseAttack(card.rank) + buffAttack;
+}
+
+export function effectiveHealth(
+  cardId: string,
+  buffHealth: number,
+  damageTaken: number,
+): number {
+  const card = parseCardId(cardId);
+  if (!card.isRoyal) return 0;
+  return royalBaseHealth(card.rank) + buffHealth - damageTaken;
+}
+
+export type CardAction =
+  | "play_diamond_to_mine"
+  | "discard_diamond_to_draw"
+  | "discard_diamond_for_boost"
+  | "play_royal_to_court"
+  | "attach_royal_support"
+  | "attach_heart"
+  | "attach_spade"
+  | "apply_club"
+  | "play_joker";
+
+export interface ValidAction {
+  action: CardAction;
+  label: string;
+  requiresTarget: boolean;
+  targetType?: "own_royal" | "any_royal" | "any_player";
+}
+
+export function getValidActionsForCard(
+  card: ParsedCard,
+  phase: string,
+  isMyTurn: boolean,
+  myCourtSize: number,
+  vault: number,
+): ValidAction[] {
+  if (!isMyTurn || phase !== "main") return [];
+
+  const actions: ValidAction[] = [];
+
+  if (card.isJoker) {
+    if (vault >= 10) {
+      actions.push({
+        action: "play_joker",
+        label: "Destroy a Royal (−10 Vault)",
+        requiresTarget: true,
+        targetType: "any_royal",
+      });
+      actions.push({
+        action: "play_joker",
+        label: "Deal 10 damage to a player (−10 Vault)",
+        requiresTarget: true,
+        targetType: "any_player",
+      });
+    }
+    return actions;
+  }
+
+  if (card.suit === "D") {
+    actions.push({ action: "play_diamond_to_mine", label: "Play to Mine", requiresTarget: false });
+    actions.push({ action: "discard_diamond_to_draw", label: "Discard to Draw a Card", requiresTarget: false });
+    actions.push({ action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false });
+    return actions;
+  }
+
+  if (card.isRoyal) {
+    actions.push({ action: "play_royal_to_court", label: "Play to Court", requiresTarget: false });
+    if (myCourtSize > 0) {
+      actions.push({
+        action: "attach_royal_support",
+        label: "Attach as Support to a Royal",
+        requiresTarget: true,
+        targetType: "own_royal",
+      });
+    }
+    return actions;
+  }
+
+  if (card.suit === "H") {
+    if (myCourtSize > 0) {
+      actions.push({
+        action: "attach_heart",
+        label: "Attach to a Royal (+Health)",
+        requiresTarget: true,
+        targetType: "own_royal",
+      });
+    }
+    return actions;
+  }
+
+  if (card.suit === "S") {
+    if (myCourtSize > 0) {
+      actions.push({
+        action: "attach_spade",
+        label: "Attach to a Royal (+Attack)",
+        requiresTarget: true,
+        targetType: "own_royal",
+      });
+    }
+    return actions;
+  }
+
+  if (card.suit === "C") {
+    actions.push({
+      action: "apply_club",
+      label: "Damage a Player or Weaken a Royal",
+      requiresTarget: true,
+      targetType: "any_royal",
+    });
+    return actions;
+  }
+
+  return actions;
+}
