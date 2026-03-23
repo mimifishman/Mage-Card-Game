@@ -67,6 +67,25 @@ describe("attachRoyalSupport", () => {
     expect(result.value.players[P1]!.hand).not.toContain("JC");
   });
 
+  it("removes supporting Royal from state.attacks if it was declared as an attacker", () => {
+    const state = makeState({
+      phase: "declare_attacks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "JC", targetPlayerId: P2 }],
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["JC"],
+          court: [mkRoyal("KH"), mkRoyal("JC", { hasAttackedThisTurn: true })],
+        }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = attachRoyalSupport(state, P1, "JC", "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const attacks = result.value.attacks;
+    expect(attacks.find((a) => a.attackerCardId === "JC")).toBeUndefined();
+  });
+
   it("rejects if target Royal not in Court", () => {
     const state = makeState({
       players: {

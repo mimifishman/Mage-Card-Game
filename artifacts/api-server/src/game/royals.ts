@@ -84,8 +84,13 @@ export function attachRoyalSupport(
     court: updatedCourt,
   };
 
+  const updatedAttacks = state.attacks.filter(
+    (a) => a.attackerCardId !== supportCardId,
+  );
+
   return ok({
     ...state,
+    attacks: updatedAttacks,
     players: { ...state.players, [playerId]: updated },
   });
 }

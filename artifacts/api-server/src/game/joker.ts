@@ -112,3 +112,22 @@ export function playJokerDamagePlayer(
     },
   });
 }
+
+export type JokerMode = "destroy_royal" | "damage_player";
+
+export function playJoker(
+  state: GameState,
+  playerId: string,
+  jokerCardId: CardId,
+  mode: JokerMode,
+  targetPlayerId: string,
+  targetCardId?: CardId,
+): Result<GameState> {
+  if (mode === "destroy_royal") {
+    if (!targetCardId) {
+      return err('mode "destroy_royal" requires a targetCardId');
+    }
+    return playJokerDestroyRoyal(state, playerId, jokerCardId, targetPlayerId, targetCardId);
+  }
+  return playJokerDamagePlayer(state, playerId, jokerCardId, targetPlayerId);
+}

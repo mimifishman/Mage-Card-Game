@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { playJokerDestroyRoyal, playJokerDamagePlayer } from "../joker";
+import { playJokerDestroyRoyal, playJokerDamagePlayer, playJoker } from "../joker";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
 
@@ -82,6 +82,45 @@ describe("playJokerDestroyRoyal", () => {
       },
     });
     const result = playJokerDestroyRoyal(state, P1, "10H", P2, "KH");
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("playJoker (unified entry point)", () => {
+  it("routes destroy_royal mode correctly", () => {
+    const state = makeState({
+      players: {
+        [P1]: richP1(),
+        [P2]: makePlayer(P2, { court: [mkRoyal("KH")] }),
+      },
+    });
+    const result = playJoker(state, P1, "JOKER1", "destroy_royal", P2, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.court).toHaveLength(0);
+  });
+
+  it("routes damage_player mode correctly", () => {
+    const state = makeState({
+      players: {
+        [P1]: richP1(),
+        [P2]: makePlayer(P2, { life: 20 }),
+      },
+    });
+    const result = playJoker(state, P1, "JOKER1", "damage_player", P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.life).toBe(10);
+  });
+
+  it("rejects destroy_royal mode without targetCardId", () => {
+    const state = makeState({
+      players: {
+        [P1]: richP1(),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = playJoker(state, P1, "JOKER1", "destroy_royal", P2);
     expect(result.ok).toBe(false);
   });
 });

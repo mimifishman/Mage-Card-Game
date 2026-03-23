@@ -10,6 +10,7 @@ export type {
   TurnPhase,
   VaultState,
   AttackDeclaration,
+  Zone,
 } from "./types";
 export { ok, err } from "./types";
 
@@ -40,7 +41,8 @@ export { attachHeart, attachSpade } from "./attachments";
 
 export { applyClubToRoyal } from "./clubs";
 
-export { playJokerDestroyRoyal, playJokerDamagePlayer } from "./joker";
+export { playJokerDestroyRoyal, playJokerDamagePlayer, playJoker } from "./joker";
+export type { JokerMode } from "./joker";
 
 export { declareAttack, declareBlock, resolveCombat } from "./combat";
 

@@ -58,6 +58,8 @@ export interface AttackDeclaration {
   blockerCardId?: CardId;
 }
 
+export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";
+
 export type TurnPhase =
   | "draw"
   | "main"

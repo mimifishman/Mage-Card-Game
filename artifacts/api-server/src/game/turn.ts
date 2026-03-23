@@ -53,8 +53,46 @@ export function advanceTurn(state: GameState): Result<GameState> {
   });
 }
 
+function healAllRoyals(state: GameState): { state: GameState; abyss: string[] } {
+  const updatedPlayers: Record<string, PlayerState> = { ...state.players };
+  const discarded: string[] = [];
+
+  for (const [playerId, player] of Object.entries(state.players)) {
+    if (player.isEliminated) continue;
+
+    const healedCourt = player.court.map((r) => ({
+      ...r,
+      damageTaken: 0,
+      hasteLocked: false,
+      hasAttackedThisTurn: false,
+    }));
+
+    updatedPlayers[playerId] = { ...player, court: healedCourt };
+  }
+
+  const activePlayerId = state.activePlayerId;
+  const activePlayer = updatedPlayers[activePlayerId];
+  if (activePlayer) {
+    let hand = [...activePlayer.hand];
+    if (hand.length > MAX_HAND_SIZE) {
+      const excess = hand.slice(MAX_HAND_SIZE);
+      discarded.push(...excess);
+      hand = hand.slice(0, MAX_HAND_SIZE);
+    }
+    updatedPlayers[activePlayerId] = { ...activePlayer, hand };
+  }
+
+  return { state: { ...state, players: updatedPlayers }, abyss: discarded };
+}
+
 export function endTurn(state: GameState): Result<GameState> {
-  if (state.phase !== "end_turn" && state.phase !== "resolve_combat" && state.phase !== "declare_attacks" && state.phase !== "main") {
+  if (
+    state.phase !== "end_turn" &&
+    state.phase !== "resolve_combat" &&
+    state.phase !== "declare_attacks" &&
+    state.phase !== "declare_blocks" &&
+    state.phase !== "main"
+  ) {
     return err(`Cannot end turn during phase "${state.phase}"`);
   }
 
@@ -70,36 +108,18 @@ export function endTurn(state: GameState): Result<GameState> {
 
   if (active.length <= 1) {
     const winnerId = active[0] ?? null;
-    return ok({ ...current, phase: "end_turn", activePlayerId: winnerId ?? current.activePlayerId });
+    return ok({
+      ...current,
+      phase: "end_turn",
+      activePlayerId: winnerId ?? current.activePlayerId,
+    });
   }
 
-  const playerId = current.activePlayerId;
-  const player = current.players[playerId]!;
-
-  const healedCourt = player.court.map((r) => ({
-    ...r,
-    damageTaken: 0,
-    hasteLocked: false,
-    hasAttackedThisTurn: false,
-  }));
-
-  let hand = [...player.hand];
-  let discardToAbyss: string[] = [];
-  if (hand.length > MAX_HAND_SIZE) {
-    discardToAbyss = hand.slice(MAX_HAND_SIZE);
-    hand = hand.slice(0, MAX_HAND_SIZE);
-  }
-
-  const updatedPlayer: PlayerState = {
-    ...player,
-    court: healedCourt,
-    hand,
-  };
+  const { state: healed, abyss: discarded } = healAllRoyals(current);
 
   current = {
-    ...current,
-    abyss: [...current.abyss, ...discardToAbyss],
-    players: { ...current.players, [playerId]: updatedPlayer },
+    ...healed,
+    abyss: [...healed.abyss, ...discarded],
     attacks: [],
   };
 

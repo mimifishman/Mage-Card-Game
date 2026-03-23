@@ -71,6 +71,22 @@ describe("endTurn", () => {
     expect(result.value.phase).toBe("draw");
   });
 
+  it("heals ALL surviving Royals including defender Royals", () => {
+    const state = makeState({
+      phase: "end_turn",
+      activePlayerId: P1,
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH", { damageTaken: 3 })] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("QS", { damageTaken: 2 })] }),
+      },
+    });
+    const result = endTurn(state);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P1]!.court[0]!.damageTaken).toBe(0);
+    expect(result.value.players[P2]!.court[0]!.damageTaken).toBe(0);
+  });
+
   it("enforces 7-card hand limit by discarding excess to Abyss", () => {
     const bigHand = ["AC", "2C", "3C", "4C", "5C", "6C", "7C", "8C", "9C", "10C"];
     const state = makeState({
