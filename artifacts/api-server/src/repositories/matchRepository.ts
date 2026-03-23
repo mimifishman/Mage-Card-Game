@@ -4,6 +4,7 @@ import {
   matchPlayersTable,
   gameStateTable,
   gameActionsLogTable,
+  usersTable,
 } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { GameState as EngineGameState } from "../game/types";
@@ -70,12 +71,20 @@ export async function getMatchWithPlayers(matchId: string) {
     .where(eq(matchesTable.id, matchId));
   if (!match) return null;
 
-  const players = await db
-    .select()
+  const rows = await db
+    .select({
+      userId: matchPlayersTable.userId,
+      turnOrder: matchPlayersTable.turnOrder,
+      life: matchPlayersTable.life,
+      isEliminated: matchPlayersTable.isEliminated,
+      joinedAt: matchPlayersTable.joinedAt,
+      displayName: usersTable.displayName,
+    })
     .from(matchPlayersTable)
+    .innerJoin(usersTable, eq(matchPlayersTable.userId, usersTable.id))
     .where(eq(matchPlayersTable.matchId, matchId));
 
-  return { match, players };
+  return { match, players: rows };
 }
 
 export async function isMatchHost(matchId: string, userId: string): Promise<boolean> {

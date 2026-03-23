@@ -47,7 +47,6 @@ export default function LobbyScreen() {
           pathname: "/(game)/waiting-room",
           params: {
             matchId: data.match.id,
-            isHost: "true",
             inviteCode: data.match.inviteCode,
           },
         });
@@ -66,7 +65,6 @@ export default function LobbyScreen() {
           pathname: "/(game)/waiting-room",
           params: {
             matchId: data.match.id,
-            isHost: "false",
             inviteCode: data.match.inviteCode,
           },
         });

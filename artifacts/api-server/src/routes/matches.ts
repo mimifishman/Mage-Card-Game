@@ -95,6 +95,7 @@ router.get("/:id", async (req: Request, res: Response) => {
       },
       players: data.players.map((p) => ({
         userId: p.userId,
+        displayName: p.displayName,
         turnOrder: p.turnOrder,
         life: p.life,
         isEliminated: p.isEliminated,

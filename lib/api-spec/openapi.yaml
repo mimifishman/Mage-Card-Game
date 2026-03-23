@@ -487,9 +487,11 @@ components:
           minLength: 1
     MatchPlayer:
       type: object
-      required: [userId, turnOrder, life, isEliminated, joinedAt]
+      required: [userId, displayName, turnOrder, life, isEliminated, joinedAt]
       properties:
         userId:
+          type: string
+        displayName:
           type: string
         turnOrder:
           type: integer

@@ -31,25 +31,11 @@ import {
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
 
-const PLAYER_TITLES = ["The Wanderer", "Archmage", "Stormcaller", "Shadowbinder"];
-
-function getPlayerDisplayName(
-  userId: string,
-  myUserId: string | undefined,
-  myDisplayName: string | undefined,
-  turnOrder: number,
-): string {
-  if (userId === myUserId) return myDisplayName ?? "You";
-  return PLAYER_TITLES[turnOrder] ?? `Player ${turnOrder + 1}`;
-}
-
 export default function WaitingRoomScreen() {
-  const { matchId, isHost: isHostParam, inviteCode } = useLocalSearchParams<{
+  const { matchId, inviteCode } = useLocalSearchParams<{
     matchId: string;
-    isHost: string;
     inviteCode: string;
   }>();
-  const isHost = isHostParam === "true";
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -83,6 +69,7 @@ export default function WaitingRoomScreen() {
 
   const players = matchData?.players ?? [];
   const matchStatus = matchData?.match?.status;
+  const isHost = !!user?.id && matchData?.match?.createdBy === user.id;
 
   useEffect(() => {
     if (matchStatus === "in_progress") {
@@ -230,9 +217,7 @@ export default function WaitingRoomScreen() {
               {Array.from({ length: 4 }).map((_, idx) => {
                 const player = players[idx];
                 const isMe = player?.userId === user?.id;
-                const displayName = player
-                  ? getPlayerDisplayName(player.userId, user?.id, user?.displayName, idx)
-                  : null;
+                const displayName = player?.displayName ?? null;
 
                 return (
                   <Animated.View

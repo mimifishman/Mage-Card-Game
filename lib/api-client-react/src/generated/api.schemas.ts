@@ -72,6 +72,7 @@ export interface JoinMatchRequest {
 
 export interface MatchPlayer {
   userId: string;
+  displayName: string;
   turnOrder: number;
   life: number;
   isEliminated: boolean;
