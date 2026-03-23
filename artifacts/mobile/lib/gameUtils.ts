@@ -143,6 +143,7 @@ export function getValidActionsForCard(
   isMyTurn: boolean,
   myCourtSize: number,
   vault: number,
+  hasTakenDiamondAction = false,
 ): ValidAction[] {
   if (!isMyTurn || phase !== "main") return [];
 
@@ -167,9 +168,18 @@ export function getValidActionsForCard(
   }
 
   if (card.suit === "D") {
-    actions.push({ action: "play_diamond_to_mine", label: "Play to Mine", requiresTarget: false });
-    actions.push({ action: "discard_diamond_to_draw", label: "Discard to Draw a Card", requiresTarget: false });
-    actions.push({ action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false });
+    if (hasTakenDiamondAction) {
+      actions.push({
+        action: "play_diamond_to_mine",
+        label: "One Diamond action per turn (already used)",
+        requiresTarget: false,
+        disabled: true,
+      });
+    } else {
+      actions.push({ action: "play_diamond_to_mine", label: "Play to Mine", requiresTarget: false });
+      actions.push({ action: "discard_diamond_to_draw", label: "Discard to Draw a Card", requiresTarget: false });
+      actions.push({ action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false });
+    }
     return actions;
   }
 

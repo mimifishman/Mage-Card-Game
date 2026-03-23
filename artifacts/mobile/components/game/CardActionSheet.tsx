@@ -26,6 +26,7 @@ interface CardActionSheetProps {
   myPlayerId: string;
   myVault: number;
   isPending: boolean;
+  hasTakenDiamondAction?: boolean;
   onClose: () => void;
   onAction: (params: ActionParams) => void;
 }
@@ -49,6 +50,7 @@ export default function CardActionSheet({
   myPlayerId,
   myVault,
   isPending,
+  hasTakenDiamondAction = false,
   onClose,
   onAction,
 }: CardActionSheetProps) {
@@ -65,6 +67,7 @@ export default function CardActionSheet({
     isMyTurn,
     myCourt.length,
     myVault,
+    hasTakenDiamondAction,
   );
 
   const handleActionPick = (action: ValidAction) => {

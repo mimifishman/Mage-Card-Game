@@ -60,9 +60,11 @@ export default function MatchScreen() {
   const [selectedTargetRoyalId, setSelectedTargetRoyalId] = useState<string | null>(null);
   const [pendingAttackerRoyalId, setPendingAttackerRoyalId] = useState<string | null>(null);
   const [selectingAttacker, setSelectingAttacker] = useState(false);
+  const [hasTakenDiamondAction, setHasTakenDiamondAction] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnecting, setWsReconnecting] = useState(false);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
+  const lastActionTypeRef = useRef<string | null>(null);
 
   const pulseOpacity = useSharedValue(1);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
@@ -102,6 +104,11 @@ export default function MatchScreen() {
     }
   }, [matchData]);
 
+  // Reset diamond gating when the active player or turn changes
+  useEffect(() => {
+    setHasTakenDiamondAction(false);
+  }, [gameState?.activePlayerId, gameState?.turnNumber]);
+
   const { mutate: submitAction, isPending: isSubmitting } = useSubmitGameAction({
     mutation: {
       onSuccess: (data) => {
@@ -110,6 +117,11 @@ export default function MatchScreen() {
         setSelectedTargetRoyalId(null);
         setPendingAttackerRoyalId(null);
         setSelectingAttacker(false);
+        const diamondActions = ["play_diamond_to_mine", "discard_diamond_to_draw", "discard_diamond_for_boost"];
+        if (lastActionTypeRef.current && diamondActions.includes(lastActionTypeRef.current)) {
+          setHasTakenDiamondAction(true);
+        }
+        lastActionTypeRef.current = null;
         if (data.winnerUserId) {
           router.replace({
             pathname: "/(game)/game-over",
@@ -173,6 +185,7 @@ export default function MatchScreen() {
             cardId: params.cardId,
           };
       }
+      lastActionTypeRef.current = body.type;
       submitAction({ matchId, data: body });
     },
     [matchId, submitAction],
@@ -338,8 +351,11 @@ export default function MatchScreen() {
       // Club directly targets the royal — dispatch immediately
       handleAction({ cardId: selectedCardId, action: "apply_club", targetPlayerId, targetRoyalId: royalId });
       setSelectedCardId(null);
+    } else if (card.isJoker) {
+      // Tapping an opponent royal with Joker selected = destroy_royal intent
+      handleAction({ cardId: selectedCardId, action: "play_joker", mode: "destroy_royal", targetPlayerId, targetRoyalId: royalId });
+      setSelectedCardId(null);
     }
-    // For Joker, the CardActionSheet handles the multi-step flow; opponent royal taps are not needed on board
   };
 
   // Tap own royal in attack phase → if multiple opponents, enter pending attacker mode; else auto-target
@@ -593,6 +609,7 @@ export default function MatchScreen() {
           myPlayerId={myId}
           myVault={vault}
           isPending={isSubmitting}
+          hasTakenDiamondAction={hasTakenDiamondAction}
           onClose={() => setSelectedCardId(null)}
           onAction={handleAction}
         />

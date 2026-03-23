@@ -13,6 +13,7 @@ export default function GameLayout() {
       <Stack.Screen name="lobby" />
       <Stack.Screen name="waiting-room" />
       <Stack.Screen name="match" />
+      <Stack.Screen name="game-over" />
     </Stack>
   );
 }
