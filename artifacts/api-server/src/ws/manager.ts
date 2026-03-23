@@ -3,7 +3,7 @@ import type { IncomingMessage } from "http";
 import type { Server } from "http";
 import { authService } from "../auth";
 import type { AuthSession } from "../auth";
-import { loadEngineState } from "../repositories/matchRepository";
+import { loadEngineState, isMatchPlayer, getActiveMatchForUser } from "../repositories/matchRepository";
 import { buildPlayerView } from "../game/serializer";
 import { logger } from "../lib/logger";
 
@@ -57,7 +57,9 @@ async function handleConnection(ws: WebSocket, req: IncomingMessage): Promise<vo
   const urlParams = new URLSearchParams(req.url?.split("?")[1] ?? "");
   const matchId = urlParams.get("matchId");
   if (matchId) {
-    await joinRoomAndReconnect(ws, client, matchId);
+    await authorizedJoinAndReconnect(ws, client, matchId);
+  } else {
+    await bootstrapActiveMatch(ws, client);
   }
 }
 
@@ -97,16 +99,36 @@ function joinRoom(ws: WebSocket, client: WsClient, matchId: string): void {
   matchRooms.get(matchId)!.add(ws);
 }
 
-async function joinRoomAndReconnect(ws: WebSocket, client: WsClient, matchId: string): Promise<void> {
+async function authorizedJoinAndReconnect(ws: WebSocket, client: WsClient, matchId: string): Promise<void> {
+  const member = await isMatchPlayer(matchId, client.userId);
+  if (!member) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "error", error: "Not a member of this match" }));
+    }
+    return;
+  }
   joinRoom(ws, client, matchId);
+  await pushCurrentState(ws, client.userId, matchId);
+}
 
+async function bootstrapActiveMatch(ws: WebSocket, client: WsClient): Promise<void> {
+  try {
+    const matchId = await getActiveMatchForUser(client.userId);
+    if (matchId) {
+      joinRoom(ws, client, matchId);
+      await pushCurrentState(ws, client.userId, matchId);
+    }
+  } catch (err) {
+    logger.warn({ err }, "Failed to bootstrap active match on reconnect");
+  }
+}
+
+async function pushCurrentState(ws: WebSocket, userId: string, matchId: string): Promise<void> {
   try {
     const engineState = await loadEngineState(matchId);
-    if (engineState) {
-      const view = buildPlayerView(engineState, client.userId);
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "reconnect_state", state: view }));
-      }
+    if (engineState && ws.readyState === WebSocket.OPEN) {
+      const view = buildPlayerView(engineState, userId);
+      ws.send(JSON.stringify({ type: "reconnect_state", state: view }));
     }
   } catch (err) {
     logger.warn({ err, matchId }, "Failed to send reconnect state");
@@ -134,8 +156,10 @@ async function handleMessage(ws: WebSocket, client: WsClient, raw: string): Prom
   const { type, matchId } = msg as Record<string, unknown>;
 
   if (type === "join_match" && typeof matchId === "string") {
-    await joinRoomAndReconnect(ws, client, matchId);
-    ws.send(JSON.stringify({ type: "joined_match", matchId }));
+    await authorizedJoinAndReconnect(ws, client, matchId);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "joined_match", matchId }));
+    }
   }
 }
 

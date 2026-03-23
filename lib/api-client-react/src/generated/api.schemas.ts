@@ -220,6 +220,8 @@ export interface GameActionRequest {
 export interface ActionResponse {
   ok: true;
   phase: string;
+  state: PlayerGameView;
+  winnerUserId?: string | null;
 }
 
 /**

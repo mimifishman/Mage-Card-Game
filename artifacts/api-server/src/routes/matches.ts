@@ -196,13 +196,15 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
 
     const newState = result.value;
 
+    const playerIds = Object.keys(newState.players);
+    const myView = buildPlayerView(newState, userId);
+
     if (isGameOver(newState)) {
       const winner = getWinner(newState);
       await saveEngineState(id, newState);
       if (winner) await finishMatch(id, winner);
       await logAction(id, userId, action, newState.turnNumber);
 
-      const playerIds = Object.keys(newState.players);
       broadcastViews(newState, playerIds, (uid, view) => {
         sendToUser(id, uid, {
           type: "game_over",
@@ -210,17 +212,18 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
           winnerUserId: winner ?? null,
         });
       });
+
+      res.json({ ok: true, phase: newState.phase, state: myView, winnerUserId: winner ?? null });
     } else {
       await saveEngineState(id, newState);
       await logAction(id, userId, action, newState.turnNumber);
 
-      const playerIds = Object.keys(newState.players);
       broadcastViews(newState, playerIds, (uid, view) => {
         sendToUser(id, uid, { type: "state_update", state: view });
       });
-    }
 
-    res.json({ ok: true, phase: newState.phase });
+      res.json({ ok: true, phase: newState.phase, state: myView });
+    }
   } catch (err) {
     req.log.error({ err }, "Failed to process action");
     res.status(500).json({ error: "Failed to process action" });

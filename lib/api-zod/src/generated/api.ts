@@ -231,6 +231,58 @@ export const SubmitGameActionBody = zod.object({
 export const SubmitGameActionResponse = zod.object({
   ok: zod.boolean(),
   phase: zod.string(),
+  state: zod.object({
+    matchId: zod.string(),
+    phase: zod.enum([
+      "draw",
+      "main",
+      "declare_attacks",
+      "declare_blocks",
+      "resolve_combat",
+      "end_turn",
+    ]),
+    turnNumber: zod.number(),
+    activePlayerId: zod.string(),
+    turnOrder: zod.array(zod.string()),
+    players: zod.record(
+      zod.string(),
+      zod.object({
+        id: zod.string(),
+        life: zod.number(),
+        isEliminated: zod.boolean(),
+        mine: zod.array(zod.string()),
+        court: zod.array(
+          zod.object({
+            cardId: zod.string(),
+            hasAttackedThisTurn: zod.boolean(),
+            hasteLocked: zod.boolean(),
+            damageTaken: zod.number(),
+            buffAttack: zod.number(),
+            buffHealth: zod.number(),
+            attachedCards: zod.array(zod.string()),
+          }),
+        ),
+        handCount: zod.number(),
+        vault: zod.object({
+          available: zod.number(),
+          tempBoost: zod.number(),
+          spent: zod.number(),
+        }),
+      }),
+    ),
+    myHand: zod.array(zod.string()),
+    deck: zod.number().describe("Number of cards remaining in the deck"),
+    abyss: zod.array(zod.string()),
+    attacks: zod.array(
+      zod.object({
+        attackerPlayerId: zod.string(),
+        attackerCardId: zod.string(),
+        targetPlayerId: zod.string(),
+        blockerCardId: zod.string().nullish(),
+      }),
+    ),
+  }),
+  winnerUserId: zod.string().nullish(),
 });
 
 /**

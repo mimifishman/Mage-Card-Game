@@ -698,10 +698,15 @@ components:
           enum: [destroy_royal, damage_player]
     ActionResponse:
       type: object
-      required: [ok, phase]
+      required: [ok, phase, state]
       properties:
         ok:
           type: boolean
           const: true
         phase:
           type: string
+        state:
+          $ref: "#/components/schemas/PlayerGameView"
+        winnerUserId:
+          type: string
+          nullable: true

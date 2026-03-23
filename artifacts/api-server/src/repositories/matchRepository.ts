@@ -172,6 +172,21 @@ export async function finishMatch(matchId: string, winnerUserId: string): Promis
     .where(eq(matchesTable.id, matchId));
 }
 
+export async function getActiveMatchForUser(userId: string): Promise<string | null> {
+  const rows = await db
+    .select({ matchId: matchPlayersTable.matchId })
+    .from(matchPlayersTable)
+    .innerJoin(matchesTable, eq(matchPlayersTable.matchId, matchesTable.id))
+    .where(
+      and(
+        eq(matchPlayersTable.userId, userId),
+        eq(matchesTable.status, "in_progress"),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.matchId ?? null;
+}
+
 export async function logAction(
   matchId: string,
   userId: string,
