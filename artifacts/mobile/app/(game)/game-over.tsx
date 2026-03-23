@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth";
+import { useGetMatch, getGetMatchQueryKey } from "@workspace/api-client-react";
 import Colors from "@/constants/colors";
 
 export default function GameOverScreen() {
@@ -19,7 +20,21 @@ export default function GameOverScreen() {
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
+  const { data: matchData } = useGetMatch(matchId ?? "", {
+    query: { queryKey: getGetMatchQueryKey(matchId ?? ""), enabled: !!matchId },
+  });
+
+  const displayNames: Record<string, string> = {};
+  if (matchData?.players) {
+    for (const p of matchData.players) {
+      displayNames[p.userId] = p.displayName;
+    }
+  }
+
   const didWin = winnerUserId === user?.id;
+  const winnerName = winnerUserId
+    ? (displayNames[winnerUserId] ?? winnerUserId.slice(0, 8))
+    : null;
 
   return (
     <View style={styles.container}>
@@ -45,10 +60,17 @@ export default function GameOverScreen() {
           <Text style={styles.resultSub}>
             {didWin
               ? "You conquered all challengers."
-              : winnerUserId
-              ? "The game has ended."
+              : winnerName
+              ? `${winnerName} wins the match!`
               : "The match is over."}
           </Text>
+
+          {!didWin && winnerName && (
+            <View style={styles.winnerBadge}>
+              <Ionicons name="trophy" size={14} color={Colors.brand} />
+              <Text style={styles.winnerBadgeText}>{winnerName}</Text>
+            </View>
+          )}
 
           <Text style={styles.matchIdText}>Match: {matchId}</Text>
         </Animated.View>
@@ -59,28 +81,21 @@ export default function GameOverScreen() {
             style={({ pressed }) => [styles.playAgainBtn, pressed && { opacity: 0.8 }]}
           >
             <LinearGradient
-              colors={[Colors.accentGreen ?? "#27AE60", "#1E8449"]}
+              colors={[Colors.accentGreen, "#1E8449"]}
               style={styles.playAgainGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               <Ionicons name="refresh" size={20} color="#FFF" />
-              <Text style={styles.playAgainText}>Play Again</Text>
+              <Text style={styles.playAgainText}>New Match</Text>
             </LinearGradient>
           </Pressable>
           <Pressable
-            onPress={() => router.replace("/(game)/lobby")}
+            onPress={() => router.replace("/")}
             style={({ pressed }) => [styles.lobbyBtn, pressed && { opacity: 0.8 }]}
           >
-            <LinearGradient
-              colors={[Colors.brand, Colors.brandDim]}
-              style={styles.lobbyBtnGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Ionicons name="home" size={20} color={Colors.bgDeep} />
-              <Text style={styles.lobbyBtnText}>Back to Lobby</Text>
-            </LinearGradient>
+            <Ionicons name="home-outline" size={20} color={Colors.textMuted} />
+            <Text style={styles.lobbyBtnText}>Back to Home</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -139,6 +154,22 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: "center",
   },
+  winnerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(200,155,60,0.1)",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(200,155,60,0.3)",
+  },
+  winnerBadgeText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.brand,
+  },
   matchIdText: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
@@ -167,19 +198,19 @@ const styles = StyleSheet.create({
     color: "#FFF",
   },
   lobbyBtn: {
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  lobbyBtnGradient: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingVertical: 18,
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgCard,
   },
   lobbyBtnText: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-    color: Colors.bgDeep,
+    fontSize: 16,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textMuted,
   },
 });
