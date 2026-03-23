@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -22,18 +22,26 @@ import Animated, {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as SecureStore from "expo-secure-store";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetMatch,
+  useStartMatch,
+  getGetMatchQueryKey,
+} from "@workspace/api-client-react";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
 
-interface MatchPlayer {
-  userId: string;
-  turnOrder: number;
-  life: number;
-  isEliminated: boolean;
-  joinedAt: string;
-}
+const PLAYER_TITLES = ["The Wanderer", "Archmage", "Stormcaller", "Shadowbinder"];
 
-const TITLES = ["The Wanderer", "Archmage", "Stormcaller", "Shadowbinder", "Flameweaver"];
+function getPlayerDisplayName(
+  userId: string,
+  myUserId: string | undefined,
+  myDisplayName: string | undefined,
+  turnOrder: number,
+): string {
+  if (userId === myUserId) return myDisplayName ?? "You";
+  return PLAYER_TITLES[turnOrder] ?? `Player ${turnOrder + 1}`;
+}
 
 export default function WaitingRoomScreen() {
   const { matchId, isHost: isHostParam, inviteCode } = useLocalSearchParams<{
@@ -45,13 +53,9 @@ export default function WaitingRoomScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-
-  const [players, setPlayers] = useState<MatchPlayer[]>([]);
-  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
-  const [isStarting, setIsStarting] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const pulseOpacity = useSharedValue(1);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
@@ -69,81 +73,81 @@ export default function WaitingRoomScreen() {
     );
   }, []);
 
-  const getApiBase = () => {
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    return domain ? `https://${domain}` : "";
-  };
+  const { data: matchData, isLoading } = useGetMatch(matchId ?? "", {
+    query: {
+      queryKey: getGetMatchQueryKey(matchId ?? ""),
+      refetchInterval: 3000,
+      enabled: !!matchId,
+    },
+  });
 
-  const getBearerHeader = useCallback(async (): Promise<Record<string, string>> => {
-    const token = await SecureStore.getItemAsync("auth_session_token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }, []);
-
-  const fetchMatchState = useCallback(async () => {
-    if (!matchId) return;
-    try {
-      const headers = await getBearerHeader();
-      const res = await fetch(`${getApiBase()}/api/matches/${matchId}`, { headers });
-      if (!res.ok) return;
-      const data = await res.json();
-      setPlayers(data.players ?? []);
-
-      const names: Record<string, string> = {};
-      (data.players ?? []).forEach((p: MatchPlayer, i: number) => {
-        names[p.userId] = TITLES[i % TITLES.length];
-      });
-      setDisplayNames(names);
-
-      if (data.match?.status === "in_progress") {
-        router.replace({ pathname: "/(game)/match", params: { matchId } });
-      }
-    } catch (e) {
-      console.error("fetchMatchState error:", e);
-    }
-  }, [matchId, getBearerHeader]);
+  const players = matchData?.players ?? [];
+  const matchStatus = matchData?.match?.status;
 
   useEffect(() => {
-    fetchMatchState();
+    if (matchStatus === "in_progress") {
+      router.replace({ pathname: "/(game)/match", params: { matchId } });
+    }
+  }, [matchStatus, matchId]);
+
+  useEffect(() => {
+    if (!matchId) return;
 
     const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    if (domain) {
-      const setupWs = async () => {
-        const token = await SecureStore.getItemAsync("auth_session_token");
-        const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
-        const ws = new WebSocket(wsUrl, token ? [`bearer-${token}`] : undefined);
-        wsRef.current = ws;
+    if (!domain) return;
 
-        ws.onopen = () => {
-          ws.send(JSON.stringify({ type: "join_match", matchId }));
-        };
+    const setupWs = async () => {
+      const token = await SecureStore.getItemAsync("auth_session_token");
+      const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
+      const protocols = token ? [`bearer-${token}`] : undefined;
+      const ws = new WebSocket(wsUrl, protocols);
+      wsRef.current = ws;
 
-        ws.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === "player_joined" || msg.type === "game_state_update") {
-              fetchMatchState();
-            } else if (msg.type === "game_started" || msg.type === "match_started") {
-              router.replace({ pathname: "/(game)/match", params: { matchId } });
-            }
-          } catch {}
-        };
-
-        ws.onerror = () => {};
-        ws.onclose = () => {};
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: "join_match", matchId }));
       };
 
-      setupWs();
-    }
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data as string);
+          if (
+            msg.type === "player_joined" ||
+            msg.type === "game_state_update"
+          ) {
+            queryClient.invalidateQueries({ queryKey: getGetMatchQueryKey(matchId) });
+          } else if (
+            msg.type === "game_started" ||
+            msg.type === "match_started"
+          ) {
+            router.replace({ pathname: "/(game)/match", params: { matchId } });
+          }
+        } catch {}
+      };
 
-    pollRef.current = setInterval(fetchMatchState, 3000);
+      ws.onerror = () => {};
+      ws.onclose = () => {};
+    };
+
+    setupWs();
 
     return () => {
       wsRef.current?.close();
-      if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [matchId, fetchMatchState]);
+  }, [matchId, queryClient]);
 
-  const handleStartGame = async () => {
+  const { mutate: startMatchMutate, isPending: isStarting } = useStartMatch({
+    mutation: {
+      onSuccess: () => {
+        router.replace({ pathname: "/(game)/match", params: { matchId } });
+      },
+      onError: (err) => {
+        const message = (err as { data?: { error?: string } })?.data?.error ?? "Failed to start match";
+        Alert.alert("Error", message);
+      },
+    },
+  });
+
+  const handleStartGame = () => {
     if (players.length < 2) {
       Alert.alert("Not enough players", "Need at least 2 players to start.");
       return;
@@ -153,24 +157,7 @@ export default function WaitingRoomScreen() {
       withTiming(0.94, { duration: 100 }),
       withTiming(1, { duration: 100 }),
     );
-    setIsStarting(true);
-    try {
-      const headers = await getBearerHeader();
-      const res = await fetch(`${getApiBase()}/api/matches/${matchId}/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        Alert.alert("Error", err.error ?? "Failed to start match");
-        return;
-      }
-      router.replace({ pathname: "/(game)/match", params: { matchId } });
-    } catch {
-      Alert.alert("Error", "Could not reach server");
-    } finally {
-      setIsStarting(false);
-    }
+    startMatchMutate({ matchId });
   };
 
   const handleCopyCode = () => {
@@ -236,45 +223,59 @@ export default function WaitingRoomScreen() {
             </View>
           </View>
 
-          <View style={styles.playersGrid}>
-            {Array.from({ length: 4 }).map((_, idx) => {
-              const player = players[idx];
-              const isMe = player?.userId === user?.id;
-              const name = player ? (displayNames[player.userId] ?? `Player ${idx + 1}`) : null;
+          {isLoading && players.length === 0 ? (
+            <ActivityIndicator color={Colors.brand} style={{ marginTop: 20 }} />
+          ) : (
+            <View style={styles.playersGrid}>
+              {Array.from({ length: 4 }).map((_, idx) => {
+                const player = players[idx];
+                const isMe = player?.userId === user?.id;
+                const displayName = player
+                  ? getPlayerDisplayName(player.userId, user?.id, user?.displayName, idx)
+                  : null;
 
-              return (
-                <Animated.View
-                  key={idx}
-                  entering={FadeInDown.delay(300 + idx * 80).duration(500)}
-                  style={[styles.playerSlot, player ? styles.playerSlotFilled : styles.playerSlotEmpty]}
-                >
-                  {player ? (
-                    <>
-                      <View style={[styles.playerAvatar, isMe && styles.playerAvatarMe]}>
-                        <MaterialCommunityIcons
-                          name="account-circle"
-                          size={28}
-                          color={isMe ? Colors.brand : Colors.textSecondary}
-                        />
-                      </View>
-                      <Text style={[styles.playerName, isMe && { color: Colors.brand }]} numberOfLines={1}>
-                        {name}
-                      </Text>
-                      {isMe && <Text style={styles.youBadge}>You</Text>}
-                      {idx === 0 && <Text style={styles.hostBadge}>Host</Text>}
-                    </>
-                  ) : (
-                    <>
-                      <View style={styles.emptySlot}>
-                        <Ionicons name="add" size={24} color={Colors.textMuted} />
-                      </View>
-                      <Text style={styles.emptySlotText}>Waiting...</Text>
-                    </>
-                  )}
-                </Animated.View>
-              );
-            })}
-          </View>
+                return (
+                  <Animated.View
+                    key={idx}
+                    entering={FadeInDown.delay(300 + idx * 80).duration(500)}
+                    style={[
+                      styles.playerSlot,
+                      player ? styles.playerSlotFilled : styles.playerSlotEmpty,
+                    ]}
+                  >
+                    {player ? (
+                      <>
+                        <View style={[styles.playerAvatar, isMe && styles.playerAvatarMe]}>
+                          <MaterialCommunityIcons
+                            name="account-circle"
+                            size={28}
+                            color={isMe ? Colors.brand : Colors.textSecondary}
+                          />
+                        </View>
+                        <Text
+                          style={[styles.playerName, isMe && { color: Colors.brand }]}
+                          numberOfLines={1}
+                        >
+                          {displayName}
+                        </Text>
+                        <View style={styles.badgeRow}>
+                          {isMe && <Text style={styles.youBadge}>You</Text>}
+                          {idx === 0 && <Text style={styles.hostBadge}>Host</Text>}
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.emptySlot}>
+                          <Ionicons name="add" size={24} color={Colors.textMuted} />
+                        </View>
+                        <Text style={styles.emptySlotText}>Waiting...</Text>
+                      </>
+                    )}
+                  </Animated.View>
+                );
+              })}
+            </View>
+          )}
 
           {players.length < 2 && (
             <View style={styles.waitingRow}>
@@ -299,7 +300,9 @@ export default function WaitingRoomScreen() {
               testID="start-game-button"
             >
               {isStarting ? (
-                <ActivityIndicator color={Colors.bgDeep} />
+                <View style={styles.loadingBtn}>
+                  <ActivityIndicator color={Colors.bgDeep} />
+                </View>
               ) : (
                 <LinearGradient
                   colors={canStart ? [Colors.brand, Colors.brandDim] : [Colors.bgSurface, Colors.bgCard]}
@@ -309,7 +312,9 @@ export default function WaitingRoomScreen() {
                 >
                   <Ionicons name="flash" size={22} color={canStart ? Colors.bgDeep : Colors.textMuted} />
                   <Text style={[styles.startBtnText, !canStart && { color: Colors.textMuted }]}>
-                    {canStart ? "Start Game" : `Need ${Math.max(0, 2 - players.length)} more player${players.length === 1 ? "" : "s"}`}
+                    {canStart
+                      ? "Start Game"
+                      : `Need ${Math.max(0, 2 - players.length)} more player${players.length === 1 ? "" : "s"}`}
                   </Text>
                 </LinearGradient>
               )}
@@ -435,7 +440,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     borderWidth: 1,
-    minHeight: 110,
+    minHeight: 120,
     justifyContent: "center",
   },
   playerSlotFilled: {
@@ -465,6 +470,10 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     color: Colors.textSecondary,
     textAlign: "center",
+  },
+  badgeRow: {
+    flexDirection: "row",
+    gap: 4,
   },
   youBadge: {
     fontSize: 10,
@@ -535,6 +544,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 10,
     paddingVertical: 18,
+  },
+  loadingBtn: {
+    paddingVertical: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.bgSurface,
   },
   startBtnText: {
     fontSize: 18,

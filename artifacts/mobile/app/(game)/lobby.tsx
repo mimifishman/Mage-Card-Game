@@ -21,6 +21,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useCreateMatch, useJoinMatch } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
 
@@ -29,89 +30,70 @@ export default function LobbyScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [inviteCode, setInviteCode] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
-  const [isJoining, setIsJoining] = useState(false);
   const [showJoinInput, setShowJoinInput] = useState(false);
 
   const createScale = useSharedValue(1);
   const joinScale = useSharedValue(1);
-
   const createStyle = useAnimatedStyle(() => ({ transform: [{ scale: createScale.value }] }));
   const joinStyle = useAnimatedStyle(() => ({ transform: [{ scale: joinScale.value }] }));
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const getApiBase = () => {
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    return domain ? `https://${domain}` : "";
-  };
+  const { mutate: createMatch, isPending: isCreating } = useCreateMatch({
+    mutation: {
+      onSuccess: (data) => {
+        router.push({
+          pathname: "/(game)/waiting-room",
+          params: {
+            matchId: data.match.id,
+            isHost: "true",
+            inviteCode: data.match.inviteCode,
+          },
+        });
+      },
+      onError: (err) => {
+        const message = (err as { data?: { error?: string } })?.data?.error ?? "Failed to create match";
+        Alert.alert("Error", message);
+      },
+    },
+  });
 
-  const getBearerHeader = async (): Promise<Record<string, string>> => {
-    const { default: SecureStore } = await import("expo-secure-store");
-    const token = await SecureStore.getItemAsync("auth_session_token");
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
+  const { mutate: joinMatch, isPending: isJoining } = useJoinMatch({
+    mutation: {
+      onSuccess: (data) => {
+        router.push({
+          pathname: "/(game)/waiting-room",
+          params: {
+            matchId: data.match.id,
+            isHost: "false",
+            inviteCode: data.match.inviteCode,
+          },
+        });
+      },
+      onError: (err) => {
+        const message = (err as { data?: { error?: string } })?.data?.error ?? "Failed to join match";
+        Alert.alert("Error", message);
+      },
+    },
+  });
 
-  const handleCreateMatch = async () => {
+  const handleCreateMatch = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     createScale.value = withSequence(
       withTiming(0.95, { duration: 100 }),
       withTiming(1, { duration: 100 }),
     );
-    setIsCreating(true);
-    try {
-      const headers = await getBearerHeader();
-      const res = await fetch(`${getApiBase()}/api/matches`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        Alert.alert("Error", err.error ?? "Failed to create match");
-        return;
-      }
-      const data = await res.json();
-      router.push({
-        pathname: "/(game)/waiting-room",
-        params: { matchId: data.match.id, isHost: "true", inviteCode: data.match.inviteCode },
-      });
-    } catch (e) {
-      Alert.alert("Error", "Could not reach server");
-    } finally {
-      setIsCreating(false);
-    }
+    createMatch();
   };
 
-  const handleJoinMatch = async () => {
+  const handleJoinMatch = () => {
     if (!inviteCode.trim()) {
       Alert.alert("Enter Code", "Please enter an invite code");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsJoining(true);
-    try {
-      const headers = await getBearerHeader();
-      const res = await fetch(`${getApiBase()}/api/matches/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
-        body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase() }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        Alert.alert("Error", err.error ?? "Failed to join match");
-        return;
-      }
-      const data = await res.json();
-      router.push({
-        pathname: "/(game)/waiting-room",
-        params: { matchId: data.match.id, isHost: "false", inviteCode: data.match.inviteCode },
-      });
-    } catch (e) {
-      Alert.alert("Error", "Could not reach server");
-    } finally {
-      setIsJoining(false);
-    }
+    joinMatch({ data: { inviteCode: inviteCode.trim().toUpperCase() } });
   };
 
   return (
