@@ -166,10 +166,10 @@ describe("declareBlock", () => {
 });
 
 describe("resolveCombat", () => {
-  it("unblocked attack deals damage to target player", () => {
+  it("unblocked attack deals damage to target player (defender passed)", () => {
     const state = makeState({
-      phase: "declare_attacks",
-      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, passed: true }],
       players: {
         [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
         [P2]: makePlayer(P2, { life: 20 }),
@@ -181,6 +181,21 @@ describe("resolveCombat", () => {
     expect(result.value.players[P2]!.life).toBe(16);
     expect(result.value.phase).toBe("end_turn");
     expect(result.value.attacks).toHaveLength(0);
+  });
+
+  it("rejects resolve_combat when called from declare_attacks phase", () => {
+    const state = makeState({
+      phase: "declare_attacks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { life: 20 }),
+      },
+    });
+    const result = resolveCombat(state, P1);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/declare_blocks/);
   });
 
   it("blocked attack: both Royals take damage, weak Royal destroyed and sent to Abyss", () => {
@@ -242,8 +257,8 @@ describe("resolveCombat", () => {
 
   it("rejects resolve_combat if not called by active player", () => {
     const state = makeState({
-      phase: "declare_attacks",
-      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, passed: true }],
       players: {
         [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
         [P2]: makePlayer(P2, { life: 20 }),

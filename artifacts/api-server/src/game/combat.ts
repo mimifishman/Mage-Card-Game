@@ -186,18 +186,16 @@ function removeDeadRoyals(
 }
 
 export function resolveCombat(state: GameState, callerPlayerId: string): Result<GameState> {
-  if (state.phase !== "declare_blocks" && state.phase !== "declare_attacks") {
-    return err(`Cannot resolve combat during phase "${state.phase}"`);
+  if (state.phase !== "declare_blocks") {
+    return err(`Cannot resolve combat during phase "${state.phase}". Must be in "declare_blocks".`);
   }
   if (state.activePlayerId !== callerPlayerId) {
     return err("Only the active player can resolve combat");
   }
 
-  if (state.phase === "declare_blocks") {
-    const undecided = state.attacks.filter((a) => !a.blockerCardId && !a.passed);
-    if (undecided.length > 0) {
-      return err("All defenders must block or pass before combat can be resolved");
-    }
+  const undecided = state.attacks.filter((a) => !a.blockerCardId && !a.passed);
+  if (undecided.length > 0) {
+    return err("All defenders must block or pass before combat can be resolved");
   }
 
   let players = { ...state.players };
