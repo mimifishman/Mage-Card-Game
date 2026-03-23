@@ -24,14 +24,15 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   useGetMatchState,
+  useGetMatch,
   useSubmitGameAction,
   getGetMatchStateQueryKey,
+  getGetMatchQueryKey,
 } from "@workspace/api-client-react";
 import type {
   PlayerGameView,
   PublicPlayerState,
   GameActionRequest,
-  MatchPlayer,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -42,6 +43,7 @@ import OpponentPanel from "@/components/game/OpponentPanel";
 import MineAbyssRow from "@/components/game/MineAbyssRow";
 import CardActionSheet from "@/components/game/CardActionSheet";
 import type { ActionParams } from "@/components/game/CardActionSheet";
+import { parseCardId } from "@/lib/gameUtils";
 
 export default function MatchScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
@@ -56,6 +58,7 @@ export default function MatchScreen() {
   const [gameState, setGameState] = useState<PlayerGameView | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedTargetRoyalId, setSelectedTargetRoyalId] = useState<string | null>(null);
+  const [pendingAttackerRoyalId, setPendingAttackerRoyalId] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnecting, setWsReconnecting] = useState(false);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
@@ -77,11 +80,26 @@ export default function MatchScreen() {
     },
   });
 
+  const { data: matchData } = useGetMatch(matchId ?? "", {
+    query: { queryKey: getGetMatchQueryKey(matchId ?? ""), enabled: !!matchId },
+  });
+
   useEffect(() => {
     if (stateData?.state) {
       setGameState(stateData.state);
     }
   }, [stateData]);
+
+  // Populate displayNames from match players metadata
+  useEffect(() => {
+    if (matchData?.players) {
+      const names: Record<string, string> = {};
+      for (const p of matchData.players) {
+        names[p.userId] = p.displayName;
+      }
+      setDisplayNames(names);
+    }
+  }, [matchData]);
 
   const { mutate: submitAction, isPending: isSubmitting } = useSubmitGameAction({
     mutation: {
@@ -89,6 +107,7 @@ export default function MatchScreen() {
         setGameState(data.state);
         setSelectedCardId(null);
         setSelectedTargetRoyalId(null);
+        setPendingAttackerRoyalId(null);
         if (data.winnerUserId) {
           router.replace({
             pathname: "/(game)/game-over",
@@ -288,26 +307,59 @@ export default function MatchScreen() {
     setSelectedTargetRoyalId(royalId === selectedTargetRoyalId ? null : royalId);
   };
 
+  // When user taps an opponent royal — could be: Club targeting, Joker targeting, or attack target
   const handleOpponentRoyalPress = (royalId: string, targetPlayerId: string) => {
-    if (!selectedCardId || !isMyTurn || !inMainPhase) return;
-    setSelectedCardId(null);
-    setSelectedTargetRoyalId(null);
+    if (!isMyTurn || !inMainPhase) return;
+
+    // Attack mode: if a royal is pending as attacker, declare the attack at this opponent
+    if (pendingAttackerRoyalId && inAttackPhase) {
+      if (!matchId) return;
+      submitAction({
+        matchId,
+        data: { type: "declare_attack", attackerRoyalId: pendingAttackerRoyalId, targetPlayerId },
+      });
+      setPendingAttackerRoyalId(null);
+      return;
+    }
+
+    if (!selectedCardId) return;
+    const card = parseCardId(selectedCardId);
+
+    if (card.suit === "C") {
+      // Club directly targets the royal — dispatch immediately
+      handleAction({ cardId: selectedCardId, action: "apply_club", targetPlayerId, targetRoyalId: royalId });
+      setSelectedCardId(null);
+    }
+    // For Joker, the CardActionSheet handles the multi-step flow; opponent royal taps are not needed on board
   };
 
-  const handleDeclareAttack = (attackerRoyalId: string) => {
-    if (!matchId || !isMyTurn) return;
-    const targets = opponents.filter((o) => !o.isEliminated);
-    if (targets.length === 0) return;
-    const target = targets[0];
-    if (!target) return;
+  // Tap own royal in attack phase → if multiple opponents, enter pending attacker mode; else auto-target
+  const handleRoyalAttackPress = (royalId: string) => {
+    if (!matchId || !isMyTurn || !inAttackPhase) return;
+    const royal = myState?.court.find((r) => r.cardId === royalId);
+    if (!royal || royal.hasAttackedThisTurn || royal.hasteLocked) return;
+    const activeOpponents = opponents.filter((o) => !o.isEliminated);
+    if (activeOpponents.length === 0) return;
+    if (activeOpponents.length === 1) {
+      // Single opponent — auto-target
+      submitAction({
+        matchId,
+        data: { type: "declare_attack", attackerRoyalId: royalId, targetPlayerId: activeOpponents[0]!.id },
+      });
+    } else {
+      // Multiple opponents — enter pending mode so user can tap an opponent panel
+      setPendingAttackerRoyalId(royalId);
+    }
+  };
+
+  // Handle opponent panel press (for attack target selection in multi-opponent games)
+  const handleOpponentPanelPress = (opponentId: string) => {
+    if (!pendingAttackerRoyalId || !matchId || !isMyTurn || !inAttackPhase) return;
     submitAction({
       matchId,
-      data: {
-        type: "declare_attack",
-        attackerRoyalId,
-        targetPlayerId: target.id,
-      },
+      data: { type: "declare_attack", attackerRoyalId: pendingAttackerRoyalId, targetPlayerId: opponentId },
     });
+    setPendingAttackerRoyalId(null);
   };
 
   const handleDoneAttacking = () => {
@@ -364,20 +416,38 @@ export default function MatchScreen() {
       >
         {opponents.length > 0 && (
           <Animated.View entering={FadeIn.duration(400)} style={styles.opponentSection}>
+            {pendingAttackerRoyalId && (
+              <View style={styles.attackTargetBanner}>
+                <Ionicons name="flash" size={14} color={Colors.accentRed} />
+                <Text style={styles.attackTargetText}>
+                  Tap an opponent to attack
+                </Text>
+                <Pressable onPress={() => setPendingAttackerRoyalId(null)} style={styles.cancelAttackBtn}>
+                  <Text style={styles.cancelAttackText}>Cancel</Text>
+                </Pressable>
+              </View>
+            )}
             {opponents.map((opp) => (
-              <OpponentPanel
+              <Pressable
                 key={opp.id}
-                player={opp}
-                displayName={
-                  displayNames[opp.id] ?? opp.id.slice(0, 8)
-                }
-                isActive={gameState.activePlayerId === opp.id}
-                onRoyalPress={
-                  isMyTurn && inMainPhase && selectedCardId
-                    ? (royalId) => handleOpponentRoyalPress(royalId, opp.id)
-                    : undefined
-                }
-              />
+                onPress={() => handleOpponentPanelPress(opp.id)}
+                disabled={!pendingAttackerRoyalId}
+                style={({ pressed }) => [
+                  pendingAttackerRoyalId && styles.attackTargetHighlight,
+                  pressed && pendingAttackerRoyalId && { opacity: 0.75 },
+                ]}
+              >
+                <OpponentPanel
+                  player={opp}
+                  displayName={displayNames[opp.id] ?? opp.id.slice(0, 8)}
+                  isActive={gameState.activePlayerId === opp.id}
+                  onRoyalPress={
+                    isMyTurn && inMainPhase && (selectedCardId || pendingAttackerRoyalId)
+                      ? (royalId) => handleOpponentRoyalPress(royalId, opp.id)
+                      : undefined
+                  }
+                />
+              </Pressable>
             ))}
           </Animated.View>
         )}
@@ -396,20 +466,16 @@ export default function MatchScreen() {
             isMyTurn={isMyTurn}
             size="lg"
             onRoyalPress={
-              isMyTurn && inAttackPhase
+              isMyTurn
                 ? (royalId) => {
                     const royal = myState?.court.find((r) => r.cardId === royalId);
                     const canAttack = royal && !royal.hasAttackedThisTurn && !royal.hasteLocked;
-                    if (canAttack) {
-                      // In main or declare_attacks phase: tap royal to declare attack
-                      handleDeclareAttack(royalId);
+                    if (inAttackPhase && canAttack) {
+                      handleRoyalAttackPress(royalId);
                     } else if (inMainPhase && selectedCardId) {
-                      // In main phase with a hand card selected: pick royal as support target
                       handleOwnRoyalPress(royalId);
                     }
                   }
-                : isMyTurn && inMainPhase && selectedCardId
-                ? handleOwnRoyalPress
                 : undefined
             }
             selectedTargetId={selectedTargetRoyalId}
@@ -706,5 +772,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
+  },
+  attackTargetBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(192,57,43,0.15)",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Colors.accentRed,
+  },
+  attackTargetText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.accentRed,
+    flex: 1,
+  },
+  cancelAttackBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  cancelAttackText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textMuted,
+  },
+  attackTargetHighlight: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.accentRed,
   },
 });

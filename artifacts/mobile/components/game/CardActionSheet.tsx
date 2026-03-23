@@ -177,11 +177,18 @@ export default function CardActionSheet({
                 validActions.map((va, i) => (
                   <Pressable
                     key={`${va.action}-${i}`}
-                    onPress={() => handleActionPick(va)}
-                    style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
+                    onPress={() => !va.disabled && handleActionPick(va)}
+                    disabled={va.disabled}
+                    style={({ pressed }) => [
+                      styles.actionBtn,
+                      va.disabled && styles.actionBtnDisabled,
+                      pressed && !va.disabled && { opacity: 0.7 },
+                    ]}
                   >
-                    <Text style={styles.actionLabel}>{va.label}</Text>
-                    {va.requiresTarget && (
+                    <Text style={[styles.actionLabel, va.disabled && styles.actionLabelDisabled]}>
+                      {va.label}
+                    </Text>
+                    {va.requiresTarget && !va.disabled && (
                       <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
                     )}
                   </Pressable>
@@ -339,11 +346,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  actionBtnDisabled: {
+    opacity: 0.5,
+    borderColor: "transparent",
+  },
   actionLabel: {
     fontSize: 14,
     fontFamily: "Inter_500Medium",
     color: Colors.textPrimary,
     flex: 1,
+  },
+  actionLabelDisabled: {
+    color: Colors.textMuted,
+    fontSize: 13,
   },
   noActions: {
     fontSize: 13,

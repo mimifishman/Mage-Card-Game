@@ -133,6 +133,7 @@ export interface ValidAction {
   action: CardAction;
   label: string;
   requiresTarget: boolean;
+  disabled?: boolean;
   targetType?: "own_royal" | "any_royal" | "any_player";
 }
 
@@ -186,36 +187,59 @@ export function getValidActionsForCard(
   }
 
   if (card.suit === "H") {
-    if (myCourtSize > 0) {
+    if (myCourtSize > 0 && vault >= card.vaultCost) {
       actions.push({
         action: "attach_heart",
-        label: "Attach to a Royal (+Health)",
+        label: `Attach to a Royal (+Health) [−${card.vaultCost} Vault]`,
         requiresTarget: true,
         targetType: "own_royal",
+      });
+    } else if (myCourtSize > 0) {
+      actions.push({
+        action: "attach_heart",
+        label: `Need ${card.vaultCost} Vault (have ${vault})`,
+        requiresTarget: false,
+        disabled: true,
       });
     }
     return actions;
   }
 
   if (card.suit === "S") {
-    if (myCourtSize > 0) {
+    if (myCourtSize > 0 && vault >= card.vaultCost) {
       actions.push({
         action: "attach_spade",
-        label: "Attach to a Royal (+Attack)",
+        label: `Attach to a Royal (+Attack) [−${card.vaultCost} Vault]`,
         requiresTarget: true,
         targetType: "own_royal",
+      });
+    } else if (myCourtSize > 0) {
+      actions.push({
+        action: "attach_spade",
+        label: `Need ${card.vaultCost} Vault (have ${vault})`,
+        requiresTarget: false,
+        disabled: true,
       });
     }
     return actions;
   }
 
   if (card.suit === "C") {
-    actions.push({
-      action: "apply_club",
-      label: "Damage a Player or Weaken a Royal",
-      requiresTarget: true,
-      targetType: "any_royal",
-    });
+    if (vault >= card.vaultCost) {
+      actions.push({
+        action: "apply_club",
+        label: `Damage a Royal [−${card.vaultCost} Vault]`,
+        requiresTarget: true,
+        targetType: "any_royal",
+      });
+    } else {
+      actions.push({
+        action: "apply_club",
+        label: `Need ${card.vaultCost} Vault (have ${vault})`,
+        requiresTarget: false,
+        disabled: true,
+      });
+    }
     return actions;
   }
 
