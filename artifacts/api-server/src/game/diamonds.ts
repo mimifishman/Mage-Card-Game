@@ -10,15 +10,23 @@ export function discardToAbyss(
   playerId: string,
   cardId: CardId,
 ): Result<GameState> {
-  const canPlay = canPlayCard(state, playerId, cardId);
-  if (!canPlay.ok) return canPlay as Result<GameState>;
+  if (state.activePlayerId !== playerId) {
+    return err("It is not your turn");
+  }
+  if (state.phase !== "main") {
+    return err(`Cannot discard during phase "${state.phase}"`);
+  }
+  const player = state.players[playerId];
+  if (!player) return err(`Player ${playerId} not found`);
+  if (!player.hand.includes(cardId)) {
+    return err(`Card ${cardId} is not in your hand`);
+  }
 
   const card = getCard(cardId);
   if (card.isRoyal) {
     return err(`Royal cards cannot be discarded to the Abyss`);
   }
 
-  const player = state.players[playerId]!;
   const withoutCard: PlayerState = {
     ...player,
     hand: player.hand.filter((c) => c !== cardId),
