@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: Auth
     description: Browser and mobile authentication endpoints.
+  - name: Matches
+    description: Match lifecycle and game action endpoints.
 paths:
   /healthz:
     get:
@@ -142,6 +144,242 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LogoutSuccess"
+  /matches:
+    post:
+      tags: [Matches]
+      operationId: createMatch
+      summary: Create a new match
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+      responses:
+        "201":
+          description: Match created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateMatchResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Internal error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /matches/join:
+    post:
+      tags: [Matches]
+      operationId: joinMatch
+      summary: Join a match by invite code
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinMatchRequest"
+      responses:
+        "200":
+          description: Joined match successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateMatchResponse"
+        "400":
+          description: Invalid invite code or match not joinable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Internal error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /matches/{matchId}:
+    get:
+      tags: [Matches]
+      operationId: getMatch
+      summary: Get match metadata and player list
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Match details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchDetailsResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a member of this match.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Match not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /matches/{matchId}/start:
+    post:
+      tags: [Matches]
+      operationId: startMatch
+      summary: Start the match (host only)
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Match started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartMatchResponse"
+        "400":
+          description: Match not in waiting state or not enough players.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Only the host can start the match.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Match not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /matches/{matchId}/actions:
+    post:
+      tags: [Matches]
+      operationId: submitGameAction
+      summary: Submit a game action
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameActionRequest"
+      responses:
+        "200":
+          description: Action accepted and state updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResponse"
+        "400":
+          description: Match has not started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a member of this match.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Action rejected by the rules engine.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /matches/{matchId}/state:
+    get:
+      tags: [Matches]
+      operationId: getMatchState
+      summary: Get the current game state (player-specific view)
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Player-specific game state view.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchStateResponse"
+        "400":
+          description: Match has not started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a member of this match.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 components:
   parameters:
     AuthorizationSessionHeader:
@@ -222,4 +460,248 @@ components:
       required: [error]
       properties:
         error:
+          type: string
+    MatchSummary:
+      type: object
+      required: [id, inviteCode, status]
+      properties:
+        id:
+          type: string
+        inviteCode:
+          type: string
+        status:
+          type: string
+          enum: [waiting, in_progress, finished]
+    CreateMatchResponse:
+      type: object
+      required: [match]
+      properties:
+        match:
+          $ref: "#/components/schemas/MatchSummary"
+    JoinMatchRequest:
+      type: object
+      required: [inviteCode]
+      properties:
+        inviteCode:
+          type: string
+          minLength: 1
+    MatchPlayer:
+      type: object
+      required: [userId, turnOrder, life, isEliminated, joinedAt]
+      properties:
+        userId:
+          type: string
+        turnOrder:
+          type: integer
+        life:
+          type: integer
+        isEliminated:
+          type: boolean
+        joinedAt:
+          type: string
+          format: date-time
+    MatchDetails:
+      type: object
+      required: [id, status, inviteCode, createdBy, turnNumber]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [waiting, in_progress, finished]
+        inviteCode:
+          type: string
+        createdBy:
+          type: string
+        turnNumber:
+          type: integer
+        currentTurnPlayerId:
+          type: string
+          nullable: true
+        winnerUserId:
+          type: string
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        finishedAt:
+          type: string
+          format: date-time
+          nullable: true
+    MatchDetailsResponse:
+      type: object
+      required: [match, players]
+      properties:
+        match:
+          $ref: "#/components/schemas/MatchDetails"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchPlayer"
+    StartMatchResponse:
+      type: object
+      required: [matchId, status]
+      properties:
+        matchId:
+          type: string
+        status:
+          type: string
+    RoyalInCourt:
+      type: object
+      required: [cardId, hasAttackedThisTurn, hasteLocked, damageTaken, buffAttack, buffHealth, attachedCards]
+      properties:
+        cardId:
+          type: string
+        hasAttackedThisTurn:
+          type: boolean
+        hasteLocked:
+          type: boolean
+        damageTaken:
+          type: integer
+        buffAttack:
+          type: integer
+        buffHealth:
+          type: integer
+        attachedCards:
+          type: array
+          items:
+            type: string
+    PublicPlayerState:
+      type: object
+      required: [id, life, isEliminated, mine, court, handCount, vault]
+      properties:
+        id:
+          type: string
+        life:
+          type: integer
+        isEliminated:
+          type: boolean
+        mine:
+          type: array
+          items:
+            type: string
+        court:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoyalInCourt"
+        handCount:
+          type: integer
+        vault:
+          type: object
+          required: [available, tempBoost, spent]
+          properties:
+            available:
+              type: integer
+            tempBoost:
+              type: integer
+            spent:
+              type: integer
+    AttackDeclaration:
+      type: object
+      required: [attackerPlayerId, attackerCardId, targetPlayerId]
+      properties:
+        attackerPlayerId:
+          type: string
+        attackerCardId:
+          type: string
+        targetPlayerId:
+          type: string
+        blockerCardId:
+          type: string
+          nullable: true
+    PlayerGameView:
+      type: object
+      required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, deck, abyss, attacks]
+      properties:
+        matchId:
+          type: string
+        phase:
+          type: string
+          enum: [draw, main, declare_attacks, declare_blocks, resolve_combat, end_turn]
+        turnNumber:
+          type: integer
+        activePlayerId:
+          type: string
+        turnOrder:
+          type: array
+          items:
+            type: string
+        players:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/PublicPlayerState"
+        myHand:
+          type: array
+          items:
+            type: string
+        deck:
+          type: integer
+          description: Number of cards remaining in the deck
+        abyss:
+          type: array
+          items:
+            type: string
+        attacks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttackDeclaration"
+    MatchStateResponse:
+      type: object
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/PlayerGameView"
+    GameActionRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum:
+            - play_diamond_to_mine
+            - discard_diamond_to_draw
+            - discard_diamond_for_boost
+            - play_royal_to_court
+            - attach_royal_support
+            - attach_heart
+            - attach_spade
+            - apply_club
+            - play_joker
+            - declare_attack
+            - begin_declare_blocks
+            - declare_block
+            - resolve_combat
+            - end_turn
+        cardId:
+          type: string
+        supportCardId:
+          type: string
+        heartCardId:
+          type: string
+        spadeCardId:
+          type: string
+        clubCardId:
+          type: string
+        targetRoyalId:
+          type: string
+        targetPlayerId:
+          type: string
+        attackerRoyalId:
+          type: string
+        blockerRoyalId:
+          type: string
+        attackerCardId:
+          type: string
+        mode:
+          type: string
+          enum: [destroy_royal, damage_player]
+    ActionResponse:
+      type: object
+      required: [ok, phase]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        phase:
           type: string

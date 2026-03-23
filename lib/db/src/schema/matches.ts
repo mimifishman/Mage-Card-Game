@@ -59,6 +59,7 @@ export const gameStateTable = pgTable("game_state", {
   abyss: jsonb("abyss").notNull().default([]),
   handByPlayer: jsonb("hand_by_player").notNull().default({}),
   courtByPlayer: jsonb("court_by_player").notNull().default({}),
+  fullState: jsonb("full_state"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

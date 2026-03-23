@@ -95,3 +95,208 @@ export const LogoutMobileSessionHeader = zod.object({
 export const LogoutMobileSessionResponse = zod.object({
   success: zod.boolean(),
 });
+
+/**
+ * @summary Create a new match
+ */
+export const CreateMatchHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+/**
+ * @summary Join a match by invite code
+ */
+export const JoinMatchHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+export const JoinMatchBody = zod.object({
+  inviteCode: zod.string().min(1),
+});
+
+export const JoinMatchResponse = zod.object({
+  match: zod.object({
+    id: zod.string(),
+    inviteCode: zod.string(),
+    status: zod.enum(["waiting", "in_progress", "finished"]),
+  }),
+});
+
+/**
+ * @summary Get match metadata and player list
+ */
+export const GetMatchParams = zod.object({
+  matchId: zod.coerce.string(),
+});
+
+export const GetMatchHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+export const GetMatchResponse = zod.object({
+  match: zod.object({
+    id: zod.string(),
+    status: zod.enum(["waiting", "in_progress", "finished"]),
+    inviteCode: zod.string(),
+    createdBy: zod.string(),
+    turnNumber: zod.number(),
+    currentTurnPlayerId: zod.string().nullish(),
+    winnerUserId: zod.string().nullish(),
+    startedAt: zod.date().nullish(),
+    finishedAt: zod.date().nullish(),
+  }),
+  players: zod.array(
+    zod.object({
+      userId: zod.string(),
+      turnOrder: zod.number(),
+      life: zod.number(),
+      isEliminated: zod.boolean(),
+      joinedAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Start the match (host only)
+ */
+export const StartMatchParams = zod.object({
+  matchId: zod.coerce.string(),
+});
+
+export const StartMatchHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+export const StartMatchResponse = zod.object({
+  matchId: zod.string(),
+  status: zod.string(),
+});
+
+/**
+ * @summary Submit a game action
+ */
+export const SubmitGameActionParams = zod.object({
+  matchId: zod.coerce.string(),
+});
+
+export const SubmitGameActionHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+export const SubmitGameActionBody = zod.object({
+  type: zod.enum([
+    "play_diamond_to_mine",
+    "discard_diamond_to_draw",
+    "discard_diamond_for_boost",
+    "play_royal_to_court",
+    "attach_royal_support",
+    "attach_heart",
+    "attach_spade",
+    "apply_club",
+    "play_joker",
+    "declare_attack",
+    "begin_declare_blocks",
+    "declare_block",
+    "resolve_combat",
+    "end_turn",
+  ]),
+  cardId: zod.string().optional(),
+  supportCardId: zod.string().optional(),
+  heartCardId: zod.string().optional(),
+  spadeCardId: zod.string().optional(),
+  clubCardId: zod.string().optional(),
+  targetRoyalId: zod.string().optional(),
+  targetPlayerId: zod.string().optional(),
+  attackerRoyalId: zod.string().optional(),
+  blockerRoyalId: zod.string().optional(),
+  attackerCardId: zod.string().optional(),
+  mode: zod.enum(["destroy_royal", "damage_player"]).optional(),
+});
+
+export const SubmitGameActionResponse = zod.object({
+  ok: zod.boolean(),
+  phase: zod.string(),
+});
+
+/**
+ * @summary Get the current game state (player-specific view)
+ */
+export const GetMatchStateParams = zod.object({
+  matchId: zod.coerce.string(),
+});
+
+export const GetMatchStateHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+export const GetMatchStateResponse = zod.object({
+  state: zod.object({
+    matchId: zod.string(),
+    phase: zod.enum([
+      "draw",
+      "main",
+      "declare_attacks",
+      "declare_blocks",
+      "resolve_combat",
+      "end_turn",
+    ]),
+    turnNumber: zod.number(),
+    activePlayerId: zod.string(),
+    turnOrder: zod.array(zod.string()),
+    players: zod.record(
+      zod.string(),
+      zod.object({
+        id: zod.string(),
+        life: zod.number(),
+        isEliminated: zod.boolean(),
+        mine: zod.array(zod.string()),
+        court: zod.array(
+          zod.object({
+            cardId: zod.string(),
+            hasAttackedThisTurn: zod.boolean(),
+            hasteLocked: zod.boolean(),
+            damageTaken: zod.number(),
+            buffAttack: zod.number(),
+            buffHealth: zod.number(),
+            attachedCards: zod.array(zod.string()),
+          }),
+        ),
+        handCount: zod.number(),
+        vault: zod.object({
+          available: zod.number(),
+          tempBoost: zod.number(),
+          spent: zod.number(),
+        }),
+      }),
+    ),
+    myHand: zod.array(zod.string()),
+    deck: zod.number().describe("Number of cards remaining in the deck"),
+    abyss: zod.array(zod.string()),
+    attacks: zod.array(
+      zod.object({
+        attackerPlayerId: zod.string(),
+        attackerCardId: zod.string(),
+        targetPlayerId: zod.string(),
+        blockerCardId: zod.string().nullish(),
+      }),
+    ),
+  }),
+});

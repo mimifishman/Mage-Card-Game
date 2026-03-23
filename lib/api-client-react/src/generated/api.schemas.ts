@@ -46,6 +46,182 @@ export interface ErrorEnvelope {
   error: string;
 }
 
+export type MatchSummaryStatus =
+  (typeof MatchSummaryStatus)[keyof typeof MatchSummaryStatus];
+
+export const MatchSummaryStatus = {
+  waiting: "waiting",
+  in_progress: "in_progress",
+  finished: "finished",
+} as const;
+
+export interface MatchSummary {
+  id: string;
+  inviteCode: string;
+  status: MatchSummaryStatus;
+}
+
+export interface CreateMatchResponse {
+  match: MatchSummary;
+}
+
+export interface JoinMatchRequest {
+  /** @minLength 1 */
+  inviteCode: string;
+}
+
+export interface MatchPlayer {
+  userId: string;
+  turnOrder: number;
+  life: number;
+  isEliminated: boolean;
+  joinedAt: string;
+}
+
+export type MatchDetailsStatus =
+  (typeof MatchDetailsStatus)[keyof typeof MatchDetailsStatus];
+
+export const MatchDetailsStatus = {
+  waiting: "waiting",
+  in_progress: "in_progress",
+  finished: "finished",
+} as const;
+
+export interface MatchDetails {
+  id: string;
+  status: MatchDetailsStatus;
+  inviteCode: string;
+  createdBy: string;
+  turnNumber: number;
+  currentTurnPlayerId?: string | null;
+  winnerUserId?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface MatchDetailsResponse {
+  match: MatchDetails;
+  players: MatchPlayer[];
+}
+
+export interface StartMatchResponse {
+  matchId: string;
+  status: string;
+}
+
+export interface RoyalInCourt {
+  cardId: string;
+  hasAttackedThisTurn: boolean;
+  hasteLocked: boolean;
+  damageTaken: number;
+  buffAttack: number;
+  buffHealth: number;
+  attachedCards: string[];
+}
+
+export type PublicPlayerStateVault = {
+  available: number;
+  tempBoost: number;
+  spent: number;
+};
+
+export interface PublicPlayerState {
+  id: string;
+  life: number;
+  isEliminated: boolean;
+  mine: string[];
+  court: RoyalInCourt[];
+  handCount: number;
+  vault: PublicPlayerStateVault;
+}
+
+export interface AttackDeclaration {
+  attackerPlayerId: string;
+  attackerCardId: string;
+  targetPlayerId: string;
+  blockerCardId?: string | null;
+}
+
+export type PlayerGameViewPhase =
+  (typeof PlayerGameViewPhase)[keyof typeof PlayerGameViewPhase];
+
+export const PlayerGameViewPhase = {
+  draw: "draw",
+  main: "main",
+  declare_attacks: "declare_attacks",
+  declare_blocks: "declare_blocks",
+  resolve_combat: "resolve_combat",
+  end_turn: "end_turn",
+} as const;
+
+export type PlayerGameViewPlayers = { [key: string]: PublicPlayerState };
+
+export interface PlayerGameView {
+  matchId: string;
+  phase: PlayerGameViewPhase;
+  turnNumber: number;
+  activePlayerId: string;
+  turnOrder: string[];
+  players: PlayerGameViewPlayers;
+  myHand: string[];
+  /** Number of cards remaining in the deck */
+  deck: number;
+  abyss: string[];
+  attacks: AttackDeclaration[];
+}
+
+export interface MatchStateResponse {
+  state: PlayerGameView;
+}
+
+export type GameActionRequestType =
+  (typeof GameActionRequestType)[keyof typeof GameActionRequestType];
+
+export const GameActionRequestType = {
+  play_diamond_to_mine: "play_diamond_to_mine",
+  discard_diamond_to_draw: "discard_diamond_to_draw",
+  discard_diamond_for_boost: "discard_diamond_for_boost",
+  play_royal_to_court: "play_royal_to_court",
+  attach_royal_support: "attach_royal_support",
+  attach_heart: "attach_heart",
+  attach_spade: "attach_spade",
+  apply_club: "apply_club",
+  play_joker: "play_joker",
+  declare_attack: "declare_attack",
+  begin_declare_blocks: "begin_declare_blocks",
+  declare_block: "declare_block",
+  resolve_combat: "resolve_combat",
+  end_turn: "end_turn",
+} as const;
+
+export type GameActionRequestMode =
+  (typeof GameActionRequestMode)[keyof typeof GameActionRequestMode];
+
+export const GameActionRequestMode = {
+  destroy_royal: "destroy_royal",
+  damage_player: "damage_player",
+} as const;
+
+export interface GameActionRequest {
+  type: GameActionRequestType;
+  cardId?: string;
+  supportCardId?: string;
+  heartCardId?: string;
+  spadeCardId?: string;
+  clubCardId?: string;
+  targetRoyalId?: string;
+  targetPlayerId?: string;
+  attackerRoyalId?: string;
+  blockerRoyalId?: string;
+  attackerCardId?: string;
+  mode?: GameActionRequestMode;
+}
+
+export interface ActionResponse {
+  ok: true;
+  phase: string;
+}
+
 /**
  * Bearer session token for mobile clients.
  */

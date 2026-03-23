@@ -17,14 +17,21 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ActionResponse,
   AuthUserEnvelope,
   BeginBrowserLoginParams,
+  CreateMatchResponse,
   ErrorEnvelope,
+  GameActionRequest,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
+  JoinMatchRequest,
   LogoutSuccess,
+  MatchDetailsResponse,
+  MatchStateResponse,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
+  StartMatchResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -635,3 +642,513 @@ export const useLogoutMobileSession = <
 > => {
   return useMutation(getLogoutMobileSessionMutationOptions(options));
 };
+
+/**
+ * @summary Create a new match
+ */
+export const getCreateMatchUrl = () => {
+  return `/api/matches`;
+};
+
+export const createMatch = async (
+  options?: RequestInit,
+): Promise<CreateMatchResponse> => {
+  return customFetch<CreateMatchResponse>(getCreateMatchUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCreateMatchMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createMatch>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createMatch>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["createMatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createMatch>>,
+    void
+  > = () => {
+    return createMatch(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateMatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createMatch>>
+>;
+
+export type CreateMatchMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Create a new match
+ */
+export const useCreateMatch = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createMatch>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createMatch>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getCreateMatchMutationOptions(options));
+};
+
+/**
+ * @summary Join a match by invite code
+ */
+export const getJoinMatchUrl = () => {
+  return `/api/matches/join`;
+};
+
+export const joinMatch = async (
+  joinMatchRequest: JoinMatchRequest,
+  options?: RequestInit,
+): Promise<CreateMatchResponse> => {
+  return customFetch<CreateMatchResponse>(getJoinMatchUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(joinMatchRequest),
+  });
+};
+
+export const getJoinMatchMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof joinMatch>>,
+    TError,
+    { data: BodyType<JoinMatchRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof joinMatch>>,
+  TError,
+  { data: BodyType<JoinMatchRequest> },
+  TContext
+> => {
+  const mutationKey = ["joinMatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof joinMatch>>,
+    { data: BodyType<JoinMatchRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return joinMatch(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type JoinMatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof joinMatch>>
+>;
+export type JoinMatchMutationBody = BodyType<JoinMatchRequest>;
+export type JoinMatchMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Join a match by invite code
+ */
+export const useJoinMatch = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof joinMatch>>,
+    TError,
+    { data: BodyType<JoinMatchRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof joinMatch>>,
+  TError,
+  { data: BodyType<JoinMatchRequest> },
+  TContext
+> => {
+  return useMutation(getJoinMatchMutationOptions(options));
+};
+
+/**
+ * @summary Get match metadata and player list
+ */
+export const getGetMatchUrl = (matchId: string) => {
+  return `/api/matches/${matchId}`;
+};
+
+export const getMatch = async (
+  matchId: string,
+  options?: RequestInit,
+): Promise<MatchDetailsResponse> => {
+  return customFetch<MatchDetailsResponse>(getGetMatchUrl(matchId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMatchQueryKey = (matchId: string) => {
+  return [`/api/matches/${matchId}`] as const;
+};
+
+export const getGetMatchQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMatch>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  matchId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMatch>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMatchQueryKey(matchId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMatch>>> = ({
+    signal,
+  }) => getMatch(matchId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!matchId,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getMatch>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetMatchQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMatch>>
+>;
+export type GetMatchQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Get match metadata and player list
+ */
+
+export function useGetMatch<
+  TData = Awaited<ReturnType<typeof getMatch>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  matchId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMatch>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMatchQueryOptions(matchId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Start the match (host only)
+ */
+export const getStartMatchUrl = (matchId: string) => {
+  return `/api/matches/${matchId}/start`;
+};
+
+export const startMatch = async (
+  matchId: string,
+  options?: RequestInit,
+): Promise<StartMatchResponse> => {
+  return customFetch<StartMatchResponse>(getStartMatchUrl(matchId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getStartMatchMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startMatch>>,
+    TError,
+    { matchId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startMatch>>,
+  TError,
+  { matchId: string },
+  TContext
+> => {
+  const mutationKey = ["startMatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startMatch>>,
+    { matchId: string }
+  > = (props) => {
+    const { matchId } = props ?? {};
+
+    return startMatch(matchId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartMatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startMatch>>
+>;
+
+export type StartMatchMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Start the match (host only)
+ */
+export const useStartMatch = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startMatch>>,
+    TError,
+    { matchId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startMatch>>,
+  TError,
+  { matchId: string },
+  TContext
+> => {
+  return useMutation(getStartMatchMutationOptions(options));
+};
+
+/**
+ * @summary Submit a game action
+ */
+export const getSubmitGameActionUrl = (matchId: string) => {
+  return `/api/matches/${matchId}/actions`;
+};
+
+export const submitGameAction = async (
+  matchId: string,
+  gameActionRequest: GameActionRequest,
+  options?: RequestInit,
+): Promise<ActionResponse> => {
+  return customFetch<ActionResponse>(getSubmitGameActionUrl(matchId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(gameActionRequest),
+  });
+};
+
+export const getSubmitGameActionMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitGameAction>>,
+    TError,
+    { matchId: string; data: BodyType<GameActionRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitGameAction>>,
+  TError,
+  { matchId: string; data: BodyType<GameActionRequest> },
+  TContext
+> => {
+  const mutationKey = ["submitGameAction"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitGameAction>>,
+    { matchId: string; data: BodyType<GameActionRequest> }
+  > = (props) => {
+    const { matchId, data } = props ?? {};
+
+    return submitGameAction(matchId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitGameActionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitGameAction>>
+>;
+export type SubmitGameActionMutationBody = BodyType<GameActionRequest>;
+export type SubmitGameActionMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Submit a game action
+ */
+export const useSubmitGameAction = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitGameAction>>,
+    TError,
+    { matchId: string; data: BodyType<GameActionRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitGameAction>>,
+  TError,
+  { matchId: string; data: BodyType<GameActionRequest> },
+  TContext
+> => {
+  return useMutation(getSubmitGameActionMutationOptions(options));
+};
+
+/**
+ * @summary Get the current game state (player-specific view)
+ */
+export const getGetMatchStateUrl = (matchId: string) => {
+  return `/api/matches/${matchId}/state`;
+};
+
+export const getMatchState = async (
+  matchId: string,
+  options?: RequestInit,
+): Promise<MatchStateResponse> => {
+  return customFetch<MatchStateResponse>(getGetMatchStateUrl(matchId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMatchStateQueryKey = (matchId: string) => {
+  return [`/api/matches/${matchId}/state`] as const;
+};
+
+export const getGetMatchStateQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMatchState>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  matchId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMatchState>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMatchStateQueryKey(matchId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMatchState>>> = ({
+    signal,
+  }) => getMatchState(matchId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!matchId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMatchState>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMatchStateQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMatchState>>
+>;
+export type GetMatchStateQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Get the current game state (player-specific view)
+ */
+
+export function useGetMatchState<
+  TData = Awaited<ReturnType<typeof getMatchState>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  matchId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMatchState>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMatchStateQueryOptions(matchId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

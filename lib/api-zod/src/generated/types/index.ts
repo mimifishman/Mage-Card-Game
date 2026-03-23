@@ -6,13 +6,34 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./actionResponse";
+export * from "./attackDeclaration";
 export * from "./authorizationSessionHeaderParameter";
 export * from "./authUser";
 export * from "./authUserEnvelope";
 export * from "./beginBrowserLoginParams";
+export * from "./createMatchResponse";
 export * from "./errorEnvelope";
+export * from "./gameActionRequest";
+export * from "./gameActionRequestMode";
+export * from "./gameActionRequestType";
 export * from "./handleBrowserLoginCallbackParams";
 export * from "./healthStatus";
+export * from "./joinMatchRequest";
 export * from "./logoutSuccess";
+export * from "./matchDetails";
+export * from "./matchDetailsResponse";
+export * from "./matchDetailsStatus";
+export * from "./matchPlayer";
+export * from "./matchStateResponse";
+export * from "./matchSummary";
+export * from "./matchSummaryStatus";
 export * from "./mobileTokenExchangeRequest";
 export * from "./mobileTokenExchangeSuccess";
+export * from "./playerGameView";
+export * from "./playerGameViewPhase";
+export * from "./playerGameViewPlayers";
+export * from "./publicPlayerState";
+export * from "./publicPlayerStateVault";
+export * from "./royalInCourt";
+export * from "./startMatchResponse";
