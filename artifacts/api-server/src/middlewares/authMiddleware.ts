@@ -28,7 +28,8 @@ export async function authMiddleware(
     if (session) {
       req.user = session;
     }
-  } catch {
+  } catch (err) {
+    req.log.warn({ err }, "Failed to resolve session; continuing unauthenticated");
   }
 
   next();
