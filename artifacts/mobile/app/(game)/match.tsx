@@ -59,6 +59,7 @@ export default function MatchScreen() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [selectedTargetRoyalId, setSelectedTargetRoyalId] = useState<string | null>(null);
   const [pendingAttackerRoyalId, setPendingAttackerRoyalId] = useState<string | null>(null);
+  const [selectingAttacker, setSelectingAttacker] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnecting, setWsReconnecting] = useState(false);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
@@ -108,6 +109,7 @@ export default function MatchScreen() {
         setSelectedCardId(null);
         setSelectedTargetRoyalId(null);
         setPendingAttackerRoyalId(null);
+        setSelectingAttacker(false);
         if (data.winnerUserId) {
           router.replace({
             pathname: "/(game)/game-over",
@@ -294,6 +296,13 @@ export default function MatchScreen() {
   // Royal can attack in main OR declare_attacks phase
   const inAttackPhase = inMainPhase || inDeclareAttacks;
 
+  // Eligible attackers: royals that haven't attacked yet and aren't haste-locked
+  const eligibleAttackers = (myState?.court ?? []).filter((r) => !r.hasAttackedThisTurn && !r.hasteLocked);
+  const hasEligibleAttackers = eligibleAttackers.length > 0;
+
+  // "Attack!" button: visible in main phase when eligible royals exist
+  const showAttackButton = isMyTurn && inMainPhase && hasEligibleAttackers;
+
   const handleCardPress = (cardId: string) => {
     if (selectedCardId === cardId) {
       setSelectedCardId(null);
@@ -460,6 +469,15 @@ export default function MatchScreen() {
 
         <Animated.View entering={FadeIn.delay(100).duration(400)} style={styles.myCourtSection}>
           <Text style={styles.sectionLabel}>YOUR COURT</Text>
+          {selectingAttacker && (
+            <View style={styles.attackTargetBanner}>
+              <Ionicons name="flash" size={14} color={Colors.accentRed} />
+              <Text style={styles.attackTargetText}>Tap a Royal to attack with</Text>
+              <Pressable onPress={() => setSelectingAttacker(false)} style={styles.cancelAttackBtn}>
+                <Text style={styles.cancelAttackText}>Cancel</Text>
+              </Pressable>
+            </View>
+          )}
           <CourtZone
             court={myState?.court ?? []}
             isMyZone
@@ -470,7 +488,8 @@ export default function MatchScreen() {
                 ? (royalId) => {
                     const royal = myState?.court.find((r) => r.cardId === royalId);
                     const canAttack = royal && !royal.hasAttackedThisTurn && !royal.hasteLocked;
-                    if (inAttackPhase && canAttack) {
+                    if ((inAttackPhase || selectingAttacker) && canAttack) {
+                      setSelectingAttacker(false);
                       handleRoyalAttackPress(royalId);
                     } else if (inMainPhase && selectedCardId) {
                       handleOwnRoyalPress(royalId);
@@ -482,8 +501,25 @@ export default function MatchScreen() {
           />
         </Animated.View>
 
-        {(canEndTurn || canDoneAttacking) && (
+        {(canEndTurn || canDoneAttacking || showAttackButton) && (
           <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.actionRow}>
+            {showAttackButton && !selectingAttacker && (
+              <Pressable
+                onPress={() => setSelectingAttacker(true)}
+                style={({ pressed }) => [styles.attackBtn, pressed && { opacity: 0.8 }]}
+                disabled={isSubmitting}
+              >
+                <LinearGradient
+                  colors={[Colors.accentRed, "#8B1A1A"]}
+                  style={styles.attackBtnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="flash" size={18} color="#FFF" />
+                  <Text style={styles.attackBtnText}>Attack!</Text>
+                </LinearGradient>
+              </Pressable>
+            )}
             {canDoneAttacking && (
               <Pressable
                 onPress={handleDoneAttacking}
