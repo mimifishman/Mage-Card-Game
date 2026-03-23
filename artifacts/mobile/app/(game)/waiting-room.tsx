@@ -21,6 +21,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Clipboard from "expo-clipboard";
 import * as SecureStore from "expo-secure-store";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -108,10 +109,14 @@ export default function WaitingRoomScreen() {
           ) {
             router.replace({ pathname: "/(game)/match", params: { matchId } });
           }
-        } catch {}
+        } catch (e) {
+          console.warn("WS message parse error:", e);
+        }
       };
 
-      ws.onerror = () => {};
+      ws.onerror = (e) => {
+        console.warn("WS error:", e);
+      };
       ws.onclose = () => {};
     };
 
@@ -147,7 +152,14 @@ export default function WaitingRoomScreen() {
     startMatchMutate({ matchId });
   };
 
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
+    if (inviteCode) {
+      try {
+        await Clipboard.setStringAsync(inviteCode);
+      } catch (e) {
+        console.warn("Clipboard copy failed:", e);
+      }
+    }
     Haptics.selectionAsync();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -217,6 +229,7 @@ export default function WaitingRoomScreen() {
               {Array.from({ length: 4 }).map((_, idx) => {
                 const player = players[idx];
                 const isMe = player?.userId === user?.id;
+                const isPlayerHost = player?.userId === matchData?.match?.createdBy;
                 const displayName = player?.displayName ?? null;
 
                 return (
@@ -245,7 +258,7 @@ export default function WaitingRoomScreen() {
                         </Text>
                         <View style={styles.badgeRow}>
                           {isMe && <Text style={styles.youBadge}>You</Text>}
-                          {idx === 0 && <Text style={styles.hostBadge}>Host</Text>}
+                          {isPlayerHost && <Text style={styles.hostBadge}>Host</Text>}
                         </View>
                       </>
                     ) : (

@@ -83,7 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
         setUser(null);
       }
-    } catch {
+    } catch (err) {
+      console.warn("fetchUser error:", err);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -149,7 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
-    } catch {
+    } catch (err) {
+      console.warn("Logout API call failed:", err);
     } finally {
       await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
       setUser(null);
