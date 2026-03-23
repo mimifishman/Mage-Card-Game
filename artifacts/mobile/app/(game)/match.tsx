@@ -106,11 +106,52 @@ export default function MatchScreen() {
   const handleAction = useCallback(
     (params: ActionParams) => {
       if (!matchId) return;
-      const body: GameActionRequest = { type: params.action as GameActionRequest["type"] };
-      if (params.targetRoyalId) body.targetRoyalId = params.targetRoyalId;
-      if (params.targetPlayerId) body.targetPlayerId = params.targetPlayerId;
-      if (params.mode) body.mode = params.mode as GameActionRequest["mode"];
-      body.cardId = params.cardId;
+      let body: GameActionRequest;
+      switch (params.action) {
+        case "attach_royal_support":
+          body = {
+            type: "attach_royal_support",
+            supportCardId: params.cardId,
+            targetRoyalId: params.targetRoyalId!,
+          };
+          break;
+        case "attach_heart":
+          body = {
+            type: "attach_heart",
+            heartCardId: params.cardId,
+            targetRoyalId: params.targetRoyalId!,
+          };
+          break;
+        case "attach_spade":
+          body = {
+            type: "attach_spade",
+            spadeCardId: params.cardId,
+            targetRoyalId: params.targetRoyalId!,
+          };
+          break;
+        case "apply_club":
+          body = {
+            type: "apply_club",
+            clubCardId: params.cardId,
+            targetPlayerId: params.targetPlayerId!,
+            targetRoyalId: params.targetRoyalId!,
+          };
+          break;
+        case "play_joker":
+          body = {
+            type: "play_joker",
+            cardId: params.cardId,
+            mode: params.mode as GameActionRequest["mode"],
+            targetRoyalId: params.targetRoyalId,
+            targetPlayerId: params.targetPlayerId,
+          };
+          break;
+        default:
+          body = {
+            type: params.action as GameActionRequest["type"],
+            cardId: params.cardId,
+          };
+      }
       submitAction({ matchId, data: body });
     },
     [matchId, submitAction],
@@ -226,13 +267,13 @@ export default function MatchScreen() {
   const inDeclareAttacks = phase === "declare_attacks";
   const vault = myState?.vault.available ?? 0;
 
-  const canEndTurn =
-    isMyTurn && (inMainPhase || inDeclareAttacks || phase === "end_turn");
+  const canEndTurn = isMyTurn && (inMainPhase || phase === "end_turn");
 
-  const canDeclareAttack =
-    isMyTurn && inMainPhase &&
-    myState !== undefined &&
-    myState.court.some((r) => !r.hasAttackedThisTurn && !r.hasteLocked);
+  // "Done Attacking" button: only valid in declare_attacks phase (after ≥1 attack declared)
+  const canDoneAttacking = isMyTurn && inDeclareAttacks;
+
+  // Royal can attack in main OR declare_attacks phase
+  const inAttackPhase = inMainPhase || inDeclareAttacks;
 
   const handleCardPress = (cardId: string) => {
     if (selectedCardId === cardId) {
@@ -263,10 +304,15 @@ export default function MatchScreen() {
       matchId,
       data: {
         type: "declare_attack",
-        attackerCardId: attackerRoyalId,
+        attackerRoyalId,
         targetPlayerId: target.id,
       },
     });
+  };
+
+  const handleDoneAttacking = () => {
+    if (!matchId) return;
+    submitAction({ matchId, data: { type: "begin_declare_blocks" } });
   };
 
   const activePlayerName = displayNames[gameState.activePlayerId]
@@ -350,28 +396,31 @@ export default function MatchScreen() {
             isMyTurn={isMyTurn}
             size="lg"
             onRoyalPress={
-              isMyTurn && (inMainPhase || inDeclareAttacks)
+              isMyTurn && inAttackPhase
                 ? (royalId) => {
-                    if (inDeclareAttacks && !myState?.court.find((r) => r.cardId === royalId)?.hasAttackedThisTurn) {
+                    const royal = myState?.court.find((r) => r.cardId === royalId);
+                    const canAttack = royal && !royal.hasAttackedThisTurn && !royal.hasteLocked;
+                    if (canAttack) {
+                      // In main or declare_attacks phase: tap royal to declare attack
                       handleDeclareAttack(royalId);
-                    } else if (inMainPhase) {
+                    } else if (inMainPhase && selectedCardId) {
+                      // In main phase with a hand card selected: pick royal as support target
                       handleOwnRoyalPress(royalId);
                     }
                   }
+                : isMyTurn && inMainPhase && selectedCardId
+                ? handleOwnRoyalPress
                 : undefined
             }
             selectedTargetId={selectedTargetRoyalId}
           />
         </Animated.View>
 
-        {(canEndTurn || canDeclareAttack) && (
+        {(canEndTurn || canDoneAttacking) && (
           <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.actionRow}>
-            {canDeclareAttack && (
+            {canDoneAttacking && (
               <Pressable
-                onPress={() => {
-                  if (!matchId) return;
-                  submitAction({ matchId, data: { type: "begin_declare_blocks" } });
-                }}
+                onPress={handleDoneAttacking}
                 style={({ pressed }) => [styles.attackBtn, pressed && { opacity: 0.8 }]}
                 disabled={isSubmitting}
               >
@@ -381,8 +430,8 @@ export default function MatchScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
-                  <Ionicons name="flash" size={18} color="#FFF" />
-                  <Text style={styles.attackBtnText}>Attack</Text>
+                  <Ionicons name="shield" size={18} color="#FFF" />
+                  <Text style={styles.attackBtnText}>Done Attacking</Text>
                 </LinearGradient>
               </Pressable>
             )}

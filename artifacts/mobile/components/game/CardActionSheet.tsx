@@ -224,32 +224,34 @@ export default function CardActionSheet({
               </Text>
               {opponents.map((opp) => (
                 <View key={opp.id} style={styles.oppSection}>
-                  <Pressable
-                    onPress={() => {
-                      if (jokerMode === "damage_player") {
-                        handlePlayerTarget(opp.id);
-                      } else if (opp.court.length === 0) {
-                        if (chosenAction?.action === "apply_club") {
-                          handlePlayerTarget(opp.id);
-                        }
-                      }
-                    }}
-                    style={({ pressed }) => [styles.oppBtn, pressed && { opacity: 0.75 }]}
-                  >
-                    <Text style={styles.oppName}>🎯 {opp.id.slice(0, 8)}</Text>
-                    <Text style={styles.oppLife}>♥ {opp.life}</Text>
-                  </Pressable>
+                  {jokerMode === "damage_player" ? (
+                    <Pressable
+                      onPress={() => handlePlayerTarget(opp.id)}
+                      style={({ pressed }) => [styles.oppBtn, pressed && { opacity: 0.75 }]}
+                    >
+                      <Text style={styles.oppName}>🎯 {opp.id.slice(0, 8)}</Text>
+                      <Text style={styles.oppLife}>♥ {opp.life}</Text>
+                    </Pressable>
+                  ) : (
+                    <View style={styles.oppBtn}>
+                      <Text style={styles.oppName}>🎯 {opp.id.slice(0, 8)}</Text>
+                      <Text style={styles.oppLife}>♥ {opp.life}</Text>
+                    </View>
+                  )}
                   {(jokerMode === "destroy_royal" || chosenAction?.action === "apply_club") &&
-                    opp.court.length > 0 && (
+                    opp.court.length > 0 ? (
                       <View style={styles.oppCourt}>
-                        <Text style={styles.courtHint}>→ pick a Royal:</Text>
+                        <Text style={styles.courtHint}>→ pick a Royal to target:</Text>
                         <CourtZone
                           court={opp.court}
                           size="sm"
                           onRoyalPress={(royalId) => handlePlayerTarget(opp.id, royalId)}
                         />
                       </View>
-                    )}
+                    ) : (jokerMode === "destroy_royal" || chosenAction?.action === "apply_club") &&
+                    opp.court.length === 0 ? (
+                      <Text style={styles.courtHint}>  No royals in court — cannot target</Text>
+                    ) : null}
                 </View>
               ))}
             </ScrollView>
