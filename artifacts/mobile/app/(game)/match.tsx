@@ -179,6 +179,16 @@ export default function MatchScreen() {
             targetPlayerId: params.targetPlayerId,
           };
           break;
+        case "discard_to_abyss":
+          body = { type: "discard_to_abyss", cardId: params.cardId };
+          break;
+        case "apply_club_damage":
+          body = {
+            type: "apply_club",
+            clubCardId: params.cardId,
+            targetPlayerId: params.targetPlayerId!,
+          };
+          break;
         default:
           body = {
             type: params.action as GameActionRequest["type"],

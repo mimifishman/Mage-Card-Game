@@ -182,6 +182,7 @@ export const GameActionRequestType = {
   play_diamond_to_mine: "play_diamond_to_mine",
   discard_diamond_to_draw: "discard_diamond_to_draw",
   discard_diamond_for_boost: "discard_diamond_for_boost",
+  discard_to_abyss: "discard_to_abyss",
   play_royal_to_court: "play_royal_to_court",
   attach_royal_support: "attach_royal_support",
   attach_heart: "attach_heart",

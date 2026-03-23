@@ -5,6 +5,32 @@ import { addTempBoost } from "./vault";
 import { drawCard } from "./draw";
 import { canPlayCard } from "./validation";
 
+export function discardToAbyss(
+  state: GameState,
+  playerId: string,
+  cardId: CardId,
+): Result<GameState> {
+  const canPlay = canPlayCard(state, playerId, cardId);
+  if (!canPlay.ok) return canPlay as Result<GameState>;
+
+  const card = getCard(cardId);
+  if (card.isRoyal) {
+    return err(`Royal cards cannot be discarded to the Abyss`);
+  }
+
+  const player = state.players[playerId]!;
+  const withoutCard: PlayerState = {
+    ...player,
+    hand: player.hand.filter((c) => c !== cardId),
+  };
+
+  return ok({
+    ...state,
+    abyss: [...state.abyss, cardId],
+    players: { ...state.players, [playerId]: withoutCard },
+  });
+}
+
 function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return {
     ...player,

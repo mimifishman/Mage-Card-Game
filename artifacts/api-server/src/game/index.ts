@@ -33,13 +33,13 @@ export { createInitialGameState, dealInitialHands, determineFirstPlayer } from "
 
 export { canPlayCard } from "./validation";
 
-export { playDiamondToMine, discardDiamondToDraw, discardDiamondForBoost } from "./diamonds";
+export { playDiamondToMine, discardDiamondToDraw, discardDiamondForBoost, discardToAbyss } from "./diamonds";
 
 export { playRoyalToCourt, attachRoyalSupport } from "./royals";
 
 export { attachHeart, attachSpade } from "./attachments";
 
-export { applyClubToRoyal } from "./clubs";
+export { applyClub, applyClubToRoyal } from "./clubs";
 
 export { playJokerDestroyRoyal, playJokerDamagePlayer, playJoker } from "./joker";
 export type { JokerMode } from "./joker";

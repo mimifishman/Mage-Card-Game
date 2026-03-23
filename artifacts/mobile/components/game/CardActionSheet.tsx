@@ -115,6 +115,8 @@ export default function CardActionSheet({
       } else {
         onAction({ cardId, action: "apply_club", targetPlayerId });
       }
+    } else if (chosenAction.action === "apply_club_damage") {
+      onAction({ cardId, action: "apply_club_damage", targetPlayerId });
     }
   };
 
@@ -234,7 +236,7 @@ export default function CardActionSheet({
               </Text>
               {opponents.map((opp) => (
                 <View key={opp.id} style={styles.oppSection}>
-                  {jokerMode === "damage_player" ? (
+                  {jokerMode === "damage_player" || chosenAction?.action === "apply_club_damage" ? (
                     <Pressable
                       onPress={() => handlePlayerTarget(opp.id)}
                       style={({ pressed }) => [styles.oppBtn, pressed && { opacity: 0.75 }]}

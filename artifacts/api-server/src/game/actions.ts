@@ -38,11 +38,16 @@ export const AttachSpadeActionSchema = z.object({
   targetRoyalId: z.string(),
 });
 
+export const DiscardToAbyssActionSchema = z.object({
+  type: z.literal("discard_to_abyss"),
+  cardId: z.string(),
+});
+
 export const ApplyClubActionSchema = z.object({
   type: z.literal("apply_club"),
   clubCardId: z.string(),
   targetPlayerId: z.string(),
-  targetRoyalId: z.string(),
+  targetRoyalId: z.string().optional(),
 });
 
 export const PlayJokerActionSchema = z.object({
@@ -81,6 +86,7 @@ export const GameActionSchema = z.discriminatedUnion("type", [
   PlayDiamondToMineActionSchema,
   DiscardDiamondToDrawActionSchema,
   DiscardDiamondForBoostActionSchema,
+  DiscardToAbyssActionSchema,
   PlayRoyalToCourtActionSchema,
   AttachRoyalSupportActionSchema,
   AttachHeartActionSchema,

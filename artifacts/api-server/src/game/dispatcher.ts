@@ -5,11 +5,12 @@ import {
   playDiamondToMine,
   discardDiamondToDraw,
   discardDiamondForBoost,
+  discardToAbyss,
   playRoyalToCourt,
   attachRoyalSupport,
   attachHeart,
   attachSpade,
-  applyClubToRoyal,
+  applyClub,
   playJokerDestroyRoyal,
   playJokerDamagePlayer,
   declareAttack,
@@ -34,6 +35,9 @@ export function dispatchAction(
     case "discard_diamond_for_boost":
       return discardDiamondForBoost(state, playerId, action.cardId);
 
+    case "discard_to_abyss":
+      return discardToAbyss(state, playerId, action.cardId);
+
     case "play_royal_to_court":
       return playRoyalToCourt(state, playerId, action.cardId);
 
@@ -47,7 +51,7 @@ export function dispatchAction(
       return attachSpade(state, playerId, action.spadeCardId, action.targetRoyalId);
 
     case "apply_club":
-      return applyClubToRoyal(
+      return applyClub(
         state,
         playerId,
         action.clubCardId,

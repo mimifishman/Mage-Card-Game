@@ -122,11 +122,13 @@ export type CardAction =
   | "play_diamond_to_mine"
   | "discard_diamond_to_draw"
   | "discard_diamond_for_boost"
+  | "discard_to_abyss"
   | "play_royal_to_court"
   | "attach_royal_support"
   | "attach_heart"
   | "attach_spade"
   | "apply_club"
+  | "apply_club_damage"
   | "play_joker";
 
 export interface ValidAction {
@@ -200,18 +202,23 @@ export function getValidActionsForCard(
     if (myCourtSize > 0 && vault >= card.vaultCost) {
       actions.push({
         action: "attach_heart",
-        label: `Attach to a Royal (+Health) [−${card.vaultCost} Vault]`,
+        label: `Attach to a Royal (+${card.pipValue} Health) [−${card.vaultCost} Vault]`,
         requiresTarget: true,
         targetType: "own_royal",
       });
     } else if (myCourtSize > 0) {
       actions.push({
         action: "attach_heart",
-        label: `Need ${card.vaultCost} Vault (have ${vault})`,
+        label: `Need ${card.vaultCost} Vault to attach (have ${vault})`,
         requiresTarget: false,
         disabled: true,
       });
     }
+    actions.push({
+      action: "discard_to_abyss",
+      label: "Discard to Abyss",
+      requiresTarget: false,
+    });
     return actions;
   }
 
@@ -219,18 +226,23 @@ export function getValidActionsForCard(
     if (myCourtSize > 0 && vault >= card.vaultCost) {
       actions.push({
         action: "attach_spade",
-        label: `Attach to a Royal (+Attack) [−${card.vaultCost} Vault]`,
+        label: `Attach to a Royal (+${card.pipValue} Attack) [−${card.vaultCost} Vault]`,
         requiresTarget: true,
         targetType: "own_royal",
       });
     } else if (myCourtSize > 0) {
       actions.push({
         action: "attach_spade",
-        label: `Need ${card.vaultCost} Vault (have ${vault})`,
+        label: `Need ${card.vaultCost} Vault to attach (have ${vault})`,
         requiresTarget: false,
         disabled: true,
       });
     }
+    actions.push({
+      action: "discard_to_abyss",
+      label: "Discard to Abyss",
+      requiresTarget: false,
+    });
     return actions;
   }
 
@@ -238,9 +250,15 @@ export function getValidActionsForCard(
     if (vault >= card.vaultCost) {
       actions.push({
         action: "apply_club",
-        label: `Damage a Royal [−${card.vaultCost} Vault]`,
+        label: `Debuff opponent Royal (−${card.pipValue} ATK/HP) [−${card.vaultCost} Vault]`,
         requiresTarget: true,
         targetType: "any_royal",
+      });
+      actions.push({
+        action: "apply_club_damage",
+        label: `Deal ${card.pipValue} damage to a player [−${card.vaultCost} Vault]`,
+        requiresTarget: true,
+        targetType: "any_player",
       });
     } else {
       actions.push({

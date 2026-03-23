@@ -21,12 +21,12 @@ function destroyRoyalToAbyss(
   };
 }
 
-export function applyClubToRoyal(
+export function applyClub(
   state: GameState,
   playerId: string,
   cardId: CardId,
   targetPlayerId: string,
-  targetCardId: CardId,
+  targetCardId?: CardId,
 ): Result<GameState> {
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
@@ -36,11 +36,32 @@ export function applyClubToRoyal(
     return err(`Card ${cardId} is not a non-Royal Club`);
   }
   if (targetPlayerId === playerId) {
-    return err("Cannot use Club on your own Royal");
+    return err("Cannot use Club on yourself");
   }
 
   const targetPlayer = state.players[targetPlayerId];
   if (!targetPlayer) return err(`Player ${targetPlayerId} not found`);
+
+  const player = state.players[playerId]!;
+  const withoutCard = { ...player, hand: player.hand.filter((c) => c !== cardId) };
+  const afterSpend = spendVault(withoutCard, card.vaultCost);
+  const updatedAbyss = [...state.abyss, cardId];
+
+  if (!targetCardId) {
+    const damagedTarget: PlayerState = {
+      ...targetPlayer,
+      life: Math.max(0, targetPlayer.life - card.pipValue),
+    };
+    return ok({
+      ...state,
+      abyss: updatedAbyss,
+      players: {
+        ...state.players,
+        [playerId]: afterSpend,
+        [targetPlayerId]: damagedTarget,
+      },
+    });
+  }
 
   const royalIdx = targetPlayer.court.findIndex((r) => r.cardId === targetCardId);
   if (royalIdx === -1) {
@@ -54,19 +75,15 @@ export function applyClubToRoyal(
     buffHealth: royal.buffHealth - card.pipValue,
   };
 
-  const player = state.players[playerId]!;
-  const withoutCard = { ...player, hand: player.hand.filter((c) => c !== cardId) };
-  const afterSpend = spendVault(withoutCard, card.vaultCost);
-
   let updatedTargetPlayer: PlayerState;
-  let updatedAbyss = [...state.abyss, cardId];
+  let currentAbyss = updatedAbyss;
 
   const hp = effectiveHealth(debuffedRoyal);
 
   if (hp <= 0) {
-    const result = destroyRoyalToAbyss(targetPlayer, targetCardId, updatedAbyss);
+    const result = destroyRoyalToAbyss(targetPlayer, targetCardId, currentAbyss);
     updatedTargetPlayer = result.player;
-    updatedAbyss = result.abyss;
+    currentAbyss = result.abyss;
   } else {
     const updatedCourt = [...targetPlayer.court];
     updatedCourt[royalIdx] = debuffedRoyal;
@@ -75,7 +92,7 @@ export function applyClubToRoyal(
 
   return ok({
     ...state,
-    abyss: updatedAbyss,
+    abyss: currentAbyss,
     players: {
       ...state.players,
       [playerId]: afterSpend,
@@ -83,3 +100,5 @@ export function applyClubToRoyal(
     },
   });
 }
+
+export const applyClubToRoyal = applyClub;
