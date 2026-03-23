@@ -8,6 +8,7 @@ interface OpponentPanelProps {
   player: PublicPlayerState;
   displayName: string;
   isActive: boolean;
+  isEliminated?: boolean;
   onRoyalPress?: (royalId: string) => void;
   selectedTargetId?: string | null;
 }
@@ -16,45 +17,57 @@ export default function OpponentPanel({
   player,
   displayName,
   isActive,
+  isEliminated = false,
   onRoyalPress,
   selectedTargetId,
 }: OpponentPanelProps) {
   return (
-    <View style={[styles.container, isActive && styles.containerActive]}>
-      <View style={styles.info}>
+    <View style={[styles.container, isActive && styles.containerActive, isEliminated && styles.containerEliminated]}>
+      <View style={[styles.info, isEliminated && styles.infoEliminated]}>
         <View style={styles.nameRow}>
           {isActive && <View style={styles.activeDot} />}
-          <Text style={[styles.name, isActive && styles.nameActive]} numberOfLines={1}>
+          <Text style={[styles.name, isActive && styles.nameActive, isEliminated && styles.nameEliminated]} numberOfLines={1}>
             {displayName}
           </Text>
         </View>
-        <View style={styles.stats}>
-          <View style={styles.statChip}>
-            <Text style={styles.statIcon}>♥</Text>
-            <Text style={styles.statVal}>{player.life}</Text>
+        {isEliminated ? (
+          <View style={styles.eliminatedBadge}>
+            <Text style={styles.eliminatedText}>ELIMINATED</Text>
           </View>
-          <View style={styles.statChip}>
-            <Text style={styles.statIcon}>🃏</Text>
-            <Text style={styles.statVal}>{player.handCount}</Text>
-          </View>
-          {player.vault.available > 0 && (
-            <View style={[styles.statChip, styles.vaultChip]}>
-              <Text style={styles.statIcon}>⚡</Text>
-              <Text style={[styles.statVal, { color: Colors.brand }]}>{player.vault.available}</Text>
+        ) : (
+          <>
+            <View style={styles.stats}>
+              <View style={styles.statChip}>
+                <Text style={styles.statIcon}>♥</Text>
+                <Text style={styles.statVal}>{player.life}</Text>
+              </View>
+              <View style={styles.statChip}>
+                <Text style={styles.statIcon}>🃏</Text>
+                <Text style={styles.statVal}>{player.handCount}</Text>
+              </View>
+              {player.vault.available > 0 && (
+                <View style={[styles.statChip, styles.vaultChip]}>
+                  <Text style={styles.statIcon}>⚡</Text>
+                  <Text style={[styles.statVal, { color: Colors.brand }]}>{player.vault.available}</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
-        {player.mine.length > 0 && (
-          <Text style={styles.mineHint}>⛏ {player.mine.length}</Text>
+            {player.mine.length > 0 && (
+              <Text style={styles.mineHint}>⛏ {player.mine.length}</Text>
+            )}
+          </>
         )}
       </View>
-      <View style={styles.court}>
+      <View style={[styles.court, isEliminated && styles.courtEliminated]}>
         <CourtZone
           court={player.court}
           size="sm"
-          onRoyalPress={onRoyalPress}
+          onRoyalPress={isEliminated ? undefined : onRoyalPress}
           selectedTargetId={selectedTargetId}
         />
+        {isEliminated && player.court.length === 0 && (
+          <Text style={styles.emptyEliminated}>No court</Text>
+        )}
       </View>
     </View>
   );
@@ -74,6 +87,10 @@ const styles = StyleSheet.create({
   containerActive: {
     borderColor: Colors.brand,
     backgroundColor: "rgba(200,155,60,0.06)",
+  },
+  containerEliminated: {
+    opacity: 0.45,
+    borderColor: Colors.bgSurface,
   },
   info: {
     width: 100,
@@ -131,5 +148,36 @@ const styles = StyleSheet.create({
   },
   court: {
     flex: 1,
+  },
+  infoEliminated: {
+    opacity: 0.7,
+  },
+  nameEliminated: {
+    color: Colors.textMuted,
+  },
+  courtEliminated: {
+    opacity: 0.5,
+  },
+  eliminatedBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(74,68,56,0.3)",
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.textMuted,
+  },
+  eliminatedText: {
+    fontSize: 8,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textMuted,
+    letterSpacing: 1,
+  },
+  emptyEliminated: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    fontFamily: "Inter_400Regular",
+    fontStyle: "italic",
+    paddingLeft: 4,
   },
 });

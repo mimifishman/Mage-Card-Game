@@ -56,6 +56,20 @@ export default function GameOverScreen() {
         <Animated.View entering={FadeInDown.delay(300).duration(600)} style={styles.buttons}>
           <Pressable
             onPress={() => router.replace("/(game)/lobby")}
+            style={({ pressed }) => [styles.playAgainBtn, pressed && { opacity: 0.8 }]}
+          >
+            <LinearGradient
+              colors={[Colors.accentGreen ?? "#27AE60", "#1E8449"]}
+              style={styles.playAgainGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name="refresh" size={20} color="#FFF" />
+              <Text style={styles.playAgainText}>Play Again</Text>
+            </LinearGradient>
+          </Pressable>
+          <Pressable
+            onPress={() => router.replace("/(game)/lobby")}
             style={({ pressed }) => [styles.lobbyBtn, pressed && { opacity: 0.8 }]}
           >
             <LinearGradient
@@ -135,6 +149,22 @@ const styles = StyleSheet.create({
   buttons: {
     width: "100%",
     gap: 12,
+  },
+  playAgainBtn: {
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  playAgainGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 18,
+  },
+  playAgainText: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    color: "#FFF",
   },
   lobbyBtn: {
     borderRadius: 16,

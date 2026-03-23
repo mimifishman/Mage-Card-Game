@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import Animated, {
   FadeIn,
+  FadeOut,
   useSharedValue,
   withRepeat,
   withSequence,
@@ -43,6 +44,7 @@ import OpponentPanel from "@/components/game/OpponentPanel";
 import MineAbyssRow from "@/components/game/MineAbyssRow";
 import CardActionSheet from "@/components/game/CardActionSheet";
 import type { ActionParams } from "@/components/game/CardActionSheet";
+import BlockingModal from "@/components/game/BlockingModal";
 import { parseCardId } from "@/lib/gameUtils";
 
 export default function MatchScreen() {
@@ -63,6 +65,11 @@ export default function MatchScreen() {
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnecting, setWsReconnecting] = useState(false);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
+  const [blockingPassedIds, setBlockingPassedIds] = useState<Set<string>>(new Set());
+  const [blockingDismissed, setBlockingDismissed] = useState(false);
+  const [combatResultText, setCombatResultText] = useState<string | null>(null);
+  const prevPhaseRef = useRef<string | null>(null);
+  const prevPlayersRef = useRef<Record<string, { life: number; courtSize: number }>>({});
 
   const pulseOpacity = useSharedValue(1);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
@@ -101,6 +108,52 @@ export default function MatchScreen() {
       setDisplayNames(names);
     }
   }, [matchData]);
+
+  // Detect combat resolution: phase moved from declare_blocks → end_turn
+  useEffect(() => {
+    if (!gameState) return;
+    const prev = prevPhaseRef.current;
+    const prevPlayers = prevPlayersRef.current;
+
+    if (prev === "declare_blocks" && (gameState.phase === "end_turn" || gameState.phase === "draw")) {
+      const parts: string[] = [];
+      for (const [id, p] of Object.entries(gameState.players)) {
+        const before = prevPlayers[id];
+        if (!before) continue;
+        const lifeDelta = p.life - before.life;
+        if (lifeDelta < 0) {
+          const name = displayNames[id] ?? id.slice(0, 8);
+          parts.push(`${name} took ${-lifeDelta} damage`);
+        }
+        const courtLost = before.courtSize - p.court.length;
+        if (courtLost > 0) {
+          const name = displayNames[id] ?? id.slice(0, 8);
+          parts.push(`${name} lost ${courtLost} Royal${courtLost > 1 ? "s" : ""}`);
+        }
+      }
+      if (parts.length > 0) {
+        setCombatResultText(parts.join(" · "));
+        setTimeout(() => setCombatResultText(null), 4000);
+      }
+    }
+
+    prevPhaseRef.current = gameState.phase;
+    prevPlayersRef.current = Object.fromEntries(
+      Object.entries(gameState.players).map(([id, p]) => [
+        id,
+        { life: p.life, courtSize: p.court.length },
+      ]),
+    );
+  }, [gameState]);
+
+  // Reset blocking state when exiting declare_blocks phase
+  useEffect(() => {
+    if (!gameState) return;
+    if (gameState.phase !== "declare_blocks") {
+      setBlockingPassedIds(new Set());
+      setBlockingDismissed(false);
+    }
+  }, [gameState?.phase]);
 
   const { mutate: submitAction, isPending: isSubmitting } = useSubmitGameAction({
     mutation: {
@@ -290,18 +343,22 @@ export default function MatchScreen() {
   const opponents = gameState.turnOrder
     .filter((id) => id !== myId)
     .map((id) => gameState.players[id])
-    .filter((p): p is PublicPlayerState => !!p && !p.isEliminated);
+    .filter((p): p is PublicPlayerState => !!p);
 
   const isMyTurn = gameState.activePlayerId === myId;
   const phase = gameState.phase;
   const inMainPhase = phase === "main";
   const inDeclareAttacks = phase === "declare_attacks";
+  const inDeclareBlocks = phase === "declare_blocks";
   const vault = myState?.vault.available ?? 0;
 
   const canEndTurn = isMyTurn && (inMainPhase || phase === "end_turn");
 
   // "Done Attacking" button: only valid in declare_attacks phase (after ≥1 attack declared)
   const canDoneAttacking = isMyTurn && inDeclareAttacks;
+
+  // "Resolve Combat" button: active player resolves after blocks are declared
+  const canResolveCombat = isMyTurn && inDeclareBlocks;
 
   // Royal can attack in main OR declare_attacks phase
   const inAttackPhase = inMainPhase || inDeclareAttacks;
@@ -312,6 +369,10 @@ export default function MatchScreen() {
 
   // "Attack!" button: visible in main phase when eligible royals exist
   const showAttackButton = isMyTurn && inMainPhase && hasEligibleAttackers;
+
+  // Blocking modal: shown to defender in declare_blocks phase
+  const attacksTargetingMe = gameState.attacks.filter((a) => a.targetPlayerId === myId);
+  const showBlockingModal = inDeclareBlocks && !isMyTurn && attacksTargetingMe.length > 0 && !blockingDismissed;
 
   const handleCardPress = (cardId: string) => {
     if (selectedCardId === cardId) {
@@ -404,6 +465,19 @@ export default function MatchScreen() {
     submitAction({ matchId, data: { type: "begin_declare_blocks" } });
   };
 
+  const handleBlock = useCallback(
+    (blockerRoyalId: string, attackerRoyalId: string) => {
+      if (!matchId) return;
+      submitAction({ matchId, data: { type: "declare_block", blockerRoyalId, attackerRoyalId } });
+    },
+    [matchId, submitAction],
+  );
+
+  const handleResolveCombat = useCallback(() => {
+    if (!matchId) return;
+    submitAction({ matchId, data: { type: "resolve_combat" } });
+  }, [matchId, submitAction]);
+
   const activePlayerName = displayNames[gameState.activePlayerId]
     ?? (gameState.activePlayerId === myId ? (user?.displayName ?? "You") : gameState.activePlayerId.slice(0, 8));
 
@@ -468,18 +542,19 @@ export default function MatchScreen() {
               <Pressable
                 key={opp.id}
                 onPress={() => handleOpponentPanelPress(opp.id)}
-                disabled={!pendingAttackerRoyalId}
+                disabled={!pendingAttackerRoyalId || opp.isEliminated}
                 style={({ pressed }) => [
-                  pendingAttackerRoyalId && styles.attackTargetHighlight,
-                  pressed && pendingAttackerRoyalId && { opacity: 0.75 },
+                  pendingAttackerRoyalId && !opp.isEliminated && styles.attackTargetHighlight,
+                  pressed && pendingAttackerRoyalId && !opp.isEliminated && { opacity: 0.75 },
                 ]}
               >
                 <OpponentPanel
                   player={opp}
                   displayName={displayNames[opp.id] ?? opp.id.slice(0, 8)}
                   isActive={gameState.activePlayerId === opp.id}
+                  isEliminated={opp.isEliminated}
                   onRoyalPress={
-                    isMyTurn && inMainPhase && (selectedCardId || pendingAttackerRoyalId)
+                    isMyTurn && inMainPhase && !opp.isEliminated && (selectedCardId || pendingAttackerRoyalId)
                       ? (royalId) => handleOpponentRoyalPress(royalId, opp.id)
                       : undefined
                   }
@@ -529,7 +604,7 @@ export default function MatchScreen() {
           />
         </Animated.View>
 
-        {(canEndTurn || canDoneAttacking || showAttackButton) && (
+        {(canEndTurn || canDoneAttacking || showAttackButton || canResolveCombat) && (
           <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.actionRow}>
             {showAttackButton && !selectingAttacker && (
               <Pressable
@@ -565,6 +640,23 @@ export default function MatchScreen() {
                 </LinearGradient>
               </Pressable>
             )}
+            {canResolveCombat && (
+              <Pressable
+                onPress={handleResolveCombat}
+                style={({ pressed }) => [styles.attackBtn, pressed && { opacity: 0.8 }]}
+                disabled={isSubmitting}
+              >
+                <LinearGradient
+                  colors={["#8B2020", Colors.accentRed]}
+                  style={styles.attackBtnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Ionicons name="flash-outline" size={18} color="#FFF" />
+                  <Text style={styles.attackBtnText}>Resolve Combat</Text>
+                </LinearGradient>
+              </Pressable>
+            )}
             {canEndTurn && (
               <Pressable
                 onPress={handleEndTurn}
@@ -591,7 +683,7 @@ export default function MatchScreen() {
           </Animated.View>
         )}
 
-        {!isMyTurn && (
+        {!isMyTurn && !inDeclareBlocks && (
           <View style={styles.waitingBanner}>
             <ActivityIndicator size="small" color={Colors.textMuted} />
             <Text style={styles.waitingText}>
@@ -599,7 +691,35 @@ export default function MatchScreen() {
             </Text>
           </View>
         )}
+        {!isMyTurn && inDeclareBlocks && attacksTargetingMe.length === 0 && (
+          <View style={styles.waitingBanner}>
+            <ActivityIndicator size="small" color={Colors.textMuted} />
+            <Text style={styles.waitingText}>Others declaring blocks...</Text>
+          </View>
+        )}
       </ScrollView>
+
+      {combatResultText && (
+        <Animated.View entering={FadeIn.duration(300)} exiting={FadeOut.duration(500)} style={styles.combatResultBanner}>
+          <Ionicons name="flash" size={14} color={Colors.accentRed} />
+          <Text style={styles.combatResultText}>{combatResultText}</Text>
+        </Animated.View>
+      )}
+
+      <BlockingModal
+        visible={showBlockingModal}
+        attacks={gameState.attacks}
+        myId={myId}
+        myCourt={myState?.court ?? []}
+        displayNames={displayNames}
+        passedIds={blockingPassedIds}
+        isSubmitting={isSubmitting}
+        onBlock={handleBlock}
+        onPass={(attackerRoyalId) =>
+          setBlockingPassedIds((prev) => new Set([...prev, attackerRoyalId]))
+        }
+        onDismiss={() => setBlockingDismissed(true)}
+      />
 
       <HandTray
         cards={gameState.myHand}
@@ -868,5 +988,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: Colors.accentRed,
+  },
+  combatResultBanner: {
+    position: "absolute",
+    top: 80,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(10,10,15,0.92)",
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: Colors.accentRed,
+    zIndex: 200,
+  },
+  combatResultText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
   },
 });
