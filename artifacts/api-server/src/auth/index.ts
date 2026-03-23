@@ -12,7 +12,7 @@ function createAuthService(): AuthService {
     default:
       throw new Error(
         `Unknown AUTH_PROVIDER "${provider}". Supported values: "replit". ` +
-          `To add a new provider, create a class implementing AuthService and register it here.`,
+          `To add a new provider, implement AuthService and register it here.`,
       );
   }
 }

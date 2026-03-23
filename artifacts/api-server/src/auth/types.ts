@@ -8,9 +8,5 @@ export interface AuthSession {
 
 export interface AuthService {
   getSession(req: Request): Promise<AuthSession | null>;
-  handleWebLogin(req: Request, res: Response): Promise<void>;
-  handleWebCallback(req: Request, res: Response): Promise<void>;
-  handleWebLogout(req: Request, res: Response): Promise<void>;
-  handleMobileTokenExchange(req: Request, res: Response): Promise<void>;
-  handleMobileLogout(req: Request, res: Response): Promise<void>;
+  handleCallback(req: Request, res: Response): Promise<void>;
 }

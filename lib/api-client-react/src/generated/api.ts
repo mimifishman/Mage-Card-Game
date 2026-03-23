@@ -116,7 +116,7 @@ export function useHealthCheck<
  * @summary Get the currently authenticated user
  */
 export const getGetCurrentAuthUserUrl = () => {
-  return `/api/auth/user`;
+  return `/api/auth/me`;
 };
 
 export const getCurrentAuthUser = async (
@@ -129,7 +129,7 @@ export const getCurrentAuthUser = async (
 };
 
 export const getGetCurrentAuthUserQueryKey = () => {
-  return [`/api/auth/user`] as const;
+  return [`/api/auth/me`] as const;
 };
 
 export const getGetCurrentAuthUserQueryOptions = <
@@ -301,8 +301,8 @@ export const getHandleBrowserLoginCallbackUrl = (
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/api/callback?${stringifiedParams}`
-    : `/api/callback`;
+    ? `/api/auth/callback?${stringifiedParams}`
+    : `/api/auth/callback`;
 };
 
 export const handleBrowserLoginCallback = async (
@@ -318,7 +318,7 @@ export const handleBrowserLoginCallback = async (
 export const getHandleBrowserLoginCallbackQueryKey = (
   params?: HandleBrowserLoginCallbackParams,
 ) => {
-  return [`/api/callback`, ...(params ? [params] : [])] as const;
+  return [`/api/auth/callback`, ...(params ? [params] : [])] as const;
 };
 
 export const getHandleBrowserLoginCallbackQueryOptions = <

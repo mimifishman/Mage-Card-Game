@@ -1,9 +1,15 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { authService } from "../auth";
+import {
+  handleWebLogin,
+  handleWebLogout,
+  handleMobileTokenExchange,
+  handleMobileLogout,
+} from "../auth/providers/replit-route-helpers";
 
 const router: IRouter = Router();
 
-router.get("/auth/user", (req: Request, res: Response) => {
+router.get("/auth/me", (req: Request, res: Response) => {
   res.json({
     user: req.isAuthenticated()
       ? {
@@ -14,27 +20,27 @@ router.get("/auth/user", (req: Request, res: Response) => {
   });
 });
 
-router.get("/login", async (req: Request, res: Response) => {
-  await authService.handleWebLogin(req, res);
+router.get("/auth/callback", async (req: Request, res: Response) => {
+  await authService.handleCallback(req, res);
 });
 
-router.get("/callback", async (req: Request, res: Response) => {
-  await authService.handleWebCallback(req, res);
+router.get("/login", async (req: Request, res: Response) => {
+  await handleWebLogin(req, res);
 });
 
 router.get("/logout", async (req: Request, res: Response) => {
-  await authService.handleWebLogout(req, res);
+  await handleWebLogout(req, res);
 });
 
 router.post(
   "/mobile-auth/token-exchange",
   async (req: Request, res: Response) => {
-    await authService.handleMobileTokenExchange(req, res);
+    await handleMobileTokenExchange(req, res);
   },
 );
 
 router.post("/mobile-auth/logout", async (req: Request, res: Response) => {
-  await authService.handleMobileLogout(req, res);
+  await handleMobileLogout(req, res);
 });
 
 export default router;

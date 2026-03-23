@@ -26,7 +26,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
-  /auth/user:
+  /auth/me:
     get:
       tags: [Auth]
       operationId: getCurrentAuthUser
@@ -56,7 +56,7 @@ paths:
       responses:
         "302":
           description: Redirect to the OIDC authorization endpoint.
-  /callback:
+  /auth/callback:
     get:
       tags: [Auth]
       operationId: handleBrowserLoginCallback
