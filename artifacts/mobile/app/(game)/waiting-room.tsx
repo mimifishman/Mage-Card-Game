@@ -22,7 +22,7 @@ import Animated, {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
-import * as SecureStore from "expo-secure-store";
+import { getStoredToken } from "@/lib/token-storage";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetMatch,
@@ -85,7 +85,7 @@ export default function WaitingRoomScreen() {
     if (!domain) return;
 
     const setupWs = async () => {
-      const token = await SecureStore.getItemAsync("auth_session_token");
+      const token = await getStoredToken();
       const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
       const protocols = token ? [`bearer-${token}`] : undefined;
       const ws = new WebSocket(wsUrl, protocols);

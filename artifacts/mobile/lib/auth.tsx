@@ -2,30 +2,15 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Platform } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
-import * as SecureStore from "expo-secure-store";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
+import { AUTH_TOKEN_KEY, getStoredToken, setStoredToken, deleteStoredToken } from "./token-storage";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const AUTH_TOKEN_KEY = "auth_session_token";
 const ISSUER_URL = "https://replit.com/oidc";
 
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 if (domain) setBaseUrl(`https://${domain}`);
-
-async function getStoredToken(): Promise<string | null> {
-  if (Platform.OS === "web") return localStorage.getItem(AUTH_TOKEN_KEY);
-  return SecureStore.getItemAsync(AUTH_TOKEN_KEY);
-}
-async function setStoredToken(token: string): Promise<void> {
-  if (Platform.OS === "web") { localStorage.setItem(AUTH_TOKEN_KEY, token); return; }
-  await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
-}
-async function deleteStoredToken(): Promise<void> {
-  if (Platform.OS === "web") { localStorage.removeItem(AUTH_TOKEN_KEY); return; }
-  await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
-}
-
 setAuthTokenGetter(getStoredToken);
 
 interface User {

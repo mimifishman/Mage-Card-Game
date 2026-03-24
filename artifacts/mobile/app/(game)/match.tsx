@@ -13,7 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as SecureStore from "expo-secure-store";
+import { getStoredToken } from "@/lib/token-storage";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -255,7 +255,7 @@ export default function MatchScreen() {
     let closed = false;
 
     const connect = async () => {
-      const token = await SecureStore.getItemAsync("auth_session_token");
+      const token = await getStoredToken();
       const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
       const protocols = token ? [`bearer-${token}`] : undefined;
       const ws = new WebSocket(wsUrl, protocols);

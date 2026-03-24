@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import * as SecureStore from "expo-secure-store";
+import { getStoredToken } from "@/lib/token-storage";
 import { useAuth } from "@/lib/auth";
 import { useGetMatch, getGetMatchQueryKey, useRematchMatch } from "@workspace/api-client-react";
 import Colors from "@/constants/colors";
@@ -48,7 +48,7 @@ export default function GameOverScreen() {
     async function connect() {
       const domain = process.env.EXPO_PUBLIC_DOMAIN ?? "";
       if (!domain) return;
-      const token = await SecureStore.getItemAsync("auth_session_token");
+      const token = await getStoredToken();
       const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
       const protocols = token ? [`bearer-${token}`] : undefined;
       const ws = new WebSocket(wsUrl, protocols);
