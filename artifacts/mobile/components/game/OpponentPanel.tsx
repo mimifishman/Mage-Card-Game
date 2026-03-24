@@ -22,11 +22,22 @@ export default function OpponentPanel({
   selectedTargetId,
 }: OpponentPanelProps) {
   return (
-    <View style={[styles.container, isActive && styles.containerActive, isEliminated && styles.containerEliminated]}>
+    <View style={[
+      styles.container,
+      isActive && styles.containerActive,
+      isEliminated && styles.containerEliminated,
+    ]}>
       <View style={[styles.info, isEliminated && styles.infoEliminated]}>
         <View style={styles.nameRow}>
           {isActive && <View style={styles.activeDot} />}
-          <Text style={[styles.name, isActive && styles.nameActive, isEliminated && styles.nameEliminated]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.name,
+              isActive && styles.nameActive,
+              isEliminated && styles.nameEliminated,
+            ]}
+            numberOfLines={1}
+          >
             {displayName}
           </Text>
         </View>
@@ -37,9 +48,9 @@ export default function OpponentPanel({
         ) : (
           <>
             <View style={styles.stats}>
-              <View style={styles.statChip}>
+              <View style={[styles.statChip, styles.lifeChip]}>
                 <Text style={styles.statIcon}>♥</Text>
-                <Text style={styles.statVal}>{player.life}</Text>
+                <Text style={[styles.statVal, styles.lifeVal]}>{player.life}</Text>
               </View>
               <View style={styles.statChip}>
                 <Text style={styles.statIcon}>🃏</Text>
@@ -53,7 +64,7 @@ export default function OpponentPanel({
               )}
             </View>
             {player.mine.length > 0 && (
-              <Text style={styles.mineHint}>⛏ {player.mine.length}</Text>
+              <Text style={styles.mineHint}>⛏ {player.mine.length} mine</Text>
             )}
           </>
         )}
@@ -80,21 +91,23 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     borderRadius: 12,
     padding: 10,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     gap: 10,
   },
   containerActive: {
     borderColor: Colors.brand,
-    backgroundColor: "rgba(200,155,60,0.06)",
+    borderWidth: 2,
+    backgroundColor: "rgba(200,155,60,0.08)",
+    elevation: 6,
   },
   containerEliminated: {
-    opacity: 0.45,
-    borderColor: Colors.bgSurface,
+    opacity: 0.5,
+    borderColor: Colors.border,
   },
   info: {
-    width: 100,
-    gap: 4,
+    width: 104,
+    gap: 5,
   },
   nameRow: {
     flexDirection: "row",
@@ -102,19 +115,24 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: Colors.brand,
+    elevation: 4,
   },
   name: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     color: Colors.textSecondary,
     flex: 1,
   },
   nameActive: {
-    color: Colors.brand,
+    color: Colors.textPrimary,
+    fontFamily: "Inter_700Bold",
+  },
+  nameEliminated: {
+    color: Colors.textMuted,
   },
   stats: {
     flexDirection: "row",
@@ -124,25 +142,35 @@ const styles = StyleSheet.create({
   statChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: 3,
     backgroundColor: Colors.bgSurface,
     borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  lifeChip: {
+    borderColor: "rgba(200,16,46,0.4)",
+    backgroundColor: "rgba(200,16,46,0.1)",
   },
   vaultChip: {
-    backgroundColor: "rgba(200,155,60,0.1)",
+    backgroundColor: "rgba(200,155,60,0.12)",
+    borderColor: "rgba(200,155,60,0.4)",
   },
   statIcon: {
-    fontSize: 9,
+    fontSize: 10,
   },
   statVal: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
     color: Colors.textSecondary,
   },
+  lifeVal: {
+    color: Colors.accentRed,
+  },
   mineHint: {
-    fontSize: 9,
+    fontSize: 10,
     color: Colors.textMuted,
     fontFamily: "Inter_400Regular",
   },
@@ -152,15 +180,12 @@ const styles = StyleSheet.create({
   infoEliminated: {
     opacity: 0.7,
   },
-  nameEliminated: {
-    color: Colors.textMuted,
-  },
   courtEliminated: {
     opacity: 0.5,
   },
   eliminatedBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "rgba(74,68,56,0.3)",
+    backgroundColor: "rgba(74,68,56,0.4)",
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -168,13 +193,13 @@ const styles = StyleSheet.create({
     borderColor: Colors.textMuted,
   },
   eliminatedText: {
-    fontSize: 8,
+    fontSize: 9,
     fontFamily: "Inter_700Bold",
     color: Colors.textMuted,
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   emptyEliminated: {
-    fontSize: 9,
+    fontSize: 10,
     color: Colors.textMuted,
     fontFamily: "Inter_400Regular",
     fontStyle: "italic",

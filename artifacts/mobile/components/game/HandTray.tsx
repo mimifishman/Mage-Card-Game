@@ -30,7 +30,10 @@ export default function HandTray({
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.label}>HAND</Text>
-        <Text style={styles.count}>{cards.length}</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.count}>{cards.length}</Text>
+        </View>
+        {canPlay && <Text style={styles.hint}>Tap a card to play</Text>}
       </View>
       {cards.length === 0 ? (
         <View style={styles.empty}>
@@ -68,29 +71,44 @@ export default function HandTray({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.bgCard,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: 8,
-    paddingBottom: 4,
+    backgroundColor: Colors.bgHandTray,
+    borderTopWidth: 2,
+    borderTopColor: Colors.borderLight,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   label: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textMuted,
-    letterSpacing: 1.5,
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textSecondary,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+  },
+  countBadge: {
+    backgroundColor: Colors.bgSurface,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
   },
   count: {
     fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textSecondary,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textPrimary,
+  },
+  hint: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    marginLeft: 4,
   },
   scrollContent: {
     paddingHorizontal: 12,
@@ -101,7 +119,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   cardWrapperSelected: {
-    transform: [{ translateY: -6 }],
+    transform: [{ translateY: -8 }],
   },
   empty: {
     paddingHorizontal: 16,

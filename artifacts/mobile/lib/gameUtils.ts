@@ -66,10 +66,10 @@ export function parseCardId(id: string): ParsedCard {
   const isRoyal = ROYAL_RANKS.includes(rank);
 
   const suitMap: Record<Suit, { symbol: string; color: string }> = {
-    H: { symbol: "♥", color: "#C0392B" },
-    S: { symbol: "♠", color: "#8C7E65" },
-    D: { symbol: "♦", color: "#2980B9" },
-    C: { symbol: "♣", color: "#27AE60" },
+    H: { symbol: "♥", color: "#C8102E" },
+    S: { symbol: "♠", color: "#0D0D0D" },
+    D: { symbol: "♦", color: "#1565C0" },
+    C: { symbol: "♣", color: "#1B5E20" },
     JOKER: { symbol: "★", color: "#C89B3C" },
   };
 

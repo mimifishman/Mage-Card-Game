@@ -430,7 +430,7 @@ export default function MatchScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={["#0A0A0F", "#0C0D18", "#0A0A0F"]} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={["#0D2B1A", "#0A1F13", "#0D2B1A"]} style={StyleSheet.absoluteFill} />
 
       <View style={[styles.header, { paddingTop: topInset + 8 }]}>
         <View style={styles.headerLeft}>
@@ -441,7 +441,9 @@ export default function MatchScreen() {
 
         <View style={styles.headerCenter}>
           {isMyTurn ? (
-            <Text style={styles.turnText}>Your Turn</Text>
+            <View style={styles.myTurnBadge}>
+              <Text style={styles.myTurnText}>YOUR TURN</Text>
+            </View>
           ) : (
             <Text style={styles.turnText}>
               {activePlayerName}&apos;s Turn
@@ -741,11 +743,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     gap: 8,
     zIndex: 10,
+    backgroundColor: "rgba(10,31,19,0.85)",
   },
   headerLeft: {
     flex: 1,
@@ -764,20 +767,20 @@ const styles = StyleSheet.create({
   },
   phaseTag: {
     backgroundColor: Colors.bgSurface,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
   },
   phaseText: {
-    fontSize: 8,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textMuted,
-    letterSpacing: 1,
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textSecondary,
+    letterSpacing: 1.2,
   },
   reconnectBadge: {
-    backgroundColor: "rgba(192,57,43,0.2)",
+    backgroundColor: "rgba(229,57,53,0.2)",
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -790,50 +793,62 @@ const styles = StyleSheet.create({
     color: Colors.accentRed,
   },
   turnText: {
-    fontSize: 13,
+    fontSize: 15,
     fontFamily: "Inter_700Bold",
     color: Colors.textPrimary,
   },
+  myTurnBadge: {
+    backgroundColor: Colors.brand,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+  },
+  myTurnText: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.bgDeep,
+    letterSpacing: 1.5,
+  },
   turnSub: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
   },
   vaultDisplay: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(200,155,60,0.12)",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: 4,
+    backgroundColor: "rgba(200,155,60,0.15)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "rgba(200,155,60,0.3)",
+    borderColor: "rgba(200,155,60,0.4)",
   },
   vaultIcon: {
-    fontSize: 11,
+    fontSize: 13,
   },
   vaultValue: {
-    fontSize: 13,
+    fontSize: 16,
     fontFamily: "Inter_700Bold",
     color: Colors.brand,
   },
   lifeDisplay: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(192,57,43,0.12)",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: 4,
+    backgroundColor: "rgba(200,16,46,0.15)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "rgba(192,57,43,0.3)",
+    borderColor: "rgba(200,16,46,0.4)",
   },
   lifeIcon: {
-    fontSize: 11,
+    fontSize: 13,
   },
   lifeValue: {
-    fontSize: 13,
+    fontSize: 16,
     fontFamily: "Inter_700Bold",
     color: Colors.accentRed,
   },
@@ -851,12 +866,17 @@ const styles = StyleSheet.create({
   myCourtSection: {
     paddingHorizontal: 12,
     gap: 8,
+    backgroundColor: "rgba(26,56,36,0.3)",
+    borderRadius: 12,
+    marginHorizontal: 6,
+    paddingVertical: 10,
   },
   sectionLabel: {
-    fontSize: 9,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textMuted,
-    letterSpacing: 1.5,
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textSecondary,
+    letterSpacing: 2,
+    textTransform: "uppercase",
   },
   actionRow: {
     flexDirection: "row",
@@ -873,12 +893,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 14,
+    paddingVertical: 16,
   },
   attackBtnText: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Inter_700Bold",
     color: "#FFF",
+    letterSpacing: 0.5,
   },
   endTurnBtn: {
     flex: 1,
@@ -890,55 +911,61 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 14,
+    paddingVertical: 16,
   },
   endTurnText: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: "Inter_700Bold",
     color: Colors.bgDeep,
+    letterSpacing: 0.5,
   },
   waitingBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 12,
+    backgroundColor: "rgba(10,31,19,0.5)",
+    borderRadius: 12,
+    marginHorizontal: 12,
   },
   waitingText: {
     fontSize: 13,
     fontFamily: "Inter_400Regular",
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
   },
   attackTargetBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(192,57,43,0.15)",
+    backgroundColor: "rgba(200,16,46,0.18)",
     borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
     borderColor: Colors.accentRed,
   },
   attackTargetText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     color: Colors.accentRed,
     flex: 1,
   },
   cancelAttackBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: Colors.bgSurface,
+    borderRadius: 6,
   },
   cancelAttackText: {
     fontSize: 11,
-    fontFamily: "Inter_500Medium",
-    color: Colors.textMuted,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textSecondary,
   },
   attackTargetHighlight: {
-    borderRadius: 12,
-    borderWidth: 1.5,
+    borderRadius: 14,
+    borderWidth: 2,
     borderColor: Colors.accentRed,
   },
   combatResultBanner: {
@@ -948,16 +975,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(10,10,15,0.92)",
+    backgroundColor: "rgba(10,31,19,0.96)",
     borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderWidth: 1.5,
     borderColor: Colors.accentRed,
     zIndex: 200,
   },
   combatResultText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Inter_600SemiBold",
     color: Colors.textPrimary,
   },

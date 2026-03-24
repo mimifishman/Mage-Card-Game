@@ -32,11 +32,11 @@ export default function CourtZone({
   return (
     <View style={styles.container}>
       {label && (
-        <Text style={styles.label}>{label}</Text>
+        <Text style={[styles.label, isMyZone && styles.labelMine]}>{label}</Text>
       )}
       {court.length === 0 ? (
-        <View style={styles.emptySlot}>
-          <Text style={styles.emptyText}>Empty Court</Text>
+        <View style={[styles.emptySlot, isMyZone && styles.emptySlotMine]}>
+          <Text style={[styles.emptyText, isMyZone && styles.emptyTextMine]}>Empty Court</Text>
         </View>
       ) : (
         <ScrollView
@@ -84,19 +84,23 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   label: {
-    fontSize: 9,
+    fontSize: 11,
     fontFamily: "Inter_600SemiBold",
     color: Colors.textMuted,
     letterSpacing: 1.5,
     paddingHorizontal: 4,
+    textTransform: "uppercase",
+  },
+  labelMine: {
+    color: Colors.textSecondary,
   },
   scrollContent: {
     gap: 6,
     paddingHorizontal: 4,
   },
   emptySlot: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -104,11 +108,19 @@ const styles = StyleSheet.create({
     minWidth: 60,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(13,43,26,0.5)",
+  },
+  emptySlotMine: {
+    borderColor: Colors.borderLight,
+    backgroundColor: "rgba(26,56,36,0.5)",
   },
   emptyText: {
-    fontSize: 9,
+    fontSize: 10,
     color: Colors.textMuted,
     fontFamily: "Inter_400Regular",
+  },
+  emptyTextMine: {
+    color: Colors.textSecondary,
   },
   royalWrapper: {
     position: "relative",
@@ -119,14 +131,16 @@ const styles = StyleSheet.create({
   },
   attackedBadge: {
     marginTop: 2,
-    backgroundColor: Colors.bgSurface,
+    backgroundColor: "rgba(200,155,60,0.2)",
     borderRadius: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: "rgba(200,155,60,0.4)",
   },
   attackedText: {
     fontSize: 7,
-    color: Colors.textMuted,
+    color: Colors.brand,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.5,
   },

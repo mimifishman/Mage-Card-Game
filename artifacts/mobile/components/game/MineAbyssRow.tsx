@@ -14,7 +14,7 @@ export default function MineAbyssRow({ mine, abyss, deckCount }: MineAbyssRowPro
 
   return (
     <View style={styles.container}>
-      <View style={styles.zone}>
+      <View style={[styles.zone, styles.mineZone]}>
         <Text style={styles.zoneLabel}>MINE</Text>
         {mine.length === 0 ? (
           <Text style={styles.zoneEmpty}>—</Text>
@@ -34,7 +34,7 @@ export default function MineAbyssRow({ mine, abyss, deckCount }: MineAbyssRowPro
 
       <View style={styles.divider} />
 
-      <View style={styles.zone}>
+      <View style={[styles.zone, styles.abyssZone]}>
         <Text style={styles.zoneLabel}>ABYSS</Text>
         {topAbyss ? (
           <CardView cardId={topAbyss} size="sm" />
@@ -46,7 +46,7 @@ export default function MineAbyssRow({ mine, abyss, deckCount }: MineAbyssRowPro
 
       <View style={styles.divider} />
 
-      <View style={styles.zone}>
+      <View style={[styles.zone, styles.deckZone]}>
         <Text style={styles.zoneLabel}>DECK</Text>
         <View style={styles.deckIcon}>
           <Text style={styles.deckCount}>{deckCount}</Text>
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.bgSurface,
+    backgroundColor: Colors.bgZoneDeep,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: Colors.border,
@@ -73,12 +73,24 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     gap: 4,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  mineZone: {
+    backgroundColor: "rgba(27,94,32,0.12)",
+  },
+  abyssZone: {
+    backgroundColor: "rgba(200,16,46,0.08)",
+  },
+  deckZone: {
+    backgroundColor: "rgba(200,155,60,0.08)",
   },
   zoneLabel: {
-    fontSize: 8,
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.textMuted,
-    letterSpacing: 1.5,
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textSecondary,
+    letterSpacing: 2,
+    textTransform: "uppercase",
   },
   zoneEmpty: {
     fontSize: 18,
@@ -86,7 +98,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
   },
   zoneSub: {
-    fontSize: 8,
+    fontSize: 9,
     color: Colors.textMuted,
     fontFamily: "Inter_400Regular",
   },
@@ -95,23 +107,23 @@ const styles = StyleSheet.create({
   },
   divider: {
     width: 1,
-    height: 48,
+    height: 56,
     backgroundColor: Colors.border,
-    marginHorizontal: 8,
+    marginHorizontal: 6,
   },
   deckIcon: {
     width: 38,
     height: 52,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
     backgroundColor: Colors.bgCard,
     alignItems: "center",
     justifyContent: "center",
   },
   deckCount: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Inter_700Bold",
-    color: Colors.textSecondary,
+    color: Colors.textPrimary,
   },
 });

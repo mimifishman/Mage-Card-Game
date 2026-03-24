@@ -28,6 +28,15 @@ export default function CardView({
   const hp = royal ? effectiveHealth(cardId, royal.buffHealth, royal.damageTaken) : null;
   const maxHp = royal ? (hp !== null && royal.damageTaken > 0 ? hp + royal.damageTaken : hp) : null;
 
+  const cardBg = card.isJoker ? "#FDF6D8" : Colors.bgCardFace;
+  const borderCol = selected
+    ? Colors.brand
+    : hasAttacked
+    ? "#B0A070"
+    : card.isJoker
+    ? Colors.brand
+    : "#C8B070";
+
   return (
     <View
       style={[
@@ -35,18 +44,11 @@ export default function CardView({
         {
           width: s.w,
           height: s.h,
-          borderColor: selected
-            ? Colors.brand
-            : hasAttacked
-            ? Colors.textMuted
-            : card.isJoker
-            ? Colors.brand
-            : Colors.border,
-          borderWidth: selected ? 2 : 1,
-          opacity: dimmed ? 0.45 : 1,
-          backgroundColor: card.isJoker
-            ? "rgba(200,155,60,0.12)"
-            : Colors.bgCard,
+          borderColor: borderCol,
+          borderWidth: selected ? 2.5 : 1.5,
+          opacity: dimmed ? 0.5 : 1,
+          backgroundColor: cardBg,
+          elevation: selected ? 8 : 3,
         },
       ]}
     >
@@ -62,9 +64,9 @@ export default function CardView({
       {card.isRoyal && royal && atk !== null && hp !== null && (
         <View style={styles.statsRow}>
           <View style={[styles.statBadge, styles.atkBadge]}>
-            <Text style={[styles.statText, { fontSize: s.statFont }]}>⚔{atk}</Text>
+            <Text style={[styles.statText, styles.atkText, { fontSize: s.statFont }]}>⚔{atk}</Text>
           </View>
-          <View style={[styles.statBadge, { backgroundColor: hp <= 0 ? Colors.accentRed : "rgba(39,174,96,0.25)" }]}>
+          <View style={[styles.statBadge, { backgroundColor: hp <= 0 ? "rgba(200,16,46,0.18)" : "rgba(27,94,32,0.18)" }]}>
             <Text style={[styles.statText, { fontSize: s.statFont, color: hp <= 0 ? Colors.accentRed : Colors.accentGreen }]}>♥{hp}</Text>
           </View>
         </View>
@@ -94,7 +96,6 @@ const SIZE_MAP = {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 8,
-    borderWidth: 1,
     padding: 4,
     alignItems: "center",
     justifyContent: "space-between",
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 3,
     paddingVertical: 1,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(200,155,60,0.15)",
   },
   atkBadge: {
     backgroundColor: "rgba(200,155,60,0.2)",
@@ -128,6 +129,9 @@ const styles = StyleSheet.create({
   statText: {
     fontFamily: "Inter_600SemiBold",
     color: Colors.brand,
+  },
+  atkText: {
+    color: "#8B5E00",
   },
   hasteLock: {
     position: "absolute",
@@ -141,14 +145,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 2,
     right: 2,
-    backgroundColor: Colors.bgSurface,
+    backgroundColor: "rgba(200,155,60,0.25)",
     borderRadius: 4,
     paddingHorizontal: 3,
     paddingVertical: 0,
   },
   attachText: {
     fontSize: 7,
-    color: Colors.textMuted,
+    color: "#7A5000",
     fontFamily: "Inter_600SemiBold",
   },
 });
