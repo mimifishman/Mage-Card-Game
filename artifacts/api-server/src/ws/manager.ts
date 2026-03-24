@@ -17,7 +17,16 @@ const clients = new Map<WebSocket, WsClient>();
 const matchRooms = new Map<string, Set<WebSocket>>();
 
 export function createWsServer(httpServer: Server): WebSocketServer {
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+  const wss = new WebSocketServer({
+    server: httpServer,
+    path: "/ws",
+    handleProtocols: (protocols: Set<string>) => {
+      for (const proto of protocols) {
+        if (proto.startsWith("bearer-")) return proto;
+      }
+      return false;
+    },
+  });
 
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
     handleConnection(ws, req).catch((err) => {

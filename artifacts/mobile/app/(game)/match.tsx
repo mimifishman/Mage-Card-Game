@@ -252,6 +252,7 @@ export default function MatchScreen() {
     if (!domain) return;
 
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectingBannerTimer: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
 
     const connect = async () => {
@@ -262,9 +263,12 @@ export default function MatchScreen() {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (reconnectingBannerTimer) {
+          clearTimeout(reconnectingBannerTimer);
+          reconnectingBannerTimer = null;
+        }
         setWsConnected(true);
         setWsReconnecting(false);
-        ws.send(JSON.stringify({ type: "join_match", matchId }));
       };
 
       ws.onmessage = (event) => {
@@ -277,7 +281,8 @@ export default function MatchScreen() {
           if (
             msg.type === "state_update" ||
             msg.type === "game_started" ||
-            msg.type === "reconnect_state"
+            msg.type === "reconnect_state" ||
+            msg.type === "connected"
           ) {
             if (msg.state) setGameState(msg.state);
           } else if (msg.type === "game_over") {
@@ -304,7 +309,9 @@ export default function MatchScreen() {
       ws.onclose = () => {
         setWsConnected(false);
         if (!closed) {
-          setWsReconnecting(true);
+          reconnectingBannerTimer = setTimeout(() => {
+            if (!closed) setWsReconnecting(true);
+          }, 1500);
           reconnectTimer = setTimeout(() => {
             if (!closed) connect();
           }, 3000);
@@ -317,6 +324,7 @@ export default function MatchScreen() {
     return () => {
       closed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (reconnectingBannerTimer) clearTimeout(reconnectingBannerTimer);
       wsRef.current?.close();
     };
   }, [matchId]);
