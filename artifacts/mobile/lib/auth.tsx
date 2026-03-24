@@ -108,7 +108,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    fetchUser();
+    const init = async () => {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const sessionToken = params.get("session_token");
+        if (sessionToken) {
+          await SecureStore.setItemAsync(AUTH_TOKEN_KEY, sessionToken);
+          window.history.replaceState({}, "", window.location.pathname);
+        }
+      }
+      await fetchUser();
+    };
+    init();
   }, [fetchUser]);
 
   useEffect(() => {

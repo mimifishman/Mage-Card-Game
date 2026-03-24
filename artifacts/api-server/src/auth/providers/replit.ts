@@ -243,7 +243,7 @@ export class ReplitAuthService implements AuthService {
     setSessionCookie(res, sid);
 
     if (isWebMobile && process.env.REPLIT_EXPO_DEV_DOMAIN) {
-      res.redirect(`https://${process.env.REPLIT_EXPO_DEV_DOMAIN}/`);
+      res.redirect(`https://${process.env.REPLIT_EXPO_DEV_DOMAIN}/?session_token=${sid}`);
     } else {
       res.redirect(returnTo);
     }
