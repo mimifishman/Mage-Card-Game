@@ -12,7 +12,21 @@ const ISSUER_URL = "https://replit.com/oidc";
 
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 if (domain) setBaseUrl(`https://${domain}`);
-setAuthTokenGetter(() => SecureStore.getItemAsync(AUTH_TOKEN_KEY));
+
+async function getStoredToken(): Promise<string | null> {
+  if (Platform.OS === "web") return localStorage.getItem(AUTH_TOKEN_KEY);
+  return SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+}
+async function setStoredToken(token: string): Promise<void> {
+  if (Platform.OS === "web") { localStorage.setItem(AUTH_TOKEN_KEY, token); return; }
+  await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+}
+async function deleteStoredToken(): Promise<void> {
+  if (Platform.OS === "web") { localStorage.removeItem(AUTH_TOKEN_KEY); return; }
+  await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+}
+
+setAuthTokenGetter(getStoredToken);
 
 interface User {
   id: string;
@@ -73,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUser = useCallback(async () => {
     try {
-      const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+      const token = await getStoredToken();
       if (!token && Platform.OS !== "web") {
         setUser(null);
         setIsLoading(false);
@@ -95,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
       } else {
         if (token) {
-          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+          await deleteStoredToken();
         }
         setUser(null);
       }
@@ -113,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const params = new URLSearchParams(window.location.search);
         const sessionToken = params.get("session_token");
         if (sessionToken) {
-          await SecureStore.setItemAsync(AUTH_TOKEN_KEY, sessionToken);
+          await setStoredToken(sessionToken);
           window.history.replaceState({}, "", window.location.pathname);
         }
       }
@@ -148,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const data = await exchangeRes.json();
         if (data.token) {
-          await SecureStore.setItemAsync(AUTH_TOKEN_KEY, data.token);
+          await setStoredToken(data.token);
           setIsLoading(true);
           await fetchUser();
         }
@@ -174,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+      const token = await getStoredToken();
       if (token) {
         const apiBase = getApiBaseUrl();
         await fetch(`${apiBase}/api/mobile-auth/logout`, {
@@ -185,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.warn("Logout API call failed:", err);
     } finally {
-      await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+      await deleteStoredToken();
       setUser(null);
     }
   }, []);
