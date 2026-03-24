@@ -321,6 +321,19 @@ export default function MatchScreen() {
     };
   }, [matchId]);
 
+  const handleBlock = useCallback(
+    (blockerRoyalId: string, attackerRoyalId: string) => {
+      if (!matchId) return;
+      submitAction({ matchId, data: { type: "declare_block", blockerRoyalId, attackerRoyalId } });
+    },
+    [matchId, submitAction],
+  );
+
+  const handleResolveCombat = useCallback(() => {
+    if (!matchId) return;
+    submitAction({ matchId, data: { type: "resolve_combat" } });
+  }, [matchId, submitAction]);
+
   if (isLoading && !gameState) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -472,19 +485,6 @@ export default function MatchScreen() {
     if (!matchId) return;
     submitAction({ matchId, data: { type: "begin_declare_blocks" } });
   };
-
-  const handleBlock = useCallback(
-    (blockerRoyalId: string, attackerRoyalId: string) => {
-      if (!matchId) return;
-      submitAction({ matchId, data: { type: "declare_block", blockerRoyalId, attackerRoyalId } });
-    },
-    [matchId, submitAction],
-  );
-
-  const handleResolveCombat = useCallback(() => {
-    if (!matchId) return;
-    submitAction({ matchId, data: { type: "resolve_combat" } });
-  }, [matchId, submitAction]);
 
   const activePlayerName = displayNames[gameState.activePlayerId]
     ?? (gameState.activePlayerId === myId ? (user?.displayName ?? "You") : gameState.activePlayerId.slice(0, 8));
