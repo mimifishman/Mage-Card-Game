@@ -164,6 +164,16 @@ export class ReplitAuthService implements AuthService {
     setOidcCookie(res, "state", state);
     setOidcCookie(res, "return_to", returnTo);
 
+    if (req.query.web_mobile === "1") {
+      res.cookie("web_mobile", "1", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: OIDC_COOKIE_TTL_MS,
+      });
+    }
+
     res.redirect(redirectTo.href);
   }
 
@@ -197,11 +207,13 @@ export class ReplitAuthService implements AuthService {
       return;
     }
 
+    const isWebMobile = req.cookies?.web_mobile === "1";
     const returnTo = getSafeReturnTo(req.cookies?.return_to);
     res.clearCookie("code_verifier", { path: "/" });
     res.clearCookie("nonce", { path: "/" });
     res.clearCookie("state", { path: "/" });
     res.clearCookie("return_to", { path: "/" });
+    res.clearCookie("web_mobile", { path: "/" });
 
     const claims = tokens.claims();
     if (!claims) {
@@ -229,7 +241,12 @@ export class ReplitAuthService implements AuthService {
 
     const sid = await createSession(record);
     setSessionCookie(res, sid);
-    res.redirect(returnTo);
+
+    if (isWebMobile && process.env.REPLIT_EXPO_DEV_DOMAIN) {
+      res.redirect(`https://${process.env.REPLIT_EXPO_DEV_DOMAIN}/`);
+    } else {
+      res.redirect(returnTo);
+    }
   }
 
   async handleLogout(req: Request, res: Response): Promise<void> {

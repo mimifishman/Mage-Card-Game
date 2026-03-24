@@ -74,22 +74,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUser = useCallback(async () => {
     try {
       const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
-      if (!token) {
+      if (!token && Platform.OS !== "web") {
         setUser(null);
         setIsLoading(false);
         return;
       }
 
       const apiBase = getApiBaseUrl();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const res = await fetch(`${apiBase}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
+        credentials: "include",
       });
       const data = await res.json();
 
       if (data.user) {
         setUser(data.user);
       } else {
-        await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+        if (token) {
+          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+        }
         setUser(null);
       }
     } catch (err) {
@@ -143,6 +150,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async () => {
     try {
+      if (Platform.OS === "web") {
+        const apiBase = getApiBaseUrl();
+        window.location.href = `${apiBase}/api/login?web_mobile=1`;
+        return;
+      }
       await promptAsync();
     } catch (err) {
       console.error("Login error:", err);
