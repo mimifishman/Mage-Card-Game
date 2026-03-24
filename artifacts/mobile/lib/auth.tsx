@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { Platform } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as SecureStore from "expo-secure-store";
@@ -45,12 +46,20 @@ function getClientId(): string {
   return process.env.EXPO_PUBLIC_REPL_ID ?? "";
 }
 
+function getRedirectUri(): string {
+  const expoDomain = process.env.EXPO_PUBLIC_EXPO_DOMAIN;
+  if (expoDomain && Platform.OS === "web") {
+    return `https://${expoDomain}/`;
+  }
+  return AuthSession.makeRedirectUri();
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
-  const redirectUri = AuthSession.makeRedirectUri();
+  const redirectUri = getRedirectUri();
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
