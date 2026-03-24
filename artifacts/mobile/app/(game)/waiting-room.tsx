@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -22,8 +22,6 @@ import Animated, {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
-import { getStoredToken } from "@/lib/token-storage";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetMatch,
   useStartMatch,
@@ -40,8 +38,6 @@ export default function WaitingRoomScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
-  const wsRef = useRef<WebSocket | null>(null);
   const [copied, setCopied] = useState(false);
 
   const pulseOpacity = useSharedValue(1);
@@ -78,54 +74,6 @@ export default function WaitingRoomScreen() {
     }
   }, [matchStatus, matchId]);
 
-  useEffect(() => {
-    if (!matchId) return;
-
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    if (!domain) return;
-
-    const setupWs = async () => {
-      const token = await getStoredToken();
-      const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
-      const protocols = token ? [`bearer-${token}`] : undefined;
-      const ws = new WebSocket(wsUrl, protocols);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: "join_match", matchId }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data as string);
-          if (
-            msg.type === "player_joined" ||
-            msg.type === "game_state_update"
-          ) {
-            queryClient.invalidateQueries({ queryKey: getGetMatchQueryKey(matchId) });
-          } else if (
-            msg.type === "game_started" ||
-            msg.type === "match_started"
-          ) {
-            router.replace({ pathname: "/(game)/match", params: { matchId } });
-          }
-        } catch (e) {
-          console.warn("WS message parse error:", e);
-        }
-      };
-
-      ws.onerror = (e) => {
-        console.warn("WS error:", e);
-      };
-      ws.onclose = () => {};
-    };
-
-    setupWs();
-
-    return () => {
-      wsRef.current?.close();
-    };
-  }, [matchId, queryClient]);
 
   const { mutate: startMatchMutate, isPending: isStarting } = useStartMatch({
     mutation: {

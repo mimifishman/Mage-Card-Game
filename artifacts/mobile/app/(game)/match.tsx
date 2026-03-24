@@ -13,7 +13,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getStoredToken } from "@/lib/token-storage";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -35,7 +34,6 @@ import type {
   PublicPlayerState,
   GameActionRequest,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
 import HandTray from "@/components/game/HandTray";
@@ -52,8 +50,6 @@ export default function MatchScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
-  const wsRef = useRef<WebSocket | null>(null);
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -62,8 +58,6 @@ export default function MatchScreen() {
   const [selectedTargetRoyalId, setSelectedTargetRoyalId] = useState<string | null>(null);
   const [pendingAttackerRoyalId, setPendingAttackerRoyalId] = useState<string | null>(null);
   const [selectingAttacker, setSelectingAttacker] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [wsReconnecting, setWsReconnecting] = useState(false);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [blockingPassedIds, setBlockingPassedIds] = useState<Set<string>>(new Set());
   const [blockingDismissed, setBlockingDismissed] = useState(false);
@@ -81,15 +75,22 @@ export default function MatchScreen() {
     );
   }, []);
 
+  const hasNavigatedRef = useRef(false);
+
   const { data: stateData, isLoading } = useGetMatchState(matchId ?? "", {
     query: {
       queryKey: getGetMatchStateQueryKey(matchId ?? ""),
       enabled: !!matchId,
+      refetchInterval: 2000,
     },
   });
 
   const { data: matchData } = useGetMatch(matchId ?? "", {
-    query: { queryKey: getGetMatchQueryKey(matchId ?? ""), enabled: !!matchId },
+    query: {
+      queryKey: getGetMatchQueryKey(matchId ?? ""),
+      enabled: !!matchId,
+      refetchInterval: 2000,
+    },
   });
 
   useEffect(() => {
@@ -108,6 +109,18 @@ export default function MatchScreen() {
       setDisplayNames(names);
     }
   }, [matchData]);
+
+  // Detect game-over from polled match status (covers opponent-triggered endings)
+  useEffect(() => {
+    if (hasNavigatedRef.current) return;
+    if (matchData?.match?.status === "finished" && matchId) {
+      hasNavigatedRef.current = true;
+      router.replace({
+        pathname: "/(game)/game-over",
+        params: { matchId, winnerUserId: matchData.match.winnerUserId ?? "" },
+      });
+    }
+  }, [matchData?.match?.status, matchData?.match?.winnerUserId, matchId]);
 
   // Detect combat resolution: phase moved from declare_blocks → end_turn
   useEffect(() => {
@@ -164,6 +177,7 @@ export default function MatchScreen() {
         setPendingAttackerRoyalId(null);
         setSelectingAttacker(false);
         if (data.winnerUserId) {
+          hasNavigatedRef.current = true;
           router.replace({
             pathname: "/(game)/game-over",
             params: { matchId, winnerUserId: data.winnerUserId },
@@ -245,89 +259,6 @@ export default function MatchScreen() {
     if (!matchId) return;
     submitAction({ matchId, data: { type: "end_turn" } });
   }, [matchId, submitAction]);
-
-  useEffect(() => {
-    if (!matchId) return;
-    const domain = process.env.EXPO_PUBLIC_DOMAIN;
-    if (!domain) return;
-
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let reconnectingBannerTimer: ReturnType<typeof setTimeout> | null = null;
-    let closed = false;
-
-    const connect = async () => {
-      const token = await getStoredToken();
-      const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
-      const protocols = token ? [`bearer-${token}`] : undefined;
-      const ws = new WebSocket(wsUrl, protocols);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        if (reconnectingBannerTimer) {
-          clearTimeout(reconnectingBannerTimer);
-          reconnectingBannerTimer = null;
-        }
-        setWsConnected(true);
-        setWsReconnecting(false);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data as string) as {
-            type: string;
-            state?: PlayerGameView;
-            winnerUserId?: string;
-          };
-          if (
-            msg.type === "state_update" ||
-            msg.type === "game_started" ||
-            msg.type === "reconnect_state" ||
-            msg.type === "connected"
-          ) {
-            if (msg.state) setGameState(msg.state);
-          } else if (msg.type === "game_over") {
-            if (msg.state) setGameState(msg.state);
-            router.replace({
-              pathname: "/(game)/game-over",
-              params: { matchId, winnerUserId: msg.winnerUserId ?? "" },
-            });
-          } else if (msg.type === "rematch") {
-            router.replace({
-              pathname: "/(game)/waiting-room",
-              params: { matchId },
-            });
-          }
-        } catch (e) {
-          console.warn("WS parse error:", e);
-        }
-      };
-
-      ws.onerror = (e) => {
-        console.warn("WS error:", e);
-      };
-
-      ws.onclose = () => {
-        setWsConnected(false);
-        if (!closed) {
-          reconnectingBannerTimer = setTimeout(() => {
-            if (!closed) setWsReconnecting(true);
-          }, 1500);
-          reconnectTimer = setTimeout(() => {
-            if (!closed) connect();
-          }, 3000);
-        }
-      };
-    };
-
-    connect();
-
-    return () => {
-      closed = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (reconnectingBannerTimer) clearTimeout(reconnectingBannerTimer);
-      wsRef.current?.close();
-    };
-  }, [matchId]);
 
   const handleBlock = useCallback(
     (blockerRoyalId: string, attackerRoyalId: string) => {
@@ -506,11 +437,6 @@ export default function MatchScreen() {
           <View style={styles.phaseTag}>
             <Text style={styles.phaseText}>{phase.replace("_", " ").toUpperCase()}</Text>
           </View>
-          {wsReconnecting && (
-            <Animated.View style={[styles.reconnectBadge, pulseStyle]}>
-              <Text style={styles.reconnectText}>Reconnecting...</Text>
-            </Animated.View>
-          )}
         </View>
 
         <View style={styles.headerCenter}>
