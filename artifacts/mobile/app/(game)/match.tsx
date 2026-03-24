@@ -430,7 +430,7 @@ export default function MatchScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={["#0D2B1A", "#0A1F13", "#0D2B1A"]} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={["#0D2B1A", "#0A1F13", "#0D2B1A"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
 
       <View style={[styles.header, { paddingTop: topInset + 8 }]}>
         <View style={styles.headerLeft}>
