@@ -1,5 +1,6 @@
 import type { GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
+import { drawCard } from "./draw";
 import { resetVaultForTurn } from "./vault";
 
 const MAX_HAND_SIZE = 7;
@@ -43,18 +44,29 @@ export function advanceTurn(state: GameState): Result<GameState> {
   const nextPlayerId = active[nextIdx]!;
 
   const nextPlayerBase = resetVaultForTurn(state.players[nextPlayerId]!);
-  const nextPlayer = { ...nextPlayerBase, hasPlayedDiamondThisTurn: false };
+  const nextPlayer: PlayerState = {
+    ...nextPlayerBase,
+    hasPlayedDiamondThisTurn: false,
+  };
 
-  return ok({
+  const preparedState: GameState = {
     ...state,
-    phase: "draw",
+    phase: "main",
     turnNumber: state.turnNumber + 1,
     activePlayerId: nextPlayerId,
-    players: { ...state.players, [nextPlayerId]: nextPlayer },
-  });
+    players: {
+      ...state.players,
+      [nextPlayerId]: nextPlayer,
+    },
+  };
+
+  return drawCard(preparedState, nextPlayerId);
 }
 
-function healAllRoyals(state: GameState): { state: GameState; abyss: string[] } {
+function healAllRoyals(state: GameState): {
+  state: GameState;
+  abyss: string[];
+} {
   const updatedPlayers: Record<string, PlayerState> = { ...state.players };
   const discarded: string[] = [];
 
@@ -73,17 +85,23 @@ function healAllRoyals(state: GameState): { state: GameState; abyss: string[] } 
 
   const activePlayerId = state.activePlayerId;
   const activePlayer = updatedPlayers[activePlayerId];
+
   if (activePlayer) {
     let hand = [...activePlayer.hand];
+
     if (hand.length > MAX_HAND_SIZE) {
       const excess = hand.slice(MAX_HAND_SIZE);
       discarded.push(...excess);
       hand = hand.slice(0, MAX_HAND_SIZE);
     }
+
     updatedPlayers[activePlayerId] = { ...activePlayer, hand };
   }
 
-  return { state: { ...state, players: updatedPlayers }, abyss: discarded };
+  return {
+    state: { ...state, players: updatedPlayers },
+    abyss: discarded,
+  };
 }
 
 export function endTurn(state: GameState): Result<GameState> {

@@ -32,7 +32,7 @@ export function createInitialGameState(
 
   return ok({
     matchId,
-    phase: "draw",
+    phase: "main" /* cnaged from "setup" to "draw" */,
     turnNumber: 1,
     activePlayerId: playerIds[0]!,
     turnOrder: [...playerIds],
