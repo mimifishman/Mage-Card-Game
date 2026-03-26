@@ -32,7 +32,7 @@ export function createInitialGameState(
 
   return ok({
     matchId,
-    phase: "main" /* cnaged from "setup" to "draw" */,
+    phase: "main",
     turnNumber: 1,
     activePlayerId: playerIds[0]!,
     turnOrder: [...playerIds],
@@ -59,40 +59,52 @@ function rankValue(cardId: CardId): number {
 }
 
 export function determineFirstPlayer(state: GameState): Result<GameState> {
-  const playerIds = state.turnOrder;
-  const drawnCards: Record<string, CardId> = {};
   let currentState = state;
+  let contenders = [...state.turnOrder];
+  const revealedCards: CardId[] = [];
 
   while (true) {
-    for (const playerId of playerIds) {
+    const roundDraws: Record<string, CardId> = {};
+
+    for (const playerId of contenders) {
       if (currentState.deck.length === 0) {
-        if (currentState.abyss.length === 0) {
-          return err("No cards left to determine first player");
-        }
-        currentState = {
-          ...currentState,
-          deck: shuffle(currentState.abyss),
-          abyss: [],
-        };
+        return err("No cards left to determine first player");
       }
+
       const [topCard, ...remaining] = currentState.deck;
-      drawnCards[playerId] = topCard!;
+
+      if (!topCard) {
+        return err("No cards left to determine first player");
+      }
+
+      roundDraws[playerId] = topCard;
+      revealedCards.push(topCard);
+
       currentState = {
         ...currentState,
         deck: remaining,
-        abyss: [...currentState.abyss, topCard!],
       };
     }
 
-    const values = playerIds.map((id) => ({
-      id,
-      value: rankValue(drawnCards[id]!),
-    }));
-    const maxValue = Math.max(...values.map((v) => v.value));
-    const winners = values.filter((v) => v.value === maxValue);
+    const ranked = contenders
+      .map((playerId) => ({
+        playerId,
+        value: rankValue(roundDraws[playerId]!),
+      }))
+      .sort((a, b) => b.value - a.value);
 
-    if (winners.length === 1) {
-      return ok({ ...currentState, activePlayerId: winners[0]!.id });
+    const topValue = ranked[0]!.value;
+    const tied = ranked.filter((r) => r.value === topValue);
+
+    if (tied.length === 1) {
+      return ok({
+        ...currentState,
+        activePlayerId: ranked[0]!.playerId,
+        deck: shuffle([...currentState.deck, ...revealedCards]),
+        abyss: [],
+      });
     }
+
+    contenders = tied.map((t) => t.playerId);
   }
 }
