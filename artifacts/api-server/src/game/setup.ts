@@ -102,6 +102,11 @@ export function determineFirstPlayer(state: GameState): Result<GameState> {
         activePlayerId: ranked[0]!.playerId,
         deck: shuffle([...currentState.deck, ...revealedCards]),
         abyss: [],
+        print: {
+          type: "first-player",
+          playerId: ranked[0]!.playerId,
+          cardId: roundDraws[ranked[0]!.playerId]!,
+        }
       });
     }
 
