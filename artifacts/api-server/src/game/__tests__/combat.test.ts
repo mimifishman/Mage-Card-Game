@@ -178,7 +178,7 @@ describe("resolveCombat", () => {
     const result = resolveCombat(state, P1);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P2]!.life).toBe(16);
+    expect(result.value.players[P2]!.life).toBe(17);
     expect(result.value.phase).toBe("end_turn");
     expect(result.value.attacks).toHaveLength(0);
   });
@@ -226,7 +226,7 @@ describe("resolveCombat", () => {
     expect(result.value.abyss).toContain("JD");
     const kh = result.value.players[P1]!.court.find((r) => r.cardId === "KH");
     expect(kh).toBeDefined();
-    expect(kh!.damageTaken).toBe(2);
+    expect(kh!.damageTaken).toBe(1);
   });
 
   it("blocked attack: blocked Royals with attachments send all to Abyss when destroyed", () => {

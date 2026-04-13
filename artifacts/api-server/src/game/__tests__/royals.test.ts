@@ -19,6 +19,7 @@ function mkRoyal(cardId: string, overrides: Partial<RoyalInCourt> = {}): RoyalIn
 describe("playRoyalToCourt", () => {
   it("places Royal in Court with haste lock", () => {
     const state = makeState({
+      mine: ["3D"],
       players: {
         [P1]: makePlayer(P1, { hand: ["KH"] }),
         [P2]: makePlayer(P2),
@@ -49,6 +50,7 @@ describe("playRoyalToCourt", () => {
 describe("attachRoyalSupport", () => {
   it("buffs target Royal and puts support in attachedCards", () => {
     const state = makeState({
+      mine: ["AD"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["JC"],
@@ -70,6 +72,7 @@ describe("attachRoyalSupport", () => {
   it("removes supporting Royal from state.attacks if it was declared as an attacker", () => {
     const state = makeState({
       phase: "declare_attacks",
+      mine: ["AD"],
       attacks: [{ attackerPlayerId: P1, attackerCardId: "JC", targetPlayerId: P2 }],
       players: {
         [P1]: makePlayer(P1, {

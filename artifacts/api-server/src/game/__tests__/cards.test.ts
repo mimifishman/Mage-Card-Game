@@ -15,8 +15,8 @@ describe("getCard", () => {
   it("returns Royal card for KH", () => {
     const card = getCard("KH");
     expect(card.isRoyal).toBe(true);
-    expect(card.vaultCost).toBe(0);
-    expect(card.pipValue).toBe(13);
+    expect(card.vaultCost).toBe(3);
+    expect(card.pipValue).toBe(3);
   });
 
   it("returns Diamond card with zero vault cost", () => {
@@ -52,29 +52,29 @@ describe("fullDeck", () => {
 
 describe("effectiveAttack", () => {
   it("returns base attack for Jack", () => {
-    expect(effectiveAttack({ cardId: "JH", buffAttack: 0 })).toBe(2);
+    expect(effectiveAttack({ cardId: "JH", buffAttack: 0 })).toBe(1);
   });
 
   it("returns base attack for Queen", () => {
-    expect(effectiveAttack({ cardId: "QH", buffAttack: 0 })).toBe(3);
+    expect(effectiveAttack({ cardId: "QH", buffAttack: 0 })).toBe(2);
   });
 
   it("includes buff", () => {
-    expect(effectiveAttack({ cardId: "KS", buffAttack: 3 })).toBe(7);
+    expect(effectiveAttack({ cardId: "KS", buffAttack: 3 })).toBe(6);
   });
 });
 
 describe("effectiveHealth", () => {
   it("returns base health for Jack", () => {
-    expect(effectiveHealth({ cardId: "JH", buffHealth: 0, damageTaken: 0 })).toBe(3);
+    expect(effectiveHealth({ cardId: "JH", buffHealth: 0, damageTaken: 0 })).toBe(1);
   });
 
   it("subtracts damage taken", () => {
-    expect(effectiveHealth({ cardId: "KS", buffHealth: 0, damageTaken: 2 })).toBe(3);
+    expect(effectiveHealth({ cardId: "KS", buffHealth: 0, damageTaken: 2 })).toBe(1);
   });
 
   it("includes buff", () => {
-    expect(effectiveHealth({ cardId: "QC", buffHealth: 4, damageTaken: 1 })).toBe(7);
+    expect(effectiveHealth({ cardId: "QC", buffHealth: 4, damageTaken: 1 })).toBe(5);
   });
 });
 

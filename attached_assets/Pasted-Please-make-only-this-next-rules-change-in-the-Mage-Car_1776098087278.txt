@@ -1,0 +1,84 @@
+Please make **only this next rules change** in the Mage Card Game repo.
+
+Do **not** change anything else yet.
+Do **not** modify Mine behavior, Hearts, Spades, Clubs, Jokers, combat flow, or UI text except where strictly necessary for this Royal-value update.
+This change is only about **Royal values, Royal stats, and Royal Vault cost**.
+
+## Goal
+
+Update Royals to match the approved beginner rules:
+
+* **Jack** = value **1**, stats **1/1**, Vault cost **1**
+* **Queen** = value **2**, stats **2/2**, Vault cost **2**
+* **King** = value **3**, stats **3/3**, Vault cost **3**
+
+Right now the repo incorrectly uses:
+
+* pip values **11 / 12 / 13**
+* base stats **2/3, 3/4, 4/5**
+* Vault cost **0** for Royals
+
+That must be changed to the beginner-rule values above.
+
+## Files to update
+
+### 1) `artifacts/api-server/src/game/cards.ts`
+
+Update the Royal card definitions so that:
+
+* Jack has:
+
+  * `pipValue: 1`
+  * base attack/health: `1/1`
+  * `vaultCost: 1`
+
+* Queen has:
+
+  * `pipValue: 2`
+  * base attack/health: `2/2`
+  * `vaultCost: 2`
+
+* King has:
+
+  * `pipValue: 3`
+  * base attack/health: `3/3`
+  * `vaultCost: 3`
+
+Apply this for all Royal cards consistently, regardless of suit.
+
+## Important constraints
+
+* Do **not** change Ace or numbered card values
+* Do **not** change Jokers in this step
+* Do **not** change any other gameplay rules
+* Do **not** invent new balancing rules
+* Do **not** change any code that is unrelated to making Royals use beginner values/stats/costs
+
+## What to verify after the change
+
+Please verify that:
+
+1. any function using Royal `pipValue` now sees J/Q/K as `1/2/3`
+2. any function using Royal base stats now gets `1/1`, `2/2`, `3/3`
+3. any function using `vaultCost` now charges `1/2/3` for J/Q/K
+4. first-player determination now compares Royals using `1/2/3` instead of `11/12/13`
+5. there are no leftover hardcoded Royal stats or Royal costs elsewhere in the repo
+
+## Tests / checks
+
+Please update any affected tests and run the relevant test suite.
+
+Also search the repo for any leftover hardcoded Royal values, such as:
+
+* `11`, `12`, `13` used for J/Q/K
+* `2/3`, `3/4`, `4/5` Royal base stats
+* `vaultCost: 0` for Royals
+
+## Final output
+
+When done, report back with:
+
+1. every file changed
+2. exactly what changed in each file
+3. any tests updated
+4. confirmation that no unrelated gameplay rules were changed

@@ -21,19 +21,14 @@ const ROYAL_RANKS: Rank[] = ["J", "Q", "K"];
 function pipValue(rank: Rank | "JOKER"): number {
   if (rank === "JOKER") return 0;
   if (rank === "A") return 1;
-  if (rank === "J") return 11;
-  if (rank === "Q") return 12;
-  if (rank === "K") return 13;
+  if (rank === "J") return 1;
+  if (rank === "Q") return 2;
+  if (rank === "K") return 3;
   return parseInt(rank, 10);
 }
 
-function vaultCost(
-  rank: Rank | "JOKER",
-  suit: Suit | "JOKER",
-  isRoyal: boolean,
-): number {
+function vaultCost(rank: Rank | "JOKER", suit: Suit | "JOKER"): number {
   if (suit === "JOKER" || rank === "JOKER") return 10;
-  if (isRoyal) return 0;
   if (suit === "D") return 0;
   return pipValue(rank);
 }
@@ -50,7 +45,7 @@ function buildCard(rank: Rank, suit: Suit): Card {
     isRoyal,
     isJoker,
     pipValue: pv,
-    vaultCost: vaultCost(rank, suit, isRoyal),
+    vaultCost: vaultCost(rank, suit),
   };
 }
 
@@ -111,15 +106,15 @@ export function shuffle(cards: CardId[]): CardId[] {
 }
 
 export function royalBaseAttack(rank: Rank): number {
-  if (rank === "J") return 2;
-  if (rank === "Q") return 3;
-  return 4;
+  if (rank === "J") return 1;
+  if (rank === "Q") return 2;
+  return 3;
 }
 
 export function royalBaseHealth(rank: Rank): number {
-  if (rank === "J") return 3;
-  if (rank === "Q") return 4;
-  return 5;
+  if (rank === "J") return 1;
+  if (rank === "Q") return 2;
+  return 3;
 }
 
 export function royalSupportBuff(rank: Rank): { attack: number; health: number } {
