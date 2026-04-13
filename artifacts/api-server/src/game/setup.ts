@@ -3,8 +3,6 @@ import { drawCards } from "./draw";
 import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 
-// console.log("DEBUG setup.ts loaded");
-
 const INITIAL_HAND_SIZE = 7;
 const DEFAULT_LIFE = 20;
 
@@ -61,11 +59,6 @@ function rankValue(cardId: CardId): number {
 }
 
 export function determineFirstPlayer(state: GameState): Result<GameState> {
-  // console.log("DEBUG determineFirstPlayer start", {
-  //   abyssCount: state.abyss.length,
-  //   deckCount: state.deck.length,
-  //   turnOrder: state.turnOrder,
-  // });
   let currentState = state;
   let contenders = [...state.turnOrder];
   const revealedCards: CardId[] = [];
@@ -87,11 +80,6 @@ export function determineFirstPlayer(state: GameState): Result<GameState> {
       roundDraws[playerId] = topCard;
       revealedCards.push(topCard);
 
-      // console.log("DEBUG revealed card", {
-      //   playerId,
-      //   card: topCard,
-      // });
-
       currentState = {
         ...currentState,
         deck: remaining,
@@ -109,13 +97,6 @@ export function determineFirstPlayer(state: GameState): Result<GameState> {
     const tied = ranked.filter((r) => r.value === topValue);
 
     if (tied.length === 1) {
-      // console.log("DEBUG determineFirstPlayer end", {
-      //   activePlayerId: ranked[0]!.playerId,
-      //   abyssCount: 0,
-      //   deckCount: currentState.deck.length,
-      //   revealedCount: revealedCards.length,
-      // });
-
       return ok({
         ...currentState,
         activePlayerId: ranked[0]!.playerId,
