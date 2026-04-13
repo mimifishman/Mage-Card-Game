@@ -1,0 +1,243 @@
+Make **only one change** in the Mage Card Game repo: refactor the **Mine** from a per-player field to **one shared Mine for the whole game**.
+
+Do **not** change any other game rules yet.
+Do **not** change Royal values, Joker behavior, Hearts, Spades, Clubs, combat rules, or any UI text except what is required for the shared-Mine refactor.
+Do **not** invent new mechanics.
+Keep the rest of the game behavior exactly the same.
+
+## Goal
+
+The Mine must be shared by all players.
+
+Right now the codebase incorrectly treats Mine as personal because:
+
+* `mine` lives on `PlayerState`
+* setup initializes each player with `mine: []`
+* Diamonds are added to `player.mine`
+* Vault is calculated from `player.mine`
+* serializer sends Mine as part of each player
+* mobile UI still reads player-specific Mine in places
+
+After this change:
+
+* `mine` must exist once on `GameState`
+* all Diamonds played to Mine go into `state.mine`
+* Vault calculations must use `state.mine`
+* API/player view must expose Mine at match level, not per player
+* mobile UI must render shared Mine from match-level state
+* there must be no remaining `player.mine` references
+
+## Exact files to update
+
+### 1) `artifacts/api-server/src/game/types.ts`
+
+Refactor types so:
+
+* `PlayerState` no longer has `mine`
+* `GameState` now has `mine: CardId[]`
+
+Target shape:
+
+```ts
+export interface PlayerState {
+  id: string;
+  life: number;
+  isEliminated: boolean;
+  hand: CardId[];
+  court: RoyalInCourt[];
+  vault: VaultState;
+  hasPlayedDiamondThisTurn: boolean;
+}
+
+export interface GameState {
+  matchId: string;
+  phase: TurnPhase;
+  turnNumber: number;
+  activePlayerId: string;
+  turnOrder: string[];
+  players: Record<string, PlayerState>;
+  deck: CardId[];
+  mine: CardId[];
+  abyss: CardId[];
+  attacks: AttackDeclaration[];
+}
+```
+
+### 2) `artifacts/api-server/src/game/setup.ts`
+
+Update initial game state so:
+
+* remove `mine: []` from each player object
+* add one top-level `mine: []` to the returned `GameState`
+
+### 3) `artifacts/api-server/src/game/diamonds.ts`
+
+In the function that plays a Diamond to the Mine:
+
+* stop appending to `player.mine`
+* append to `state.mine`
+* still remove the Diamond from the player’s hand
+* still set `hasPlayedDiamondThisTurn: true`
+
+Expected pattern:
+
+```ts
+const updated: PlayerState = {
+  ...removeFromHand(player, cardId),
+  hasPlayedDiamondThisTurn: true,
+};
+
+return ok({
+  ...state,
+  mine: [...state.mine, cardId],
+  players: { ...state.players, [playerId]: updated },
+});
+```
+
+### 4) `artifacts/api-server/src/game/vault.ts`
+
+Change Vault availability so it uses the shared Mine.
+
+Keep `calculateVaultFromMine(mine)`.
+
+Change `availableVault` to:
+
+```ts
+export function availableVault(mine: CardId[], player: PlayerState): number {
+  return calculateVaultFromMine(mine) + player.vault.tempBoost - player.vault.spent;
+}
+```
+
+Do not change `spendVault`, `addTempBoost`, or `resetVaultForTurn` except for any necessary type fixes.
+
+### 5) `artifacts/api-server/src/game/validation.ts`
+
+Anywhere Vault availability is checked, pass the shared Mine:
+
+* replace `availableVault(player)`
+* with `availableVault(state.mine, player)`
+
+### 6) `artifacts/api-server/src/game/joker.ts`
+
+Update all Joker Vault checks the same way:
+
+* replace `availableVault(player)`
+* with `availableVault(state.mine, player)`
+
+Do not change Joker rules themselves yet.
+
+### 7) `artifacts/api-server/src/game/serializer.ts`
+
+Refactor API view models so Mine is match-level, not player-level.
+
+Requirements:
+
+* `PublicPlayerState` must no longer include `mine`
+* `PlayerGameView` must include top-level `mine: string[]`
+* `serializePlayer` should take the shared mine as an argument
+* Vault availability must use `availableVault(mine, player)`
+* `buildPlayerView` must return `mine: state.mine`
+
+Target structure:
+
+```ts
+export interface PublicPlayerState {
+  id: string;
+  life: number;
+  isEliminated: boolean;
+  court: RoyalInCourt[];
+  handCount: number;
+  vault: {
+    available: number;
+    tempBoost: number;
+    spent: number;
+  };
+}
+
+export interface PlayerGameView {
+  matchId: string;
+  phase: string;
+  turnNumber: number;
+  activePlayerId: string;
+  turnOrder: string[];
+  players: Record<string, PublicPlayerState>;
+  myHand: string[];
+  myDiamondPlayed: boolean;
+  deck: number;
+  mine: string[];
+  abyss: string[];
+  attacks: AttackDeclaration[];
+}
+```
+
+### 8) `artifacts/mobile/app/(game)/match.tsx`
+
+Update the Mine UI to use match-level Mine:
+
+* replace any use of player-level Mine or `myState?.mine`
+* use `gameState.mine`
+
+Expected prop shape:
+
+```tsx
+<MineAbyssRow
+  mine={gameState.mine ?? []}
+  abyss={gameState.abyss}
+  deckCount={gameState.deck}
+/>
+```
+
+### 9) `artifacts/mobile/components/game/OpponentPanel.tsx`
+
+Remove any leftover `player.mine` references.
+At minimum, remove the old block like:
+
+```tsx
+{player.mine.length > 0 && (
+  <Text style={styles.mineHint}>⛏ {player.mine.length} mine</Text>
+)}
+```
+
+Also remove the unused `mineHint` style if it becomes unused.
+
+### 10) Generated/shared client types
+
+Update any generated or shared client schemas/types so they match the new API shape:
+
+* remove `mine` from player-level public state
+* add top-level `mine` to match/game view
+
+Likely files:
+
+* `lib/api-spec/openapi.yaml`
+* `lib/api-client-react/src/generated/api.schemas.ts`
+
+## Important constraints
+
+Only implement the shared-Mine refactor.
+Do not make any unrelated fixes.
+Do not change existing gameplay logic beyond what is required to move Mine to match-level state and make Vault use the shared Mine.
+
+## Before finishing
+
+Search the repo for any remaining `player.mine` references and remove or refactor them appropriately.
+
+## Acceptance criteria
+
+I should be able to:
+
+1. Start a match
+2. Play a Diamond to the Mine
+3. See that Diamond in one shared Mine
+4. See both players referencing the same Mine state
+5. Have Vault calculations use the shared Mine total
+6. No runtime errors from `player.mine` being undefined
+
+## Final output
+
+When done, give me:
+
+1. the exact files changed
+2. a short summary of what changed in each file
+3. any commands I need to run to regenerate client types or restart services
+4. confirmation that no unrelated rule changes were made
