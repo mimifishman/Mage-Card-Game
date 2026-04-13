@@ -130,7 +130,6 @@ export interface PublicPlayerState {
   id: string;
   life: number;
   isEliminated: boolean;
-  mine: string[];
   court: RoyalInCourt[];
   handCount: number;
   vault: PublicPlayerStateVault;
@@ -141,6 +140,7 @@ export interface AttackDeclaration {
   attackerCardId: string;
   targetPlayerId: string;
   blockerCardId?: string | null;
+  /** True when the defending player chose to not block this attack */
   passed?: boolean;
 }
 
@@ -170,6 +170,7 @@ export interface PlayerGameView {
   myDiamondPlayed: boolean;
   /** Number of cards remaining in the deck */
   deck: number;
+  mine: string[];
   abyss: string[];
   attacks: AttackDeclaration[];
 }
@@ -246,4 +247,9 @@ export type HandleBrowserLoginCallbackParams = {
   code?: string;
   state?: string;
   iss?: string;
+};
+
+export type RematchMatch200 = {
+  ok: true;
+  matchId: string;
 };

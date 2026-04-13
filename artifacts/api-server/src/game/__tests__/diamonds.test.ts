@@ -5,8 +5,9 @@ import { makeState, makePlayer, P1, P2 } from "./helpers";
 
 function stateWithHand(hand: string[], mine: string[] = [], deck: string[] = []) {
   return makeState({
+    mine,
     players: {
-      [P1]: makePlayer(P1, { hand, mine, vault: { tempBoost: 0, spent: 0 } }),
+      [P1]: makePlayer(P1, { hand, vault: { tempBoost: 0, spent: 0 } }),
       [P2]: makePlayer(P2),
     },
     deck,
@@ -14,14 +15,14 @@ function stateWithHand(hand: string[], mine: string[] = [], deck: string[] = [])
 }
 
 describe("playDiamondToMine", () => {
-  it("moves Diamond from hand to mine", () => {
+  it("moves Diamond from hand to shared mine", () => {
     const state = stateWithHand(["7D"]);
     const result = playDiamondToMine(state, P1, "7D");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P1]!.mine).toContain("7D");
+    expect(result.value.mine).toContain("7D");
     expect(result.value.players[P1]!.hand).not.toContain("7D");
-    expect(calculateVaultFromMine(result.value.players[P1]!.mine)).toBe(7);
+    expect(calculateVaultFromMine(result.value.mine)).toBe(7);
   });
 
   it("rejects non-Diamond cards", () => {

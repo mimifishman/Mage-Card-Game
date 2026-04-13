@@ -24,7 +24,6 @@ export function createInitialGameState(
       isEliminated: false,
       hand: [],
       court: [],
-      mine: [],
       vault: { tempBoost: 0, spent: 0 },
       hasPlayedDiamondThisTurn: false,
     };
@@ -38,6 +37,7 @@ export function createInitialGameState(
     turnOrder: [...playerIds],
     players,
     deck,
+    mine: [],
     abyss: [],
     attacks: [],
   });

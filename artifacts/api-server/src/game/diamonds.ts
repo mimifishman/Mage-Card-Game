@@ -69,12 +69,12 @@ export function playDiamondToMine(
 
   const updated: PlayerState = {
     ...removeFromHand(player, cardId),
-    mine: [...player.mine, cardId],
     hasPlayedDiamondThisTurn: true,
   };
 
   return ok({
     ...state,
+    mine: [...state.mine, cardId],
     players: { ...state.players, [playerId]: updated },
   });
 }

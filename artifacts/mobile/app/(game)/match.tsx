@@ -509,7 +509,7 @@ export default function MatchScreen() {
         )}
 
         <MineAbyssRow
-          mine={myState?.mine ?? []}
+          mine={gameState.mine ?? []}
           abyss={gameState.abyss}
           deckCount={gameState.deck}
         />

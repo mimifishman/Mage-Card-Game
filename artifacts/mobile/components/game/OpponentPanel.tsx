@@ -63,9 +63,6 @@ export default function OpponentPanel({
                 </View>
               )}
             </View>
-            {player.mine.length > 0 && (
-              <Text style={styles.mineHint}>⛏ {player.mine.length} mine</Text>
-            )}
           </>
         )}
       </View>
@@ -168,11 +165,6 @@ const styles = StyleSheet.create({
   },
   lifeVal: {
     color: Colors.accentRed,
-  },
-  mineHint: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontFamily: "Inter_400Regular",
   },
   court: {
     flex: 1,

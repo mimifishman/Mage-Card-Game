@@ -18,23 +18,21 @@ describe("calculateVaultFromMine", () => {
 
 describe("availableVault", () => {
   it("returns base vault when no spending", () => {
-    const player = makePlayer("p1", { mine: ["5D", "3D"] });
-    expect(availableVault(player)).toBe(8);
+    const player = makePlayer("p1");
+    expect(availableVault(["5D", "3D"], player)).toBe(8);
   });
 
   it("subtracts spent amount", () => {
     const player = makePlayer("p1", {
-      mine: ["5D"],
       vault: { tempBoost: 0, spent: 3 },
     });
-    expect(availableVault(player)).toBe(2);
+    expect(availableVault(["5D"], player)).toBe(2);
   });
 
   it("includes temp boost", () => {
     const player = makePlayer("p1", {
-      mine: ["5D"],
       vault: { tempBoost: 4, spent: 0 },
     });
-    expect(availableVault(player)).toBe(9);
+    expect(availableVault(["5D"], player)).toBe(9);
   });
 });

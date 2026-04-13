@@ -5,11 +5,10 @@ import { makeState, makePlayer, P1, P2 } from "./helpers";
 describe("canPlayCard", () => {
   it("allows playing a card with enough vault", () => {
     const state = makeState({
-      phase: "main",
+      mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["5H"],
-          mine: ["10D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
@@ -54,10 +53,10 @@ describe("canPlayCard", () => {
 
   it("rejects if not enough vault", () => {
     const state = makeState({
+      mine: [],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["10S"],
-          mine: [],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
@@ -71,10 +70,10 @@ describe("canPlayCard", () => {
 
   it("allows Joker when vault >= 10", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["JOKER1"],
-          mine: ["10D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
@@ -86,10 +85,10 @@ describe("canPlayCard", () => {
 
   it("rejects Joker when vault < 10", () => {
     const state = makeState({
+      mine: ["5D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["JOKER1"],
-          mine: ["5D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),

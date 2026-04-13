@@ -8,9 +8,9 @@ export function calculateVaultFromMine(mine: CardId[]): number {
   }, 0);
 }
 
-export function availableVault(player: PlayerState): number {
+export function availableVault(mine: CardId[], player: PlayerState): number {
   return (
-    calculateVaultFromMine(player.mine) +
+    calculateVaultFromMine(mine) +
     player.vault.tempBoost -
     player.vault.spent
   );

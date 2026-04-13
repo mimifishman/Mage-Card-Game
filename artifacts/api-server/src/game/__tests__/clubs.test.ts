@@ -16,18 +16,15 @@ function mkRoyal(cardId: string, overrides: Partial<RoyalInCourt> = {}): RoyalIn
   };
 }
 
-const richP1 = () =>
-  makePlayer(P1, {
-    hand: ["3C"],
-    mine: ["10D"],
-    vault: { tempBoost: 0, spent: 0 },
-  });
-
 describe("applyClubToRoyal", () => {
   it("reduces target Royal's buffAttack and buffHealth", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
-        [P1]: richP1(),
+        [P1]: makePlayer(P1, {
+          hand: ["3C"],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
         [P2]: makePlayer(P2, {
           court: [mkRoyal("KH", { buffAttack: 5, buffHealth: 5 })],
         }),
@@ -44,10 +41,10 @@ describe("applyClubToRoyal", () => {
 
   it("destroys Royal when effective health <= 0 and sends Royal + attachments to Abyss", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["10C"],
-          mine: ["10D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2, {
@@ -70,11 +67,11 @@ describe("applyClubToRoyal", () => {
 
   it("rejects targeting your own Royal", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["3C"],
           court: [mkRoyal("KH")],
-          mine: ["10D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
@@ -86,8 +83,12 @@ describe("applyClubToRoyal", () => {
 
   it("rejects if target Royal not in opponent Court", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
-        [P1]: richP1(),
+        [P1]: makePlayer(P1, {
+          hand: ["3C"],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
         [P2]: makePlayer(P2, { court: [] }),
       },
     });

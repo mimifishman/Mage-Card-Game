@@ -19,11 +19,11 @@ function mkRoyal(cardId: string, overrides: Partial<RoyalInCourt> = {}): RoyalIn
 describe("attachHeart", () => {
   it("adds health to target Royal", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["6H"],
           court: [mkRoyal("KS")],
-          mine: ["10D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
@@ -45,7 +45,6 @@ describe("attachHeart", () => {
         [P1]: makePlayer(P1, {
           hand: ["JH"],
           court: [mkRoyal("KS")],
-          mine: [],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
@@ -57,11 +56,11 @@ describe("attachHeart", () => {
 
   it("rejects non-Heart card", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["6S"],
           court: [mkRoyal("KS")],
-          mine: ["10D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
@@ -73,11 +72,11 @@ describe("attachHeart", () => {
 
   it("rejects if target Royal not in Court", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["6H"],
           court: [],
-          mine: ["10D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
@@ -91,11 +90,11 @@ describe("attachHeart", () => {
 describe("attachSpade", () => {
   it("adds attack AND health to target Royal", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["4S"],
           court: [mkRoyal("QH")],
-          mine: ["10D"],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),

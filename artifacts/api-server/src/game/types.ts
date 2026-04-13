@@ -46,7 +46,6 @@ export interface PlayerState {
   isEliminated: boolean;
   hand: CardId[];
   court: RoyalInCourt[];
-  mine: CardId[];
   vault: VaultState;
   hasPlayedDiamondThisTurn: boolean;
 }
@@ -77,6 +76,7 @@ export interface GameState {
   turnOrder: string[];
   players: Record<string, PlayerState>;
   deck: CardId[];
+  mine: CardId[];
   abyss: CardId[];
   attacks: AttackDeclaration[];
 }

@@ -1,11 +1,10 @@
-import type { AttackDeclaration, GameState, PlayerState, RoyalInCourt } from "./types";
+import type { AttackDeclaration, CardId, GameState, PlayerState, RoyalInCourt } from "./types";
 import { availableVault } from "./vault";
 
 export interface PublicPlayerState {
   id: string;
   life: number;
   isEliminated: boolean;
-  mine: string[];
   court: RoyalInCourt[];
   handCount: number;
   vault: {
@@ -25,20 +24,20 @@ export interface PlayerGameView {
   myHand: string[];
   myDiamondPlayed: boolean;
   deck: number;
+  mine: string[];
   abyss: string[];
   attacks: AttackDeclaration[];
 }
 
-function serializePlayer(player: PlayerState): PublicPlayerState {
+function serializePlayer(player: PlayerState, mine: CardId[]): PublicPlayerState {
   return {
     id: player.id,
     life: player.life,
     isEliminated: player.isEliminated,
-    mine: player.mine,
     court: player.court,
     handCount: player.hand.length,
     vault: {
-      available: availableVault(player),
+      available: availableVault(mine, player),
       tempBoost: player.vault.tempBoost,
       spent: player.vault.spent,
     },
@@ -48,7 +47,7 @@ function serializePlayer(player: PlayerState): PublicPlayerState {
 export function buildPlayerView(state: GameState, viewerUserId: string): PlayerGameView {
   const players: Record<string, PublicPlayerState> = {};
   for (const [id, p] of Object.entries(state.players)) {
-    players[id] = serializePlayer(p);
+    players[id] = serializePlayer(p, state.mine);
   }
 
   const myPlayer = state.players[viewerUserId];
@@ -64,6 +63,7 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
     myHand,
     myDiamondPlayed: myPlayer?.hasPlayedDiamondThisTurn ?? false,
     deck: state.deck.length,
+    mine: state.mine,
     abyss: state.abyss,
     attacks: state.attacks,
   };

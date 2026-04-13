@@ -37,8 +37,8 @@ export function playJokerDestroyRoyal(
   if (!joker.isJoker) return err(`Card ${jokerCardId} is not a Joker`);
 
   const player = state.players[playerId]!;
-  if (availableVault(player) < JOKER_COST) {
-    return err(`Joker requires ${JOKER_COST} Vault; you have ${availableVault(player)}`);
+  if (availableVault(state.mine, player) < JOKER_COST) {
+    return err(`Joker requires ${JOKER_COST} Vault; you have ${availableVault(state.mine, player)}`);
   }
 
   const targetPlayer = state.players[targetPlayerId];
@@ -84,8 +84,8 @@ export function playJokerDamagePlayer(
   if (!joker.isJoker) return err(`Card ${jokerCardId} is not a Joker`);
 
   const player = state.players[playerId]!;
-  if (availableVault(player) < JOKER_COST) {
-    return err(`Joker requires ${JOKER_COST} Vault; you have ${availableVault(player)}`);
+  if (availableVault(state.mine, player) < JOKER_COST) {
+    return err(`Joker requires ${JOKER_COST} Vault; you have ${availableVault(state.mine, player)}`);
   }
 
   const targetPlayer = state.players[targetPlayerId];

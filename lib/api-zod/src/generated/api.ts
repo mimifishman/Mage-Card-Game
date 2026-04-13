@@ -157,6 +157,7 @@ export const GetMatchResponse = zod.object({
   players: zod.array(
     zod.object({
       userId: zod.string(),
+      displayName: zod.string(),
       turnOrder: zod.number(),
       life: zod.number(),
       isEliminated: zod.boolean(),
@@ -203,6 +204,7 @@ export const SubmitGameActionBody = zod.object({
     "play_diamond_to_mine",
     "discard_diamond_to_draw",
     "discard_diamond_for_boost",
+    "discard_to_abyss",
     "play_royal_to_court",
     "attach_royal_support",
     "attach_heart",
@@ -212,6 +214,7 @@ export const SubmitGameActionBody = zod.object({
     "declare_attack",
     "begin_declare_blocks",
     "declare_block",
+    "pass_block",
     "resolve_combat",
     "end_turn",
   ]),
@@ -250,7 +253,6 @@ export const SubmitGameActionResponse = zod.object({
         id: zod.string(),
         life: zod.number(),
         isEliminated: zod.boolean(),
-        mine: zod.array(zod.string()),
         court: zod.array(
           zod.object({
             cardId: zod.string(),
@@ -271,7 +273,13 @@ export const SubmitGameActionResponse = zod.object({
       }),
     ),
     myHand: zod.array(zod.string()),
+    myDiamondPlayed: zod
+      .boolean()
+      .describe(
+        "Whether the current viewer has already taken a Diamond action this turn",
+      ),
     deck: zod.number().describe("Number of cards remaining in the deck"),
+    mine: zod.array(zod.string()),
     abyss: zod.array(zod.string()),
     attacks: zod.array(
       zod.object({
@@ -279,10 +287,36 @@ export const SubmitGameActionResponse = zod.object({
         attackerCardId: zod.string(),
         targetPlayerId: zod.string(),
         blockerCardId: zod.string().nullish(),
+        passed: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when the defending player chose to not block this attack",
+          ),
       }),
     ),
   }),
   winnerUserId: zod.string().nullish(),
+});
+
+/**
+ * Resets the match to waiting state and notifies all players via WebSocket to return to the waiting room.
+ * @summary Request a rematch (resets match to waiting state)
+ */
+export const RematchMatchParams = zod.object({
+  matchId: zod.coerce.string(),
+});
+
+export const RematchMatchHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+export const RematchMatchResponse = zod.object({
+  ok: zod.boolean(),
+  matchId: zod.string(),
 });
 
 /**
@@ -319,7 +353,6 @@ export const GetMatchStateResponse = zod.object({
         id: zod.string(),
         life: zod.number(),
         isEliminated: zod.boolean(),
-        mine: zod.array(zod.string()),
         court: zod.array(
           zod.object({
             cardId: zod.string(),
@@ -340,7 +373,13 @@ export const GetMatchStateResponse = zod.object({
       }),
     ),
     myHand: zod.array(zod.string()),
+    myDiamondPlayed: zod
+      .boolean()
+      .describe(
+        "Whether the current viewer has already taken a Diamond action this turn",
+      ),
     deck: zod.number().describe("Number of cards remaining in the deck"),
+    mine: zod.array(zod.string()),
     abyss: zod.array(zod.string()),
     attacks: zod.array(
       zod.object({
@@ -348,6 +387,12 @@ export const GetMatchStateResponse = zod.object({
         attackerCardId: zod.string(),
         targetPlayerId: zod.string(),
         blockerCardId: zod.string().nullish(),
+        passed: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when the defending player chose to not block this attack",
+          ),
       }),
     ),
   }),

@@ -26,7 +26,7 @@ export function canPlayCard(
   }
 
   const card = getCard(cardId);
-  const vault = availableVault(player);
+  const vault = availableVault(state.mine, player);
 
   if (vault < card.vaultCost) {
     return err(

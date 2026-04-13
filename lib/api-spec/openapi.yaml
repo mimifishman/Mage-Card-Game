@@ -623,7 +623,7 @@ components:
             type: string
     PublicPlayerState:
       type: object
-      required: [id, life, isEliminated, mine, court, handCount, vault]
+      required: [id, life, isEliminated, court, handCount, vault]
       properties:
         id:
           type: string
@@ -631,10 +631,6 @@ components:
           type: integer
         isEliminated:
           type: boolean
-        mine:
-          type: array
-          items:
-            type: string
         court:
           type: array
           items:
@@ -669,7 +665,7 @@ components:
           description: True when the defending player chose to not block this attack
     PlayerGameView:
       type: object
-      required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, myDiamondPlayed, deck, abyss, attacks]
+      required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, myDiamondPlayed, deck, mine, abyss, attacks]
       properties:
         matchId:
           type: string
@@ -698,6 +694,10 @@ components:
         deck:
           type: integer
           description: Number of cards remaining in the deck
+        mine:
+          type: array
+          items:
+            type: string
         abyss:
           type: array
           items:
