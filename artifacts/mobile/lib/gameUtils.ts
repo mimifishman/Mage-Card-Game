@@ -171,13 +171,22 @@ export function getValidActionsForCard(
   }
 
   if (card.isRoyal) {
-    actions.push({ action: "play_royal_to_court", label: "Play to Court", requiresTarget: false });
-    if (myCourtSize > 0) {
+    if (vault >= card.vaultCost) {
+      actions.push({ action: "play_royal_to_court", label: `Play to Court [−${card.vaultCost} Vault]`, requiresTarget: false });
+      if (myCourtSize > 0) {
+        actions.push({
+          action: "attach_royal_support",
+          label: "Attach as Support to a Royal",
+          requiresTarget: true,
+          targetType: "own_royal",
+        });
+      }
+    } else {
       actions.push({
-        action: "attach_royal_support",
-        label: "Attach as Support to a Royal",
-        requiresTarget: true,
-        targetType: "own_royal",
+        action: "play_royal_to_court",
+        label: `Need ${card.vaultCost} Vault to play (have ${vault})`,
+        requiresTarget: false,
+        disabled: true,
       });
     }
     return actions;
@@ -215,11 +224,20 @@ export function getValidActionsForCard(
         disabled: true,
       });
     }
-    actions.push({
-      action: "discard_heart_to_heal",
-      label: `Discard — heal yourself (+${card.pipValue} Life)`,
-      requiresTarget: false,
-    });
+    if (vault >= card.vaultCost) {
+      actions.push({
+        action: "discard_heart_to_heal",
+        label: `Discard — heal yourself (+${card.pipValue} Life) [−${card.vaultCost} Vault]`,
+        requiresTarget: false,
+      });
+    } else {
+      actions.push({
+        action: "discard_heart_to_heal",
+        label: `Need ${card.vaultCost} Vault to discard (have ${vault})`,
+        requiresTarget: false,
+        disabled: true,
+      });
+    }
     return actions;
   }
 
@@ -239,12 +257,21 @@ export function getValidActionsForCard(
         disabled: true,
       });
     }
-    actions.push({
-      action: "discard_spade_to_return",
-      label: `Discard — return a card from Abyss (value ≤ ${card.pipValue})`,
-      requiresTarget: true,
-      targetType: "pick_abyss",
-    });
+    if (vault >= card.vaultCost) {
+      actions.push({
+        action: "discard_spade_to_return",
+        label: `Discard — return a card from Abyss (value ≤ ${card.pipValue}) [−${card.vaultCost} Vault]`,
+        requiresTarget: true,
+        targetType: "pick_abyss",
+      });
+    } else {
+      actions.push({
+        action: "discard_spade_to_return",
+        label: `Need ${card.vaultCost} Vault to discard (have ${vault})`,
+        requiresTarget: false,
+        disabled: true,
+      });
+    }
     return actions;
   }
 

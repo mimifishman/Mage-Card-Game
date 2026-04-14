@@ -97,4 +97,42 @@ describe("canPlayCard", () => {
     const result = canPlayCard(state, P1, "JOKER1");
     expect(result.ok).toBe(false);
   });
+
+  it("allows non-royal Diamond (AD) with no vault", () => {
+    const state = makeState({
+      mine: [],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["AD"], vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = canPlayCard(state, P1, "AD");
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects Diamond Royal (JD) when vault < 1", () => {
+    const state = makeState({
+      mine: [],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["JD"], vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = canPlayCard(state, P1, "JD");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/vault/i);
+  });
+
+  it("allows Diamond Royal (QD) when vault >= 2", () => {
+    const state = makeState({
+      mine: ["2D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["QD"], vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = canPlayCard(state, P1, "QD");
+    expect(result.ok).toBe(true);
+  });
 });

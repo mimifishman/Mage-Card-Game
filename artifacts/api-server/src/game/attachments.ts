@@ -105,17 +105,18 @@ export function discardHeartToHeal(
   playerId: string,
   heartCardId: CardId,
 ): Result<GameState> {
-  const playerResult = validateActiveMainPhase(state, playerId, heartCardId);
-  if (!playerResult.ok) return playerResult;
-  const player = playerResult.value;
+  const canPlay = canPlayCard(state, playerId, heartCardId);
+  if (!canPlay.ok) return canPlay as Result<GameState>;
 
   const card = getCard(heartCardId);
   if (card.suit !== "H" || card.isRoyal) {
     return err(`Card ${heartCardId} is not a non-Royal Heart`);
   }
 
+  const player = state.players[playerId]!;
+  const afterSpend = spendVault(removeFromHand(player, heartCardId), card.vaultCost);
   const healed: PlayerState = {
-    ...removeFromHand(player, heartCardId),
+    ...afterSpend,
     life: player.life + card.pipValue,
   };
 
@@ -132,9 +133,8 @@ export function discardSpadeToReturn(
   spadeCardId: CardId,
   targetCardId: CardId,
 ): Result<GameState> {
-  const playerResult = validateActiveMainPhase(state, playerId, spadeCardId);
-  if (!playerResult.ok) return playerResult;
-  const player = playerResult.value;
+  const canPlay = canPlayCard(state, playerId, spadeCardId);
+  if (!canPlay.ok) return canPlay as Result<GameState>;
 
   const spadeCard = getCard(spadeCardId);
   if (spadeCard.suit !== "S" || spadeCard.isRoyal) {
@@ -152,10 +152,11 @@ export function discardSpadeToReturn(
     );
   }
 
-  const withoutSpade = removeFromHand(player, spadeCardId);
+  const player = state.players[playerId]!;
+  const afterSpend = spendVault(removeFromHand(player, spadeCardId), spadeCard.vaultCost);
   const updatedPlayer: PlayerState = {
-    ...withoutSpade,
-    hand: [...withoutSpade.hand, targetCardId],
+    ...afterSpend,
+    hand: [...afterSpend.hand, targetCardId],
   };
 
   return ok({

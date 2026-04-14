@@ -29,7 +29,8 @@ function pipValue(rank: Rank | "JOKER"): number {
 
 function vaultCost(rank: Rank | "JOKER", suit: Suit | "JOKER"): number {
   if (suit === "JOKER" || rank === "JOKER") return 10;
-  if (suit === "D") return 0;
+  const isRoyal = rank === "J" || rank === "Q" || rank === "K";
+  if (suit === "D" && !isRoyal) return 0;
   return pipValue(rank);
 }
 

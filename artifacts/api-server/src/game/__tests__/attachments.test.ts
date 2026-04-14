@@ -112,10 +112,11 @@ describe("attachSpade", () => {
 });
 
 describe("discardHeartToHeal", () => {
-  it("heals the active player by the card pip value", () => {
+  it("heals the active player by the card pip value and spends vault", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
-        [P1]: makePlayer(P1, { hand: ["7H"], life: 14 }),
+        [P1]: makePlayer(P1, { hand: ["7H"], life: 14, vault: { tempBoost: 0, spent: 0 } }),
         [P2]: makePlayer(P2),
       },
     });
@@ -125,13 +126,14 @@ describe("discardHeartToHeal", () => {
     expect(result.value.players[P1]!.life).toBe(21);
     expect(result.value.players[P1]!.hand).not.toContain("7H");
     expect(result.value.abyss).toContain("7H");
-    expect(result.value.players[P1]!.vault.spent).toBe(0);
+    expect(result.value.players[P1]!.vault.spent).toBe(7);
   });
 
   it("removes card from hand before adding life (no double-count)", () => {
     const state = makeState({
+      mine: ["10D"],
       players: {
-        [P1]: makePlayer(P1, { hand: ["3H"], life: 15 }),
+        [P1]: makePlayer(P1, { hand: ["3H"], life: 15, vault: { tempBoost: 0, spent: 0 } }),
         [P2]: makePlayer(P2),
       },
     });
@@ -141,6 +143,18 @@ describe("discardHeartToHeal", () => {
     expect(result.value.players[P1]!.life).toBe(18);
     expect(result.value.players[P1]!.hand).not.toContain("3H");
     expect(result.value.abyss).toContain("3H");
+  });
+
+  it("rejects when vault < card pip value", () => {
+    const state = makeState({
+      mine: [],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["7H"], vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = discardHeartToHeal(state, P1, "7H");
+    expect(result.ok).toBe(false);
   });
 
   it("rejects Royal Heart card", () => {
@@ -179,11 +193,12 @@ describe("discardHeartToHeal", () => {
 });
 
 describe("discardSpadeToReturn", () => {
-  it("swaps spade for abyss card of equal or lesser value", () => {
+  it("swaps spade for abyss card of equal or lesser value and spends vault", () => {
     const state = makeState({
+      mine: ["10D"],
       abyss: ["5C"],
       players: {
-        [P1]: makePlayer(P1, { hand: ["7S"] }),
+        [P1]: makePlayer(P1, { hand: ["7S"], vault: { tempBoost: 0, spent: 0 } }),
         [P2]: makePlayer(P2),
       },
     });
@@ -194,6 +209,20 @@ describe("discardSpadeToReturn", () => {
     expect(result.value.players[P1]!.hand).not.toContain("7S");
     expect(result.value.abyss).toContain("7S");
     expect(result.value.abyss).not.toContain("5C");
+    expect(result.value.players[P1]!.vault.spent).toBe(7);
+  });
+
+  it("rejects when vault < spade pip value", () => {
+    const state = makeState({
+      mine: [],
+      abyss: ["5C"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["7S"], vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = discardSpadeToReturn(state, P1, "7S", "5C");
+    expect(result.ok).toBe(false);
   });
 
   it("rejects when abyss card value exceeds spade value", () => {
