@@ -1,0 +1,114 @@
+Please make **only this next fix** in the Mage Card Game repo.
+
+## Problem to fix
+
+**Royal Diamonds are being handled as Diamonds instead of Royals.**
+
+According to the approved beginner rules, **all Jacks, Queens, and Kings are Royals regardless of suit**, including:
+
+* Jack of Diamonds
+* Queen of Diamonds
+* King of Diamonds
+
+So `J♦`, `Q♦`, and `K♦` must be treated as **Royals**, not as regular Diamond cards.
+
+## Important rule
+
+When a card is both:
+
+* suit = `D`
+* and `isRoyal = true`
+
+it must follow **Royal behavior first**, not Diamond behavior.
+
+That means Royal Diamonds should:
+
+* be playable as Royals
+* use Royal actions
+* go to Court as Royals
+* not get normal Diamond actions like:
+
+  * play to Mine
+  * discard to draw
+  * discard for boost
+
+## Likely current bug
+
+Please check for any logic that branches by suit first, especially patterns like:
+
+```ts
+if (card.suit === "D") { ... }
+if (card.isRoyal) { ... }
+```
+
+If that exists, it should be changed so Royals are checked first, for example:
+
+```ts
+if (card.isRoyal) { ... }
+if (card.suit === "D") { ... }
+```
+
+or equivalent logic that ensures Royal Diamonds are treated as Royals.
+
+## Confirmed file to inspect
+
+### `artifacts/mobile/lib/gameUtils.ts`
+
+Please check `getValidActionsForCard(...)`.
+
+This is the main place I expect the bug, because Royal Diamonds are likely being routed into Diamond actions before the Royal check.
+
+In this function:
+
+* make sure `card.isRoyal` is handled **before** `card.suit === "D"`
+* so `J♦`, `Q♦`, `K♦` return Royal actions, not Diamond actions
+
+## Also search for similar logic elsewhere
+
+Please search the repo for any other places where Royal Diamonds could be misclassified, especially:
+
+* `if (card.suit === "D")`
+* `switch (card.suit)`
+* any action router / handler / UI menu logic
+* any backend or frontend branching that treats Diamonds before Royals
+
+If any similar logic exists, fix it the same way:
+
+* **Royal check first**
+* Diamond check only for non-Royal Diamonds
+
+## Constraints
+
+Do **not** make any other gameplay changes.
+Do **not** change Mine behavior.
+Do **not** change Royal values/stats/costs in this step unless already required elsewhere.
+Do **not** change Hearts, Spades, Clubs, Jokers, or combat rules.
+Only fix the classification/handling issue where Royal Diamonds are being treated like Diamonds instead of Royals.
+
+## Acceptance criteria
+
+After this fix:
+
+1. `J♦`, `Q♦`, and `K♦` must be treated as Royals
+2. they must show Royal actions, not Diamond actions
+3. they must not be playable to the Mine
+4. they must not use Diamond discard/boost actions
+5. regular numbered Diamonds should still behave like Diamonds
+6. non-Diamond Royals should still behave exactly as Royals
+
+## Please verify manually or with tests
+
+Please confirm:
+
+* `JD`, `QD`, `KD` now return Royal behavior
+* `2D`, `5D`, `10D` still return normal Diamond behavior
+* no unrelated rules changed
+
+## Final output
+
+When done, report back with:
+
+1. every file changed
+2. exactly what logic changed in each file
+3. whether the issue existed only in UI or also elsewhere
+4. confirmation that no unrelated gameplay changes were made
