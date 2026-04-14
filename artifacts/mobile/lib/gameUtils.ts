@@ -251,11 +251,6 @@ export function getValidActionsForCard(
       requiresTarget: true,
       targetType: "pick_abyss",
     });
-    actions.push({
-      action: "discard_to_abyss",
-      label: "Discard to Abyss",
-      requiresTarget: false,
-    });
     return actions;
   }
 
