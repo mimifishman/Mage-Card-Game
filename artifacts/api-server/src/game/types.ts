@@ -48,6 +48,7 @@ export interface PlayerState {
   court: RoyalInCourt[];
   vault: VaultState;
   hasPlayedDiamondThisTurn: boolean;
+  hasHadFirstTurn: boolean;
 }
 
 export interface AttackDeclaration {

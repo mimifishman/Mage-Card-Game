@@ -68,7 +68,7 @@ describe("endTurn", () => {
     expect(p1King!.hasteLocked).toBe(false);
     expect(p1King!.hasAttackedThisTurn).toBe(false);
     expect(result.value.activePlayerId).toBe(P2);
-    expect(result.value.phase).toBe("draw");
+    expect(result.value.phase).toBe("main");
   });
 
   it("heals ALL surviving Royals including defender Royals", () => {

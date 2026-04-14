@@ -44,9 +44,11 @@ export function advanceTurn(state: GameState): Result<GameState> {
   const nextPlayerId = active[nextIdx]!;
 
   const nextPlayerBase = resetVaultForTurn(state.players[nextPlayerId]!);
+  const isFirstTurn = !nextPlayerBase.hasHadFirstTurn;
   const nextPlayer: PlayerState = {
     ...nextPlayerBase,
     hasPlayedDiamondThisTurn: false,
+    hasHadFirstTurn: true,
   };
 
   const preparedState: GameState = {
@@ -60,6 +62,9 @@ export function advanceTurn(state: GameState): Result<GameState> {
     },
   };
 
+  if (isFirstTurn) {
+    return ok(preparedState);
+  }
   return drawCard(preparedState, nextPlayerId);
 }
 

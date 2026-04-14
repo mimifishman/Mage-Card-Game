@@ -26,6 +26,7 @@ export function createInitialGameState(
       court: [],
       vault: { tempBoost: 0, spent: 0 },
       hasPlayedDiamondThisTurn: false,
+      hasHadFirstTurn: false,
     };
   }
 
@@ -49,6 +50,16 @@ export function dealInitialHands(state: GameState): Result<GameState> {
     const result = drawCards(current, playerId, INITIAL_HAND_SIZE);
     if (!result.ok) return result;
     current = result.value;
+  }
+  const firstPlayer = current.players[current.activePlayerId];
+  if (firstPlayer) {
+    current = {
+      ...current,
+      players: {
+        ...current.players,
+        [current.activePlayerId]: { ...firstPlayer, hasHadFirstTurn: true },
+      },
+    };
   }
   return ok(current);
 }

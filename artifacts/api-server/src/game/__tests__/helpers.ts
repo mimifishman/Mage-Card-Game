@@ -15,6 +15,7 @@ export function makePlayer(
     court: [],
     vault: { tempBoost: 0, spent: 0 },
     hasPlayedDiamondThisTurn: false,
+    hasHadFirstTurn: false,
     ...overrides,
   };
 }
