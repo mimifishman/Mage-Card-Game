@@ -4,6 +4,19 @@ import { err, ok } from "./types";
 import { spendVault } from "./vault";
 import { canPlayCard } from "./validation";
 
+function validateActiveMainPhase(
+  state: GameState,
+  playerId: string,
+  cardId: CardId,
+): Result<PlayerState> {
+  if (state.activePlayerId !== playerId) return err("It is not your turn");
+  if (state.phase !== "main") return err(`Cannot discard during phase "${state.phase}"`);
+  const player = state.players[playerId];
+  if (!player) return err(`Player ${playerId} not found`);
+  if (!player.hand.includes(cardId)) return err(`Card ${cardId} is not in your hand`);
+  return ok(player);
+}
+
 function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return { ...player, hand: player.hand.filter((c) => c !== cardId) };
 }
@@ -84,5 +97,77 @@ export function attachSpade(
   return ok({
     ...state,
     players: { ...state.players, [playerId]: updated },
+  });
+}
+
+export function discardHeartToHeal(
+  state: GameState,
+  playerId: string,
+  heartCardId: CardId,
+  targetPlayerId: string,
+): Result<GameState> {
+  const playerResult = validateActiveMainPhase(state, playerId, heartCardId);
+  if (!playerResult.ok) return playerResult;
+  const player = playerResult.value;
+
+  const card = getCard(heartCardId);
+  if (card.suit !== "H" || card.isRoyal) {
+    return err(`Card ${heartCardId} is not a non-Royal Heart`);
+  }
+
+  const target = state.players[targetPlayerId];
+  if (!target) return err(`Player ${targetPlayerId} not found`);
+  if (target.isEliminated) return err(`Player ${targetPlayerId} is eliminated`);
+
+  const playerWithoutCard = removeFromHand(player, heartCardId);
+  const base = playerId === targetPlayerId ? playerWithoutCard : target;
+  const healed: PlayerState = { ...base, life: base.life + card.pipValue };
+
+  const newPlayers: GameState["players"] = { ...state.players, [playerId]: playerWithoutCard };
+  newPlayers[targetPlayerId] = healed;
+
+  return ok({
+    ...state,
+    abyss: [...state.abyss, heartCardId],
+    players: newPlayers,
+  });
+}
+
+export function discardSpadeToReturn(
+  state: GameState,
+  playerId: string,
+  spadeCardId: CardId,
+  targetCardId: CardId,
+): Result<GameState> {
+  const playerResult = validateActiveMainPhase(state, playerId, spadeCardId);
+  if (!playerResult.ok) return playerResult;
+  const player = playerResult.value;
+
+  const spadeCard = getCard(spadeCardId);
+  if (spadeCard.suit !== "S" || spadeCard.isRoyal) {
+    return err(`Card ${spadeCardId} is not a non-Royal Spade`);
+  }
+
+  if (!state.abyss.includes(targetCardId)) {
+    return err(`Card ${targetCardId} is not in the Abyss`);
+  }
+
+  const targetCard = getCard(targetCardId);
+  if (targetCard.pipValue > spadeCard.pipValue) {
+    return err(
+      `Card ${targetCardId} value (${targetCard.pipValue}) exceeds Spade value (${spadeCard.pipValue})`,
+    );
+  }
+
+  const withoutSpade = removeFromHand(player, spadeCardId);
+  const updatedPlayer: PlayerState = {
+    ...withoutSpade,
+    hand: [...withoutSpade.hand, targetCardId],
+  };
+
+  return ok({
+    ...state,
+    abyss: [...state.abyss.filter((c) => c !== targetCardId), spadeCardId],
+    players: { ...state.players, [playerId]: updatedPlayer },
   });
 }

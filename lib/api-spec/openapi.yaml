@@ -727,6 +727,8 @@ components:
             - attach_royal_support
             - attach_heart
             - attach_spade
+            - discard_heart_to_heal
+            - discard_spade_to_return
             - apply_club
             - play_joker
             - declare_attack
@@ -754,6 +756,8 @@ components:
         blockerRoyalId:
           type: string
         attackerCardId:
+          type: string
+        targetCardId:
           type: string
         mode:
           type: string

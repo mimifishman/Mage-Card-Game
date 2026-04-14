@@ -209,6 +209,8 @@ export const SubmitGameActionBody = zod.object({
     "attach_royal_support",
     "attach_heart",
     "attach_spade",
+    "discard_heart_to_heal",
+    "discard_spade_to_return",
     "apply_club",
     "play_joker",
     "declare_attack",
@@ -228,6 +230,7 @@ export const SubmitGameActionBody = zod.object({
   attackerRoyalId: zod.string().optional(),
   blockerRoyalId: zod.string().optional(),
   attackerCardId: zod.string().optional(),
+  targetCardId: zod.string().optional(),
   mode: zod.enum(["destroy_royal", "damage_player"]).optional(),
 });
 

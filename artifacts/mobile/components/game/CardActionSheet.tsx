@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { PublicPlayerState, RoyalInCourt } from "@workspace/api-client-react";
@@ -27,6 +26,7 @@ interface CardActionSheetProps {
   myVault: number;
   isPending: boolean;
   hasTakenDiamondAction?: boolean;
+  abyss: string[];
   onClose: () => void;
   onAction: (params: ActionParams) => void;
 }
@@ -36,10 +36,11 @@ export interface ActionParams {
   action: string;
   targetRoyalId?: string;
   targetPlayerId?: string;
+  targetCardId?: string;
   mode?: string;
 }
 
-type SheetStep = "actions" | "pick_royal" | "pick_player" | "joker_mode";
+type SheetStep = "actions" | "pick_royal" | "pick_player" | "joker_mode" | "pick_abyss";
 
 export default function CardActionSheet({
   cardId,
@@ -51,6 +52,7 @@ export default function CardActionSheet({
   myVault,
   isPending,
   hasTakenDiamondAction = false,
+  abyss,
   onClose,
   onAction,
 }: CardActionSheetProps) {
@@ -77,7 +79,9 @@ export default function CardActionSheet({
     } else if (action.requiresTarget) {
       if (action.targetType === "own_royal") {
         setStep("pick_royal");
-      } else if (action.targetType === "any_royal" || action.targetType === "any_player") {
+      } else if (action.targetType === "pick_abyss") {
+        setStep("pick_abyss");
+      } else {
         setStep("pick_player");
       }
     } else {
@@ -87,11 +91,7 @@ export default function CardActionSheet({
 
   const handleJokerMode = (mode: "destroy_royal" | "damage_player") => {
     setJokerMode(mode);
-    if (mode === "destroy_royal") {
-      setStep("pick_player");
-    } else {
-      setStep("pick_player");
-    }
+    setStep("pick_player");
   };
 
   const handleRoyalTarget = (targetRoyalId: string) => {
@@ -117,10 +117,31 @@ export default function CardActionSheet({
       }
     } else if (chosenAction.action === "apply_club_damage") {
       onAction({ cardId, action: "apply_club_damage", targetPlayerId });
+    } else if (chosenAction.action === "discard_heart_to_heal") {
+      onAction({ cardId, action: "discard_heart_to_heal", targetPlayerId });
     }
   };
 
+  const handleAbyssTarget = (targetCardId: string) => {
+    if (!chosenAction) return;
+    onAction({ cardId, action: chosenAction.action, targetCardId });
+  };
+
   const opponents = Object.values(allPlayers).filter((p) => p.id !== myPlayerId && !p.isEliminated);
+  const myState = allPlayers[myPlayerId];
+
+  const isHealAction = chosenAction?.action === "discard_heart_to_heal";
+  const playersForHeal = isHealAction
+    ? [
+        ...(myState ? [myState] : []),
+        ...opponents,
+      ]
+    : opponents;
+
+  const eligibleAbyssCards = abyss.filter((c) => {
+    const abyssCard = parseCardId(c);
+    return abyssCard.pipValue <= card.pipValue;
+  });
 
   return (
     <Modal
@@ -227,41 +248,70 @@ export default function CardActionSheet({
                 onRoyalPress={handleRoyalTarget}
               />
             </ScrollView>
+          ) : step === "pick_abyss" ? (
+            <ScrollView contentContainerStyle={styles.targetList}>
+              <Text style={styles.stepTitle}>
+                Pick a card from the Abyss (value ≤ {card.pipValue})
+              </Text>
+              {eligibleAbyssCards.length === 0 ? (
+                <Text style={styles.noActions}>
+                  No eligible cards in the Abyss (need value ≤ {card.pipValue}).
+                </Text>
+              ) : (
+                <View style={styles.abyssGrid}>
+                  {eligibleAbyssCards.map((abyssCardId) => (
+                    <Pressable
+                      key={abyssCardId}
+                      onPress={() => handleAbyssTarget(abyssCardId)}
+                      style={({ pressed }) => [styles.abyssCard, pressed && { opacity: 0.7 }]}
+                    >
+                      <CardView cardId={abyssCardId} size="sm" />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
           ) : step === "pick_player" ? (
             <ScrollView contentContainerStyle={styles.targetList}>
               <Text style={styles.stepTitle}>
-                {jokerMode === "destroy_royal" || chosenAction?.action === "apply_club"
+                {isHealAction
+                  ? "Pick a player to heal"
+                  : jokerMode === "destroy_royal" || chosenAction?.action === "apply_club"
                   ? "Pick an opponent"
                   : "Pick a target player"}
               </Text>
-              {opponents.map((opp) => (
-                <View key={opp.id} style={styles.oppSection}>
-                  {jokerMode === "damage_player" || chosenAction?.action === "apply_club_damage" ? (
+              {(isHealAction ? playersForHeal : opponents).map((p) => (
+                <View key={p.id} style={styles.oppSection}>
+                  {jokerMode === "damage_player" ||
+                  chosenAction?.action === "apply_club_damage" ||
+                  isHealAction ? (
                     <Pressable
-                      onPress={() => handlePlayerTarget(opp.id)}
+                      onPress={() => handlePlayerTarget(p.id)}
                       style={({ pressed }) => [styles.oppBtn, pressed && { opacity: 0.75 }]}
                     >
-                      <Text style={styles.oppName}>🎯 {opp.id.slice(0, 8)}</Text>
-                      <Text style={styles.oppLife}>♥ {opp.life}</Text>
+                      <Text style={styles.oppName}>
+                        {p.id === myPlayerId ? "You" : `🎯 ${p.id.slice(0, 8)}`}
+                      </Text>
+                      <Text style={styles.oppLife}>♥ {p.life}</Text>
                     </Pressable>
                   ) : (
                     <View style={styles.oppBtn}>
-                      <Text style={styles.oppName}>🎯 {opp.id.slice(0, 8)}</Text>
-                      <Text style={styles.oppLife}>♥ {opp.life}</Text>
+                      <Text style={styles.oppName}>🎯 {p.id.slice(0, 8)}</Text>
+                      <Text style={styles.oppLife}>♥ {p.life}</Text>
                     </View>
                   )}
                   {(jokerMode === "destroy_royal" || chosenAction?.action === "apply_club") &&
-                    opp.court.length > 0 ? (
+                    p.court.length > 0 ? (
                       <View style={styles.oppCourt}>
                         <Text style={styles.courtHint}>→ pick a Royal to target:</Text>
                         <CourtZone
-                          court={opp.court}
+                          court={p.court}
                           size="sm"
-                          onRoyalPress={(royalId) => handlePlayerTarget(opp.id, royalId)}
+                          onRoyalPress={(royalId) => handlePlayerTarget(p.id, royalId)}
                         />
                       </View>
                     ) : (jokerMode === "destroy_royal" || chosenAction?.action === "apply_club") &&
-                    opp.court.length === 0 ? (
+                    p.court.length === 0 ? (
                       <Text style={styles.courtHint}>  No royals in court — cannot target</Text>
                     ) : null}
                 </View>
@@ -382,6 +432,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     gap: 8,
+  },
+  abyssGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  abyssCard: {
+    borderRadius: 8,
   },
   oppSection: {
     gap: 8,

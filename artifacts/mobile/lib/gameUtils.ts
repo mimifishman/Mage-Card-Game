@@ -126,6 +126,8 @@ export type CardAction =
   | "attach_royal_support"
   | "attach_heart"
   | "attach_spade"
+  | "discard_heart_to_heal"
+  | "discard_spade_to_return"
   | "apply_club"
   | "apply_club_damage"
   | "play_joker";
@@ -135,7 +137,7 @@ export interface ValidAction {
   label: string;
   requiresTarget: boolean;
   disabled?: boolean;
-  targetType?: "own_royal" | "any_royal" | "any_player";
+  targetType?: "own_royal" | "any_royal" | "any_player" | "any_player_inc_self" | "pick_abyss";
 }
 
 export function getValidActionsForCard(
@@ -214,6 +216,12 @@ export function getValidActionsForCard(
       });
     }
     actions.push({
+      action: "discard_heart_to_heal",
+      label: `Discard — heal any player (+${card.pipValue} Life)`,
+      requiresTarget: true,
+      targetType: "any_player_inc_self",
+    });
+    actions.push({
       action: "discard_to_abyss",
       label: "Discard to Abyss",
       requiresTarget: false,
@@ -225,7 +233,7 @@ export function getValidActionsForCard(
     if (myCourtSize > 0 && vault >= card.vaultCost) {
       actions.push({
         action: "attach_spade",
-        label: `Attach to a Royal (+${card.pipValue} Attack) [−${card.vaultCost} Vault]`,
+        label: `Attach to a Royal (+${card.pipValue} Atk/Def) [−${card.vaultCost} Vault]`,
         requiresTarget: true,
         targetType: "own_royal",
       });
@@ -237,6 +245,12 @@ export function getValidActionsForCard(
         disabled: true,
       });
     }
+    actions.push({
+      action: "discard_spade_to_return",
+      label: `Discard — return a card from Abyss (value ≤ ${card.pipValue})`,
+      requiresTarget: true,
+      targetType: "pick_abyss",
+    });
     actions.push({
       action: "discard_to_abyss",
       label: "Discard to Abyss",

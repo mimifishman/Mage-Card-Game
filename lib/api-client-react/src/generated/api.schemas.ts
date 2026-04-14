@@ -191,6 +191,8 @@ export const GameActionRequestType = {
   attach_royal_support: "attach_royal_support",
   attach_heart: "attach_heart",
   attach_spade: "attach_spade",
+  discard_heart_to_heal: "discard_heart_to_heal",
+  discard_spade_to_return: "discard_spade_to_return",
   apply_club: "apply_club",
   play_joker: "play_joker",
   declare_attack: "declare_attack",
@@ -221,6 +223,7 @@ export interface GameActionRequest {
   attackerRoyalId?: string;
   blockerRoyalId?: string;
   attackerCardId?: string;
+  targetCardId?: string;
   mode?: GameActionRequestMode;
 }
 

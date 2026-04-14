@@ -10,6 +10,8 @@ import {
   attachRoyalSupport,
   attachHeart,
   attachSpade,
+  discardHeartToHeal,
+  discardSpadeToReturn,
   applyClub,
   playJokerDestroyRoyal,
   playJokerDamagePlayer,
@@ -50,6 +52,12 @@ export function dispatchAction(
 
     case "attach_spade":
       return attachSpade(state, playerId, action.spadeCardId, action.targetRoyalId);
+
+    case "discard_heart_to_heal":
+      return discardHeartToHeal(state, playerId, action.heartCardId, action.targetPlayerId);
+
+    case "discard_spade_to_return":
+      return discardSpadeToReturn(state, playerId, action.spadeCardId, action.targetCardId);
 
     case "apply_club":
       return applyClub(

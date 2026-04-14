@@ -217,6 +217,20 @@ export default function MatchScreen() {
             targetRoyalId: params.targetRoyalId!,
           };
           break;
+        case "discard_heart_to_heal":
+          body = {
+            type: "discard_heart_to_heal",
+            heartCardId: params.cardId,
+            targetPlayerId: params.targetPlayerId!,
+          };
+          break;
+        case "discard_spade_to_return":
+          body = {
+            type: "discard_spade_to_return",
+            spadeCardId: params.cardId,
+            targetCardId: params.targetCardId!,
+          };
+          break;
         case "apply_club":
           body = {
             type: "apply_club",
@@ -696,6 +710,7 @@ export default function MatchScreen() {
           myVault={vault}
           isPending={isSubmitting}
           hasTakenDiamondAction={gameState.myDiamondPlayed}
+          abyss={gameState.abyss}
           onClose={() => setSelectedCardId(null)}
           onAction={handleAction}
         />

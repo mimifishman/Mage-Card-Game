@@ -50,6 +50,18 @@ export const ApplyClubActionSchema = z.object({
   targetRoyalId: z.string().optional(),
 });
 
+export const DiscardHeartToHealActionSchema = z.object({
+  type: z.literal("discard_heart_to_heal"),
+  heartCardId: z.string(),
+  targetPlayerId: z.string(),
+});
+
+export const DiscardSpadeToReturnActionSchema = z.object({
+  type: z.literal("discard_spade_to_return"),
+  spadeCardId: z.string(),
+  targetCardId: z.string(),
+});
+
 export const PlayJokerActionSchema = z.object({
   type: z.literal("play_joker"),
   cardId: z.string(),
@@ -96,6 +108,8 @@ export const GameActionSchema = z.discriminatedUnion("type", [
   AttachRoyalSupportActionSchema,
   AttachHeartActionSchema,
   AttachSpadeActionSchema,
+  DiscardHeartToHealActionSchema,
+  DiscardSpadeToReturnActionSchema,
   ApplyClubActionSchema,
   PlayJokerActionSchema,
   DeclareAttackActionSchema,

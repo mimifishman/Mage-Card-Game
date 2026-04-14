@@ -37,7 +37,7 @@ export { playDiamondToMine, discardDiamondToDraw, discardDiamondForBoost, discar
 
 export { playRoyalToCourt, attachRoyalSupport } from "./royals";
 
-export { attachHeart, attachSpade } from "./attachments";
+export { attachHeart, attachSpade, discardHeartToHeal, discardSpadeToReturn } from "./attachments";
 
 export { applyClub, applyClubToRoyal } from "./clubs";
 

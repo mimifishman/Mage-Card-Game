@@ -1,0 +1,196 @@
+Please make **only these next rule changes** in the Mage Card Game repo.
+
+Do **not** change anything else yet.
+Do **not** change Mine behavior, Royals, Jokers, combat flow, or Clubs in this step.
+This step is only to implement the **missing Heart heal** rule and the **missing Spade return-from-Abyss** rule.
+
+## Rules to implement
+
+### Hearts
+
+* **Heal on Royal:** Play Heart on Royal in Court, add card value to that Royal’s Health
+
+  * This already seems to exist. Keep it working.
+* **Health on Player:** Discard Heart to Abyss, add card value to a **target player’s life**
+
+### Spades
+
+* **Arm:** Play Spade on Royal, add card value to that Royal’s Attack and Health
+
+  * This already seems to exist. Keep it working.
+* **Return:** Discard Spade to Abyss, choose a card in the Abyss with value **less than or equal to** the Spade’s value, and return that chosen card to the acting player’s hand
+
+### Clubs
+
+* Leave Clubs exactly as they are right now in this step
+
+## What already exists and should remain
+
+* `attach_heart` behavior for attaching a Heart to a Royal
+* `attach_spade` behavior for attaching a Spade to a Royal
+* Club curse / direct damage behavior
+
+## What is missing and must be added
+
+There are currently no dedicated game actions for:
+
+* discard Heart to heal a player
+* discard Spade to return a card from the Abyss
+
+Please add those end to end.
+
+## Files to inspect and update
+
+### 1) `artifacts/api-server/src/game/actions.ts`
+
+Add new action schemas for the missing rules.
+
+Add a Heart-heal action, something like:
+
+```ts
+export const DiscardHeartToHealActionSchema = z.object({
+  type: z.literal("discard_heart_to_heal"),
+  heartCardId: z.string(),
+  targetPlayerId: z.string(),
+});
+```
+
+Add a Spade-return action, something like:
+
+```ts
+export const DiscardSpadeToReturnActionSchema = z.object({
+  type: z.literal("discard_spade_to_return"),
+  spadeCardId: z.string(),
+  targetCardId: z.string(),
+});
+```
+
+Add both to `GameActionSchema`.
+
+### 2) `artifacts/api-server/src/game/dispatcher.ts`
+
+Wire the new actions into the dispatcher.
+
+Add handlers for:
+
+* `discard_heart_to_heal`
+* `discard_spade_to_return`
+
+These should call new backend functions you implement.
+
+### 3) `artifacts/api-server/src/game/attachments.ts` or a new focused file if cleaner
+
+Implement the missing backend logic.
+
+#### A. Heart discard to heal player
+
+Create a function like:
+
+```ts
+discardHeartToHeal(state, playerId, heartCardId, targetPlayerId)
+```
+
+Required behavior:
+
+* validate it is the acting player’s turn / card can be played using the repo’s existing validation style
+* validate the card is a **non-Royal Heart**
+* remove the Heart from the acting player’s hand
+* put the Heart into `state.abyss`
+* increase the target player’s life by the Heart’s value
+* return updated game state
+
+Keep the validation and state-update style consistent with the rest of the codebase.
+
+#### B. Spade discard to return from Abyss
+
+Create a function like:
+
+```ts
+discardSpadeToReturn(state, playerId, spadeCardId, targetCardId)
+```
+
+Required behavior:
+
+* validate it is playable using the repo’s existing validation style
+* validate the card is a **non-Royal Spade**
+* validate `targetCardId` is currently in the Abyss
+* validate the target card’s value is **less than or equal to** the Spade’s value
+* remove the Spade from the acting player’s hand
+* move the Spade to the Abyss
+* remove the selected target card from the Abyss
+* add the selected target card to the acting player’s hand
+* return updated game state
+
+Important:
+
+* the Spade itself should remain in the Abyss after use
+* the selected card should leave the Abyss and go to the player’s hand
+
+## Value rule for the Spade return
+
+Use the game’s existing card value logic:
+
+* Jack = 1
+* Queen = 2
+* King = 3
+* numbered cards use their number
+* Ace uses the repo’s current Ace value convention unless already standardized elsewhere
+
+Use the same card-value source the rest of the engine uses, not a new hardcoded mapping if avoidable.
+
+## UI / action selection
+
+Please also update the UI/action generation layer so these new actions are actually available to the player.
+
+Search for where card actions are generated, likely including:
+
+* `artifacts/mobile/lib/gameUtils.ts`
+* any action menu / hand action UI files
+
+### For Hearts
+
+A non-Royal Heart should offer:
+
+* attach to one of your Royals
+* discard to heal a target player
+
+### For Spades
+
+A non-Royal Spade should offer:
+
+* attach to one of your Royals
+* discard to return an eligible card from the Abyss
+
+Do not remove the existing attach actions.
+
+## Constraints
+
+* Do **not** change Clubs in this step
+* Do **not** change Diamond behavior
+* Do **not** change Joker behavior
+* Do **not** change Royal values or stats in this step unless already required elsewhere
+* Do **not** invent new mechanics
+* Keep the code style consistent with the existing repo
+
+## Tests
+
+Please add or update backend tests for:
+
+1. Heart discard heals a player and sends the Heart to Abyss
+2. Spade discard returns a valid card from Abyss to hand and sends the Spade to Abyss
+3. Spade return rejects a target card whose value is greater than the Spade’s value
+4. Spade return rejects a target card not in the Abyss
+5. Existing Heart attach and Spade attach behavior still works
+6. Existing Club behavior remains unchanged
+
+Also update any UI/action tests if they exist.
+
+## Final output
+
+When done, report back with:
+
+1. every file changed
+2. exactly what changed in each file
+3. any tests added or updated
+4. confirmation that Clubs were left unchanged
+5. confirmation that no unrelated gameplay rules were changed
