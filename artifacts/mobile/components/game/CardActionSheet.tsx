@@ -153,7 +153,7 @@ export default function CardActionSheet({
                 <Text style={styles.cardSub}>Cost: 10 Vault</Text>
               )}
               {card.isRoyal && (
-                <Text style={styles.cardSub}>Royal — costs 0 Vault</Text>
+                <Text style={styles.cardSub}>Royal — costs {card.vaultCost} Vault</Text>
               )}
               {!card.isRoyal && !card.isJoker && card.suit !== "D" && (
                 <Text style={styles.cardSub}>Vault cost: {card.vaultCost}</Text>
