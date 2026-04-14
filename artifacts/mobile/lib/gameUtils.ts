@@ -137,7 +137,7 @@ export interface ValidAction {
   label: string;
   requiresTarget: boolean;
   disabled?: boolean;
-  targetType?: "own_royal" | "any_royal" | "any_player" | "any_player_inc_self" | "pick_abyss";
+  targetType?: "own_royal" | "any_royal" | "any_player" | "pick_abyss";
 }
 
 export function getValidActionsForCard(
@@ -217,13 +217,7 @@ export function getValidActionsForCard(
     }
     actions.push({
       action: "discard_heart_to_heal",
-      label: `Discard — heal any player (+${card.pipValue} Life)`,
-      requiresTarget: true,
-      targetType: "any_player_inc_self",
-    });
-    actions.push({
-      action: "discard_to_abyss",
-      label: "Discard to Abyss",
+      label: `Discard — heal yourself (+${card.pipValue} Life)`,
       requiresTarget: false,
     });
     return actions;

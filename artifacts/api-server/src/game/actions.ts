@@ -53,7 +53,6 @@ export const ApplyClubActionSchema = z.object({
 export const DiscardHeartToHealActionSchema = z.object({
   type: z.literal("discard_heart_to_heal"),
   heartCardId: z.string(),
-  targetPlayerId: z.string(),
 });
 
 export const DiscardSpadeToReturnActionSchema = z.object({

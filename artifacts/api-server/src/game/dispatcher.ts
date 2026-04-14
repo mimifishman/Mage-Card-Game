@@ -54,7 +54,7 @@ export function dispatchAction(
       return attachSpade(state, playerId, action.spadeCardId, action.targetRoyalId);
 
     case "discard_heart_to_heal":
-      return discardHeartToHeal(state, playerId, action.heartCardId, action.targetPlayerId);
+      return discardHeartToHeal(state, playerId, action.heartCardId);
 
     case "discard_spade_to_return":
       return discardSpadeToReturn(state, playerId, action.spadeCardId, action.targetCardId);

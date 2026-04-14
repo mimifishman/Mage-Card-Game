@@ -117,8 +117,6 @@ export default function CardActionSheet({
       }
     } else if (chosenAction.action === "apply_club_damage") {
       onAction({ cardId, action: "apply_club_damage", targetPlayerId });
-    } else if (chosenAction.action === "discard_heart_to_heal") {
-      onAction({ cardId, action: "discard_heart_to_heal", targetPlayerId });
     }
   };
 
@@ -128,15 +126,6 @@ export default function CardActionSheet({
   };
 
   const opponents = Object.values(allPlayers).filter((p) => p.id !== myPlayerId && !p.isEliminated);
-  const myState = allPlayers[myPlayerId];
-
-  const isHealAction = chosenAction?.action === "discard_heart_to_heal";
-  const playersForHeal = isHealAction
-    ? [
-        ...(myState ? [myState] : []),
-        ...opponents,
-      ]
-    : opponents;
 
   const eligibleAbyssCards = abyss.filter((c) => {
     const abyssCard = parseCardId(c);
@@ -274,24 +263,18 @@ export default function CardActionSheet({
           ) : step === "pick_player" ? (
             <ScrollView contentContainerStyle={styles.targetList}>
               <Text style={styles.stepTitle}>
-                {isHealAction
-                  ? "Pick a player to heal"
-                  : jokerMode === "destroy_royal" || chosenAction?.action === "apply_club"
+                {jokerMode === "destroy_royal" || chosenAction?.action === "apply_club"
                   ? "Pick an opponent"
                   : "Pick a target player"}
               </Text>
-              {(isHealAction ? playersForHeal : opponents).map((p) => (
+              {opponents.map((p) => (
                 <View key={p.id} style={styles.oppSection}>
-                  {jokerMode === "damage_player" ||
-                  chosenAction?.action === "apply_club_damage" ||
-                  isHealAction ? (
+                  {jokerMode === "damage_player" || chosenAction?.action === "apply_club_damage" ? (
                     <Pressable
                       onPress={() => handlePlayerTarget(p.id)}
                       style={({ pressed }) => [styles.oppBtn, pressed && { opacity: 0.75 }]}
                     >
-                      <Text style={styles.oppName}>
-                        {p.id === myPlayerId ? "You" : `🎯 ${p.id.slice(0, 8)}`}
-                      </Text>
+                      <Text style={styles.oppName}>🎯 {p.id.slice(0, 8)}</Text>
                       <Text style={styles.oppLife}>♥ {p.life}</Text>
                     </Pressable>
                   ) : (

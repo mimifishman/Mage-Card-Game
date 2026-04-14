@@ -104,7 +104,6 @@ export function discardHeartToHeal(
   state: GameState,
   playerId: string,
   heartCardId: CardId,
-  targetPlayerId: string,
 ): Result<GameState> {
   const playerResult = validateActiveMainPhase(state, playerId, heartCardId);
   if (!playerResult.ok) return playerResult;
@@ -115,21 +114,15 @@ export function discardHeartToHeal(
     return err(`Card ${heartCardId} is not a non-Royal Heart`);
   }
 
-  const target = state.players[targetPlayerId];
-  if (!target) return err(`Player ${targetPlayerId} not found`);
-  if (target.isEliminated) return err(`Player ${targetPlayerId} is eliminated`);
-
-  const playerWithoutCard = removeFromHand(player, heartCardId);
-  const base = playerId === targetPlayerId ? playerWithoutCard : target;
-  const healed: PlayerState = { ...base, life: base.life + card.pipValue };
-
-  const newPlayers: GameState["players"] = { ...state.players, [playerId]: playerWithoutCard };
-  newPlayers[targetPlayerId] = healed;
+  const healed: PlayerState = {
+    ...removeFromHand(player, heartCardId),
+    life: player.life + card.pipValue,
+  };
 
   return ok({
     ...state,
     abyss: [...state.abyss, heartCardId],
-    players: newPlayers,
+    players: { ...state.players, [playerId]: healed },
   });
 }
 

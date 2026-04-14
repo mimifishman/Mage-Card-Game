@@ -112,30 +112,30 @@ describe("attachSpade", () => {
 });
 
 describe("discardHeartToHeal", () => {
-  it("heals target opponent by the card pip value", () => {
+  it("heals the active player by the card pip value", () => {
     const state = makeState({
       players: {
-        [P1]: makePlayer(P1, { hand: ["7H"] }),
-        [P2]: makePlayer(P2, { life: 14 }),
+        [P1]: makePlayer(P1, { hand: ["7H"], life: 14 }),
+        [P2]: makePlayer(P2),
       },
     });
-    const result = discardHeartToHeal(state, P1, "7H", P2);
+    const result = discardHeartToHeal(state, P1, "7H");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P2]!.life).toBe(21);
+    expect(result.value.players[P1]!.life).toBe(21);
     expect(result.value.players[P1]!.hand).not.toContain("7H");
     expect(result.value.abyss).toContain("7H");
     expect(result.value.players[P1]!.vault.spent).toBe(0);
   });
 
-  it("heals self when targetPlayerId === playerId", () => {
+  it("removes card from hand before adding life (no double-count)", () => {
     const state = makeState({
       players: {
         [P1]: makePlayer(P1, { hand: ["3H"], life: 15 }),
         [P2]: makePlayer(P2),
       },
     });
-    const result = discardHeartToHeal(state, P1, "3H", P1);
+    const result = discardHeartToHeal(state, P1, "3H");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.players[P1]!.life).toBe(18);
@@ -150,7 +150,7 @@ describe("discardHeartToHeal", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = discardHeartToHeal(state, P1, "JH", P2);
+    const result = discardHeartToHeal(state, P1, "JH");
     expect(result.ok).toBe(false);
   });
 
@@ -161,18 +161,7 @@ describe("discardHeartToHeal", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = discardHeartToHeal(state, P1, "7S", P2);
-    expect(result.ok).toBe(false);
-  });
-
-  it("rejects healing eliminated player", () => {
-    const state = makeState({
-      players: {
-        [P1]: makePlayer(P1, { hand: ["4H"] }),
-        [P2]: makePlayer(P2, { isEliminated: true }),
-      },
-    });
-    const result = discardHeartToHeal(state, P1, "4H", P2);
+    const result = discardHeartToHeal(state, P1, "7S");
     expect(result.ok).toBe(false);
   });
 
@@ -184,7 +173,7 @@ describe("discardHeartToHeal", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = discardHeartToHeal(state, P1, "5H", P2);
+    const result = discardHeartToHeal(state, P1, "5H");
     expect(result.ok).toBe(false);
   });
 });

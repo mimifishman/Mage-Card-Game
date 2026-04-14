@@ -221,7 +221,6 @@ export default function MatchScreen() {
           body = {
             type: "discard_heart_to_heal",
             heartCardId: params.cardId,
-            targetPlayerId: params.targetPlayerId!,
           };
           break;
         case "discard_spade_to_return":
