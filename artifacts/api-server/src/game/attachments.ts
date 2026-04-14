@@ -4,19 +4,6 @@ import { err, ok } from "./types";
 import { spendVault } from "./vault";
 import { canPlayCard } from "./validation";
 
-function validateActiveMainPhase(
-  state: GameState,
-  playerId: string,
-  cardId: CardId,
-): Result<PlayerState> {
-  if (state.activePlayerId !== playerId) return err("It is not your turn");
-  if (state.phase !== "main") return err(`Cannot discard during phase "${state.phase}"`);
-  const player = state.players[playerId];
-  if (!player) return err(`Player ${playerId} not found`);
-  if (!player.hand.includes(cardId)) return err(`Card ${cardId} is not in your hand`);
-  return ok(player);
-}
-
 function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return { ...player, hand: player.hand.filter((c) => c !== cardId) };
 }
