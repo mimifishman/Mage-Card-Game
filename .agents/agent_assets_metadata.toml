@@ -1,0 +1,20 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "JmyXfCAXQff8Fk-9wvzBq"
+uri = "file://artifacts/mockup-sandbox/public/images/parchment-bg.png"
+type = "image"
+title = "Aged parchment texture background"
+
+[[generated]]
+id = "Tqd_899dR9BWVuAe27pYx"
+uri = "file://artifacts/mockup-sandbox/public/images/antique-card-back.png"
+type = "image"
+title = "Antique medieval card back"
+
+[[generated]]
+id = "5qq4FBn58LPLQwTMJ9YN4"
+uri = "file://artifacts/mockup-sandbox/public/images/wax-seal-btn.png"
+type = "image"
+title = "Red wax seal stamp"
