@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
+import { parseCardId } from "@/lib/gameUtils";
 
 interface MineAbyssRowProps {
   mine: string[];
@@ -11,11 +12,17 @@ interface MineAbyssRowProps {
 
 export default function MineAbyssRow({ mine, abyss, deckCount }: MineAbyssRowProps) {
   const topAbyss = abyss.length > 0 ? abyss[abyss.length - 1] : null;
+  const mineValue = mine.reduce((sum, id) => sum + parseCardId(id).pipValue, 0);
 
   return (
     <View style={styles.container}>
       <View style={[styles.zone, styles.mineZone]}>
-        <Text style={styles.zoneLabel}>MINE</Text>
+        <View style={styles.mineLabelRow}>
+          <Text style={styles.zoneLabel}>MINE</Text>
+          <View style={styles.mineBadge}>
+            <Text style={styles.mineBadgeText}>{mineValue}</Text>
+          </View>
+        </View>
         {mine.length === 0 ? (
           <Text style={styles.zoneEmpty}>—</Text>
         ) : (
@@ -29,7 +36,7 @@ export default function MineAbyssRow({ mine, abyss, deckCount }: MineAbyssRowPro
             ))}
           </ScrollView>
         )}
-        <Text style={styles.zoneSub}>{mine.length} diamonds</Text>
+        <Text style={styles.zoneSub}>pts value</Text>
       </View>
 
       <View style={styles.divider} />
@@ -101,6 +108,22 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: Colors.textMuted,
     fontFamily: "Inter_400Regular",
+  },
+  mineLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  mineBadge: {
+    backgroundColor: "rgba(27,94,32,0.25)",
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  mineBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: "#1B5E20",
   },
   mineScroll: {
     gap: 3,
