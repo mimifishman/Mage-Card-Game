@@ -69,7 +69,7 @@ export default function OpponentPanel({
       <View style={[styles.court, isEliminated && styles.courtEliminated]}>
         <CourtZone
           court={player.court}
-          size="sm"
+          size="md"
           onRoyalPress={isEliminated ? undefined : onRoyalPress}
           selectedTargetId={selectedTargetId}
         />

@@ -1,13 +1,13 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { parseCardId, effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
+import { parseCardId } from "@/lib/gameUtils";
 import type { RoyalInCourt } from "@workspace/api-client-react";
 import Colors from "@/constants/colors";
 
 interface CardViewProps {
   cardId: string;
   royal?: RoyalInCourt;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   dimmed?: boolean;
   selected?: boolean;
   hasAttacked?: boolean;
@@ -23,10 +23,6 @@ export default function CardView({
 }: CardViewProps) {
   const card = parseCardId(cardId);
   const s = SIZE_MAP[size];
-
-  const atk = royal ? effectiveAttack(cardId, royal.buffAttack) : null;
-  const hp = royal ? effectiveHealth(cardId, royal.buffHealth, royal.damageTaken) : null;
-  const maxHp = royal ? (hp !== null && royal.damageTaken > 0 ? hp + royal.damageTaken : hp) : null;
 
   const cardBg = card.isJoker ? "#FDF6D8" : Colors.bgCardFace;
   const borderCol = selected
@@ -61,26 +57,15 @@ export default function CardView({
         </Text>
       </View>
 
-      {card.isRoyal && royal && atk !== null && hp !== null && (
-        <View style={styles.statsRow}>
-          <View style={[styles.statBadge, styles.atkBadge]}>
-            <Text style={[styles.statText, styles.atkText, { fontSize: s.statFont }]}>⚔{atk}</Text>
-          </View>
-          <View style={[styles.statBadge, { backgroundColor: hp <= 0 ? "rgba(200,16,46,0.18)" : "rgba(27,94,32,0.18)" }]}>
-            <Text style={[styles.statText, { fontSize: s.statFont, color: hp <= 0 ? Colors.accentRed : Colors.accentGreen }]}>♥{hp}</Text>
-          </View>
-        </View>
-      )}
-
       {royal?.hasteLocked && (
         <View style={styles.hasteLock}>
-          <Text style={styles.hasteLockText}>⏳</Text>
+          <Text style={[styles.hasteLockText, { fontSize: s.iconFont }]}>⏳</Text>
         </View>
       )}
 
       {royal?.attachedCards && royal.attachedCards.length > 0 && (
         <View style={styles.attachBadge}>
-          <Text style={styles.attachText}>+{royal.attachedCards.length}</Text>
+          <Text style={[styles.attachText, { fontSize: s.iconFont }]}>+{royal.attachedCards.length}</Text>
         </View>
       )}
     </View>
@@ -88,9 +73,10 @@ export default function CardView({
 }
 
 const SIZE_MAP = {
-  sm: { w: 38, h: 52, rankFont: 10, symbolFont: 9, statFont: 8 },
-  md: { w: 52, h: 72, rankFont: 13, symbolFont: 11, statFont: 9 },
-  lg: { w: 68, h: 96, rankFont: 17, symbolFont: 14, statFont: 11 },
+  sm: { w: 38, h: 52, rankFont: 10, symbolFont: 9, iconFont: 7 },
+  md: { w: 52, h: 72, rankFont: 13, symbolFont: 11, iconFont: 8 },
+  lg: { w: 68, h: 96, rankFont: 17, symbolFont: 14, iconFont: 9 },
+  xl: { w: 84, h: 118, rankFont: 22, symbolFont: 18, iconFont: 11 },
 };
 
 const styles = StyleSheet.create({
@@ -98,7 +84,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 4,
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     overflow: "hidden",
     position: "relative",
   },
@@ -113,45 +99,22 @@ const styles = StyleSheet.create({
   symbol: {
     lineHeight: undefined,
   },
-  statsRow: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  statBadge: {
-    borderRadius: 4,
-    paddingHorizontal: 3,
-    paddingVertical: 1,
-    backgroundColor: "rgba(200,155,60,0.15)",
-  },
-  atkBadge: {
-    backgroundColor: "rgba(200,155,60,0.2)",
-  },
-  statText: {
-    fontFamily: "Inter_600SemiBold",
-    color: Colors.brand,
-  },
-  atkText: {
-    color: "#8B5E00",
-  },
   hasteLock: {
     position: "absolute",
-    top: 2,
-    right: 2,
+    top: 3,
+    right: 3,
   },
-  hasteLockText: {
-    fontSize: 8,
-  },
+  hasteLockText: {},
   attachBadge: {
     position: "absolute",
-    bottom: 2,
-    right: 2,
+    bottom: 3,
+    right: 3,
     backgroundColor: "rgba(200,155,60,0.25)",
     borderRadius: 4,
     paddingHorizontal: 3,
     paddingVertical: 0,
   },
   attachText: {
-    fontSize: 7,
     color: "#7A5000",
     fontFamily: "Inter_600SemiBold",
   },

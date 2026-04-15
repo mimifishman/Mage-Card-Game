@@ -9,6 +9,7 @@ import {
 import type { RoyalInCourt } from "@workspace/api-client-react";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
+import { effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
 
 interface CourtZoneProps {
   court: RoyalInCourt[];
@@ -17,7 +18,7 @@ interface CourtZoneProps {
   isMyTurn?: boolean;
   selectedTargetId?: string | null;
   onRoyalPress?: (royalId: string) => void;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }
 
 export default function CourtZone({
@@ -29,6 +30,8 @@ export default function CourtZone({
   onRoyalPress,
   size = "md",
 }: CourtZoneProps) {
+  const statFontSize = size === "xl" ? 14 : size === "lg" ? 13 : 11;
+
   return (
     <View style={styles.container}>
       {label && (
@@ -47,6 +50,11 @@ export default function CourtZone({
           {court.map((royal) => {
             const canInteract = !!onRoyalPress;
             const isSelected = selectedTargetId === royal.cardId;
+
+            const atk = effectiveAttack(royal.cardId, royal.buffAttack);
+            const hp = effectiveHealth(royal.cardId, royal.buffHealth, royal.damageTaken);
+            const isDamaged = royal.damageTaken > 0;
+
             return (
               <Pressable
                 key={royal.cardId}
@@ -65,6 +73,24 @@ export default function CourtZone({
                   hasAttacked={royal.hasAttackedThisTurn}
                   selected={isSelected}
                 />
+
+                <View style={styles.statRow}>
+                  <View style={styles.atkPill}>
+                    <Text style={[styles.atkPillText, { fontSize: statFontSize }]}>
+                      ⚔{atk}
+                    </Text>
+                  </View>
+                  <View style={[styles.hpPill, isDamaged && styles.hpPillDamaged]}>
+                    <Text style={[
+                      styles.hpPillText,
+                      { fontSize: statFontSize },
+                      isDamaged && styles.hpPillTextDamaged,
+                    ]}>
+                      ♥{hp}
+                    </Text>
+                  </View>
+                </View>
+
                 {royal.hasAttackedThisTurn && (
                   <View style={styles.attackedBadge}>
                     <Text style={styles.attackedText}>ATK</Text>
@@ -123,14 +149,49 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   royalWrapper: {
-    position: "relative",
     alignItems: "center",
+    gap: 4,
   },
   royalSelected: {
     transform: [{ translateY: -4 }],
   },
+  statRow: {
+    flexDirection: "row",
+    gap: 4,
+    alignItems: "center",
+  },
+  atkPill: {
+    backgroundColor: "rgba(200,155,60,0.22)",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "rgba(200,155,60,0.45)",
+  },
+  atkPillText: {
+    fontFamily: "Inter_700Bold",
+    color: "#8B5E00",
+  },
+  hpPill: {
+    backgroundColor: "rgba(27,94,32,0.18)",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "rgba(27,94,32,0.4)",
+  },
+  hpPillDamaged: {
+    backgroundColor: "rgba(200,16,46,0.14)",
+    borderColor: "rgba(200,16,46,0.4)",
+  },
+  hpPillText: {
+    fontFamily: "Inter_700Bold",
+    color: Colors.accentGreen,
+  },
+  hpPillTextDamaged: {
+    color: Colors.accentRed,
+  },
   attackedBadge: {
-    marginTop: 2,
     backgroundColor: "rgba(200,155,60,0.2)",
     borderRadius: 4,
     paddingHorizontal: 5,

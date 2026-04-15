@@ -580,7 +580,7 @@ export default function MatchScreen() {
             court={myState?.court ?? []}
             isMyZone
             isMyTurn={isMyTurn}
-            size="lg"
+            size="xl"
             onRoyalPress={
               isMyTurn
                 ? (royalId) => {
