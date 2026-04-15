@@ -65,6 +65,67 @@ describe("applyClubToRoyal", () => {
     expect(result.value.abyss).toContain("10C");
   });
 
+  it("reduces target player life by Royal maxHp when debuff kills (positive lifeLoss)", () => {
+    const state = makeState({
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["2C"],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+        [P2]: makePlayer(P2, {
+          court: [mkRoyal("KH", { buffHealth: 2, damageTaken: 3 })],
+        }),
+      },
+    });
+    const result = applyClubToRoyal(state, P1, "2C", P2, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.court).toHaveLength(0);
+    expect(result.value.players[P2]!.life).toBe(17);
+    expect(result.value.players[P1]!.life).toBe(20);
+  });
+
+  it("clamps life loss to 0 when debuff makes maxHp negative", () => {
+    const state = makeState({
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["9C"],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+        [P2]: makePlayer(P2, {
+          court: [mkRoyal("KH", { buffHealth: 5 })],
+        }),
+      },
+    });
+    const result = applyClubToRoyal(state, P1, "9C", P2, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.court).toHaveLength(0);
+    expect(result.value.players[P2]!.life).toBe(20);
+  });
+
+  it("does not reduce target player life when debuff does not kill the Royal", () => {
+    const state = makeState({
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["3C"],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+        [P2]: makePlayer(P2, {
+          court: [mkRoyal("KH", { buffHealth: 5 })],
+        }),
+      },
+    });
+    const result = applyClubToRoyal(state, P1, "3C", P2, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.court).toHaveLength(1);
+    expect(result.value.players[P2]!.life).toBe(20);
+  });
+
   it("rejects targeting your own Royal", () => {
     const state = makeState({
       mine: ["10D"],
