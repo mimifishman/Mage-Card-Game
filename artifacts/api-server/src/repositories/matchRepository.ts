@@ -174,7 +174,7 @@ export async function saveEngineState(matchId: string, engineState: EngineGameSt
     .where(eq(matchesTable.id, matchId));
 }
 
-export async function finishMatch(matchId: string, winnerUserId: string): Promise<void> {
+export async function finishMatch(matchId: string, winnerUserId: string | null): Promise<void> {
   await db
     .update(matchesTable)
     .set({ status: "finished", finishedAt: new Date(), winnerUserId })

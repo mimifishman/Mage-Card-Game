@@ -256,3 +256,7 @@ export type RematchMatch200 = {
   ok: true;
   matchId: string;
 };
+
+export type AbandonMatch200 = {
+  ok: true;
+};

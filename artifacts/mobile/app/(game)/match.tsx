@@ -26,6 +26,7 @@ import {
   useGetMatchState,
   useGetMatch,
   useSubmitGameAction,
+  useAbandonMatch,
   getGetMatchStateQueryKey,
   getGetMatchQueryKey,
 } from "@workspace/api-client-react";
@@ -167,6 +168,37 @@ export default function MatchScreen() {
       setBlockingDismissed(false);
     }
   }, [gameState?.phase]);
+
+  const { mutate: abandonMatchMutate } = useAbandonMatch({
+    mutation: {
+      onSuccess: () => {
+        router.replace({
+          pathname: "/(game)/game-over",
+          params: { matchId: matchId ?? "", winnerUserId: "" },
+        });
+      },
+      onError: () => {
+        Alert.alert("Error", "Failed to end the game. Please try again.");
+      },
+    },
+  });
+
+  const handleAbandon = useCallback(() => {
+    Alert.alert(
+      "End Game",
+      "This will end the match for all players. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "End Game",
+          style: "destructive",
+          onPress: () => {
+            if (matchId) abandonMatchMutate({ matchId });
+          },
+        },
+      ],
+    );
+  }, [matchId, abandonMatchMutate]);
 
   const { mutate: submitAction, isPending: isSubmitting } = useSubmitGameAction({
     mutation: {
@@ -450,6 +482,12 @@ export default function MatchScreen() {
           <View style={styles.phaseTag}>
             <Text style={styles.phaseText}>{phase.replace("_", " ").toUpperCase()}</Text>
           </View>
+          <Pressable
+            onPress={handleAbandon}
+            style={({ pressed }) => [styles.endGameBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.endGameBtnText}>End Game</Text>
+          </Pressable>
         </View>
 
         <View style={styles.headerCenter}>
@@ -792,6 +830,20 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.textSecondary,
     letterSpacing: 1.2,
+  },
+  endGameBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(200,16,46,0.35)",
+    backgroundColor: "rgba(200,16,46,0.08)",
+  },
+  endGameBtnText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: "#C8102E",
+    letterSpacing: 0.5,
   },
   reconnectBadge: {
     backgroundColor: "rgba(229,57,53,0.2)",

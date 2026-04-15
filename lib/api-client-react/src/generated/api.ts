@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AbandonMatch200,
   ActionResponse,
   AuthUserEnvelope,
   BeginBrowserLoginParams,
@@ -1150,6 +1151,90 @@ export const useRematchMatch = <
   TContext
 > => {
   return useMutation(getRematchMatchMutationOptions(options));
+};
+
+/**
+ * @summary Abandon a match (ends for all players, no winner)
+ */
+export const getAbandonMatchUrl = (matchId: string) => {
+  return `/api/matches/${matchId}/abandon`;
+};
+
+export const abandonMatch = async (
+  matchId: string,
+  options?: RequestInit,
+): Promise<AbandonMatch200> => {
+  return customFetch<AbandonMatch200>(getAbandonMatchUrl(matchId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAbandonMatchMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof abandonMatch>>,
+    TError,
+    { matchId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof abandonMatch>>,
+  TError,
+  { matchId: string },
+  TContext
+> => {
+  const mutationKey = ["abandonMatch"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof abandonMatch>>,
+    { matchId: string }
+  > = (props) => {
+    const { matchId } = props ?? {};
+
+    return abandonMatch(matchId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AbandonMatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof abandonMatch>>
+>;
+
+export type AbandonMatchMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Abandon a match (ends for all players, no winner)
+ */
+export const useAbandonMatch = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof abandonMatch>>,
+    TError,
+    { matchId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof abandonMatch>>,
+  TError,
+  { matchId: string },
+  TContext
+> => {
+  return useMutation(getAbandonMatchMutationOptions(options));
 };
 
 /**

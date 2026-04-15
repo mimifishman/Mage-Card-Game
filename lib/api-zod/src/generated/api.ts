@@ -323,6 +323,24 @@ export const RematchMatchResponse = zod.object({
 });
 
 /**
+ * @summary Abandon a match (ends for all players, no winner)
+ */
+export const AbandonMatchParams = zod.object({
+  matchId: zod.coerce.string(),
+});
+
+export const AbandonMatchHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+export const AbandonMatchResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
  * @summary Get the current game state (player-specific view)
  */
 export const GetMatchStateParams = zod.object({

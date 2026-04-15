@@ -267,6 +267,41 @@ router.get("/:id/state", async (req: Request, res: Response) => {
   }
 });
 
+router.post("/:id/abandon", async (req: Request, res: Response) => {
+  const userId = req.user!.internalUserId;
+  const { id } = req.params as { id: string };
+
+  try {
+    const data = await getMatchWithPlayers(id);
+    if (!data) {
+      res.status(404).json({ error: "Match not found" });
+      return;
+    }
+    if (data.match.status !== "in_progress") {
+      res.status(409).json({ error: "Match is not in progress" });
+      return;
+    }
+
+    const member = await isMatchPlayer(id, userId);
+    if (!member) {
+      res.status(403).json({ error: "You are not a participant in this match" });
+      return;
+    }
+
+    await finishMatch(id, null);
+
+    const playerIds = data.players.map((p) => p.userId);
+    for (const pid of playerIds) {
+      sendToUser(id, pid, { type: "game_over", winnerUserId: null, state: null });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to abandon match");
+    res.status(500).json({ error: "Failed to abandon match" });
+  }
+});
+
 router.post("/:id/rematch", async (req: Request, res: Response) => {
   const userId = req.user!.internalUserId;
   const { id } = req.params as { id: string };
