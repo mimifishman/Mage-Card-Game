@@ -1,5 +1,5 @@
-import { effectiveAttack, effectiveHealth } from "./cards";
-import type { AttackDeclaration, CardId, GameState, PlayerState, Result, RoyalInCourt } from "./types";
+import { effectiveAttack, effectiveHealth, getCard, royalBaseHealth } from "./cards";
+import type { AttackDeclaration, CardId, GameState, PlayerState, Rank, Result, RoyalInCourt } from "./types";
 import { err, ok } from "./types";
 
 export function beginDeclareBlocks(state: GameState): Result<GameState> {
@@ -179,8 +179,16 @@ function removeDeadRoyals(
 ): { player: PlayerState; abyss: CardId[] } {
   const dead = player.court.filter(isDeadRoyal);
   const toAbyss = dead.flatMap((r) => [r.cardId, ...r.attachedCards]);
+  const lifeLoss = dead.reduce((sum, r) => {
+    const card = getCard(r.cardId);
+    return sum + royalBaseHealth(card.rank as Rank) + r.buffHealth;
+  }, 0);
   return {
-    player: { ...player, court: player.court.filter((r) => !isDeadRoyal(r)) },
+    player: {
+      ...player,
+      court: player.court.filter((r) => !isDeadRoyal(r)),
+      life: player.life - lifeLoss,
+    },
     abyss: [...abyss, ...toAbyss],
   };
 }
