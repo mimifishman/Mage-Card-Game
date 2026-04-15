@@ -273,4 +273,35 @@ describe("discardSpadeToReturn", () => {
     const result = discardSpadeToReturn(state, P1, "9S", "4D");
     expect(result.ok).toBe(false);
   });
+
+  it("rejects Joker in abyss when spade value < 10", () => {
+    const state = makeState({
+      mine: ["10D"],
+      abyss: ["JOKER1"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["9S"], vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = discardSpadeToReturn(state, P1, "9S", "JOKER1");
+    expect(result.ok).toBe(false);
+  });
+
+  it("allows Joker in abyss to be retrieved by 10 of Spades", () => {
+    const state = makeState({
+      mine: ["10D"],
+      abyss: ["JOKER1"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["10S"], vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = discardSpadeToReturn(state, P1, "10S", "JOKER1");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P1]!.hand).toContain("JOKER1");
+    expect(result.value.players[P1]!.hand).not.toContain("10S");
+    expect(result.value.abyss).toContain("10S");
+    expect(result.value.abyss).not.toContain("JOKER1");
+  });
 });

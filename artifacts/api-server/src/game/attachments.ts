@@ -133,9 +133,10 @@ export function discardSpadeToReturn(
   }
 
   const targetCard = getCard(targetCardId);
-  if (targetCard.pipValue > spadeCard.pipValue) {
+  const effectiveTargetValue = targetCard.isJoker ? 10 : targetCard.pipValue;
+  if (effectiveTargetValue > spadeCard.pipValue) {
     return err(
-      `Card ${targetCardId} value (${targetCard.pipValue}) exceeds Spade value (${spadeCard.pipValue})`,
+      `Card ${targetCardId} value (${effectiveTargetValue}) exceeds Spade value (${spadeCard.pipValue})`,
     );
   }
 
