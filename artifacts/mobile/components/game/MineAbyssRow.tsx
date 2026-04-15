@@ -36,7 +36,6 @@ export default function MineAbyssRow({ mine, abyss, deckCount }: MineAbyssRowPro
             ))}
           </ScrollView>
         )}
-        <Text style={styles.zoneSub}>pts value</Text>
       </View>
 
       <View style={styles.divider} />
