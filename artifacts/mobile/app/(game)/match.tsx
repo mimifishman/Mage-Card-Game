@@ -174,7 +174,7 @@ export default function MatchScreen() {
       onSuccess: () => {
         router.replace({
           pathname: "/(game)/game-over",
-          params: { matchId: matchId ?? "", winnerUserId: "" },
+          params: { matchId: matchId ?? "" },
         });
       },
       onError: () => {
@@ -486,7 +486,7 @@ export default function MatchScreen() {
             onPress={handleAbandon}
             style={({ pressed }) => [styles.endGameBtn, pressed && { opacity: 0.7 }]}
           >
-            <Text style={styles.endGameBtnText}>End Game</Text>
+            <Text style={styles.endGameBtnText}>⚑ End Game</Text>
           </Pressable>
         </View>
 
