@@ -49,3 +49,51 @@ describe("determineFirstPlayer", () => {
     expect(["p1", "p2"]).toContain(result.value.activePlayerId);
   });
 });
+
+describe("game-start setup flow (determineFirstPlayer → dealInitialHands)", () => {
+  it("stamps hasHadFirstTurn=true on the winner only — all other players stay false", () => {
+    const playerIds = ["p1", "p2", "p3"];
+    const init = createInitialGameState("match1", playerIds);
+    expect(init.ok).toBe(true);
+    if (!init.ok) return;
+
+    const withFirst = determineFirstPlayer(init.value);
+    expect(withFirst.ok).toBe(true);
+    if (!withFirst.ok) return;
+
+    const withHands = dealInitialHands(withFirst.value);
+    expect(withHands.ok).toBe(true);
+    if (!withHands.ok) return;
+
+    const state = withHands.value;
+    const winner = state.activePlayerId;
+
+    expect(state.players[winner]!.hasHadFirstTurn).toBe(true);
+
+    for (const id of playerIds) {
+      if (id !== winner) {
+        expect(state.players[id]!.hasHadFirstTurn).toBe(false);
+      }
+    }
+  });
+
+  it("every player receives 7 cards and the deck shrinks accordingly", () => {
+    const playerIds = ["p1", "p2"];
+    const init = createInitialGameState("match1", playerIds);
+    expect(init.ok).toBe(true);
+    if (!init.ok) return;
+
+    const withFirst = determineFirstPlayer(init.value);
+    expect(withFirst.ok).toBe(true);
+    if (!withFirst.ok) return;
+
+    const withHands = dealInitialHands(withFirst.value);
+    expect(withHands.ok).toBe(true);
+    if (!withHands.ok) return;
+
+    const state = withHands.value;
+    expect(state.players["p1"]!.hand).toHaveLength(7);
+    expect(state.players["p2"]!.hand).toHaveLength(7);
+    expect(state.deck).toHaveLength(40);
+  });
+});
