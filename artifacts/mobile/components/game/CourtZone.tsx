@@ -9,7 +9,7 @@ import {
 import type { RoyalInCourt } from "@workspace/api-client-react";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
-import { effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
+import { effectiveAttack, effectiveHealth, royalBaseHealth, parseCardId, type Rank } from "@/lib/gameUtils";
 
 interface CourtZoneProps {
   court: RoyalInCourt[];
@@ -51,9 +51,11 @@ export default function CourtZone({
             const canInteract = !!onRoyalPress;
             const isSelected = selectedTargetId === royal.cardId;
 
+            const card = parseCardId(royal.cardId);
             const atk = effectiveAttack(royal.cardId, royal.buffAttack);
             const hp = effectiveHealth(royal.cardId, royal.buffHealth, royal.damageTaken);
-            const isDamaged = royal.damageTaken > 0;
+            const maxHp = royalBaseHealth(card.rank as Rank) + royal.buffHealth;
+            const isDamaged = hp < maxHp;
 
             return (
               <Pressable
