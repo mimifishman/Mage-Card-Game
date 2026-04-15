@@ -105,6 +105,38 @@ describe("declareAttack", () => {
     const result = declareAttack(state, P1, "KH", P2);
     expect(result.ok).toBe(false);
   });
+
+  it("rejects a second attack declaration even from a different Royal", () => {
+    const state = makeState({
+      phase: "declare_attacks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [mkRoyal("KH", { hasAttackedThisTurn: true }), mkRoyal("QH")],
+        }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = declareAttack(state, P1, "QH", P2);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/one Royal/i);
+  });
+
+  it("allows a single attack declaration from an eligible Royal", () => {
+    const state = makeState({
+      phase: "main",
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("QH")] }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = declareAttack(state, P1, "QH", P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.attacks).toHaveLength(1);
+    expect(result.value.attacks[0]!.attackerCardId).toBe("QH");
+  });
 });
 
 describe("declareBlock", () => {

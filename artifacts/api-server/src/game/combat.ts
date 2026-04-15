@@ -33,6 +33,9 @@ export function declareAttack(
   if (attackerPlayerId === targetPlayerId) {
     return err("Cannot attack yourself");
   }
+  if (state.attacks.length > 0) {
+    return err("Only one Royal may attack per turn");
+  }
 
   const attacker = state.players[attackerPlayerId];
   if (!attacker) return err(`Player ${attackerPlayerId} not found`);
