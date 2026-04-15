@@ -181,6 +181,7 @@ function removeDeadRoyals(
   const toAbyss = dead.flatMap((r) => [r.cardId, ...r.attachedCards]);
   const lifeLoss = dead.reduce((sum, r) => {
     const card = getCard(r.cardId);
+    if (!card.isRoyal) return sum;
     return sum + royalBaseHealth(card.rank as Rank) + r.buffHealth;
   }, 0);
   return {
