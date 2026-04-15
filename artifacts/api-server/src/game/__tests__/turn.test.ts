@@ -133,6 +133,80 @@ describe("advanceTurn", () => {
     if (!result.ok) return;
     expect(result.value.activePlayerId).toBe(P3);
   });
+
+  it("does not draw a card for the next player on their first turn (hasHadFirstTurn: false)", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      players: {
+        [P1]: makePlayer(P1, { hasHadFirstTurn: true }),
+        [P2]: makePlayer(P2, { hasHadFirstTurn: false, hand: [] }),
+      },
+      deck: ["2C", "3C", "4H", "5H"],
+    });
+    const result = advanceTurn(state);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.activePlayerId).toBe(P2);
+    expect(result.value.players[P2]!.hand).toHaveLength(0);
+    expect(result.value.deck).toHaveLength(4);
+    expect(result.value.players[P2]!.hasHadFirstTurn).toBe(true);
+  });
+
+  it("draws a card for the next player on their second turn (hasHadFirstTurn: true)", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      players: {
+        [P1]: makePlayer(P1, { hasHadFirstTurn: true }),
+        [P2]: makePlayer(P2, { hasHadFirstTurn: true, hand: [] }),
+      },
+      deck: ["2C", "3C", "4H", "5H"],
+    });
+    const result = advanceTurn(state);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.activePlayerId).toBe(P2);
+    expect(result.value.players[P2]!.hand).toHaveLength(1);
+    expect(result.value.deck).toHaveLength(3);
+  });
+
+  it("no-draw applies independently to each player in a 3-player game", () => {
+    const P3 = "player-3";
+    const deck = ["2C", "3C", "4H", "5H", "6S", "7D"];
+    const base = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      turnOrder: [P1, P2, P3],
+      players: {
+        [P1]: makePlayer(P1, { hasHadFirstTurn: true }),
+        [P2]: makePlayer(P2, { hasHadFirstTurn: false, hand: [] }),
+        [P3]: makePlayer(P3, { hasHadFirstTurn: false, hand: [] }),
+      },
+      deck,
+    });
+
+    const after1 = advanceTurn(base);
+    expect(after1.ok).toBe(true);
+    if (!after1.ok) return;
+    expect(after1.value.activePlayerId).toBe(P2);
+    expect(after1.value.players[P2]!.hand).toHaveLength(0);
+    expect(after1.value.deck).toHaveLength(6);
+
+    const after2 = advanceTurn(after1.value);
+    expect(after2.ok).toBe(true);
+    if (!after2.ok) return;
+    expect(after2.value.activePlayerId).toBe(P3);
+    expect(after2.value.players[P3]!.hand).toHaveLength(0);
+    expect(after2.value.deck).toHaveLength(6);
+
+    const after3 = advanceTurn(after2.value);
+    expect(after3.ok).toBe(true);
+    if (!after3.ok) return;
+    expect(after3.value.activePlayerId).toBe(P1);
+    expect(after3.value.players[P1]!.hand).toHaveLength(1);
+    expect(after3.value.deck).toHaveLength(5);
+  });
 });
 
 describe("isGameOver / getWinner", () => {

@@ -140,19 +140,19 @@ router.post("/:id/start", async (req: Request, res: Response) => {
       return;
     }
 
-    const withHands = dealInitialHands(stateResult.value);
-    if (!withHands.ok) {
-      res.status(500).json({ error: withHands.error });
-      return;
-    }
-
-    const withFirst = determineFirstPlayer(withHands.value);
+    const withFirst = determineFirstPlayer(stateResult.value);
     if (!withFirst.ok) {
       res.status(500).json({ error: withFirst.error });
       return;
     }
 
-    const engineState = withFirst.value;
+    const withHands = dealInitialHands(withFirst.value);
+    if (!withHands.ok) {
+      res.status(500).json({ error: withHands.error });
+      return;
+    }
+
+    const engineState = withHands.value;
     await startMatch(id, engineState);
 
     broadcastViews(engineState, playerIds, (uid, view) => {
