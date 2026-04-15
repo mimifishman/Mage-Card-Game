@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   mineBadgeText: {
     fontSize: 11,
     fontFamily: "Inter_700Bold",
-    color: "#1B5E20",
+    color: "#FFFFFF",
   },
   mineScroll: {
     gap: 3,
