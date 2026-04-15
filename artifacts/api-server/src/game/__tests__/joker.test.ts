@@ -66,6 +66,24 @@ describe("playJokerDestroyRoyal", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("reduces target player life by Royal base health (unbuffed King → -3)", () => {
+    const state = richState("JOKER1", { court: [mkRoyal("KH")] });
+    const result = playJokerDestroyRoyal(state, P1, "JOKER1", P2, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.life).toBe(17);
+    expect(result.value.players[P1]!.life).toBe(20);
+  });
+
+  it("reduces target player life by Royal base health + buffHealth (buffed King → -5)", () => {
+    const state = richState("JOKER1", { court: [mkRoyal("KH", { buffHealth: 2 })] });
+    const result = playJokerDestroyRoyal(state, P1, "JOKER1", P2, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.life).toBe(15);
+    expect(result.value.players[P1]!.life).toBe(20);
+  });
+
   it("rejects if not a Joker card", () => {
     const state = makeState({
       mine: ["10D"],

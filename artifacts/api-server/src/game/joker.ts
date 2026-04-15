@@ -1,5 +1,5 @@
-import { getCard } from "./cards";
-import type { CardId, GameState, PlayerState, Result } from "./types";
+import { getCard, royalBaseHealth } from "./cards";
+import type { CardId, GameState, PlayerState, Rank, Result } from "./types";
 import { err, ok } from "./types";
 import { availableVault, spendVault } from "./vault";
 import { canPlayCard } from "./validation";
@@ -44,21 +44,29 @@ export function playJokerDestroyRoyal(
   const targetPlayer = state.players[targetPlayerId];
   if (!targetPlayer) return err(`Player ${targetPlayerId} not found`);
 
-  const royalExists = targetPlayer.court.some((r) => r.cardId === targetCardId);
-  if (!royalExists) {
+  const targetRoyal = targetPlayer.court.find((r) => r.cardId === targetCardId);
+  if (!targetRoyal) {
     return err(`Royal ${targetCardId} is not in ${targetPlayerId}'s Court`);
   }
+
+  const royalCard = getCard(targetCardId);
+  const lifeLoss = royalBaseHealth(royalCard.rank as Rank) + targetRoyal.buffHealth;
 
   const withoutJoker = { ...player, hand: player.hand.filter((c) => c !== jokerCardId) };
   const afterSpend = spendVault(withoutJoker, JOKER_COST);
 
   let updatedAbyss = [...state.abyss, jokerCardId];
-  const { player: updatedTarget, abyss } = destroyRoyalToAbyss(
+  const { player: destroyedTarget, abyss } = destroyRoyalToAbyss(
     targetPlayer,
     targetCardId,
     updatedAbyss,
   );
   updatedAbyss = abyss;
+
+  const updatedTarget: PlayerState = {
+    ...destroyedTarget,
+    life: destroyedTarget.life - lifeLoss,
+  };
 
   return ok({
     ...state,
