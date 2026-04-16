@@ -3,7 +3,10 @@ type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/game-screen-variants/ArcaneManuscript.tsx": () => import("../components/mockups/game-screen-variants/ArcaneManuscript.tsx"),
   "./components/mockups/game-screen-variants/BrightTable.tsx": () => import("../components/mockups/game-screen-variants/BrightTable.tsx"),
+  "./components/mockups/game-screen-variants/CommandHUD.tsx": () => import("../components/mockups/game-screen-variants/CommandHUD.tsx"),
+  "./components/mockups/game-screen-variants/DuelSplit.tsx": () => import("../components/mockups/game-screen-variants/DuelSplit.tsx"),
   "./components/mockups/game-screen-variants/FocusMode.tsx": () => import("../components/mockups/game-screen-variants/FocusMode.tsx"),
+  "./components/mockups/game-screen-variants/NestedArena.tsx": () => import("../components/mockups/game-screen-variants/NestedArena.tsx"),
   "./components/mockups/game-screen-variants/StorybookRealm.tsx": () => import("../components/mockups/game-screen-variants/StorybookRealm.tsx"),
   "./components/mockups/game-screen-variants/VoidNeon.tsx": () => import("../components/mockups/game-screen-variants/VoidNeon.tsx")
 };

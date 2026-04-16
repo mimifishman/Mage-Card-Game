@@ -210,7 +210,7 @@ export default function LobbyScreen() {
 
         <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.statsRow}>
           {[
-            { label: "Cards", value: "108", icon: "layers-outline" as const },
+            { label: "Cards", value: "54", icon: "layers-outline" as const },
             { label: "Players", value: "2–4", icon: "people-outline" as const },
             { label: "Rounds", value: "Varied", icon: "refresh-outline" as const },
           ].map(({ label, value, icon }) => (
