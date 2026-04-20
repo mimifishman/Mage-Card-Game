@@ -1,14 +1,14 @@
 export function GameOver() {
-  const bg = "#0D2B1A";
-  const bgCard = "#122019";
-  const bgSurface = "#1A3A28";
-  const gold = "#C89B3C";
-  const goldDim = "#9A7530";
+  const bg = "#0A0A0A";
+  const bgSurface = "#1C1C1C";
+  const bgCard = "#141414";
+  const border = "#2A2A2A";
+  const text = "#FFFFFF";
+  const textMuted = "#888888";
+  const gradStart = "#C8A0C8";
+  const gradEnd = "#9080C8";
+  const gold = "#C8A050";
   const red = "#C8102E";
-  const green = "#2E8B57";
-  const text = "#E8EFE8";
-  const textMuted = "#7A9E88";
-  const border = "#2A4A36";
 
   return (
     <div
@@ -16,165 +16,202 @@ export function GameOver() {
         width: 390,
         minHeight: 844,
         background: bg,
-        fontFamily: "'Inter', system-ui, sans-serif",
-        position: "relative",
-        overflow: "hidden",
+        fontFamily: "system-ui, sans-serif",
         display: "flex",
         flexDirection: "column",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      {/* === VICTORY half (top) === */}
+      {/* ── VICTORY section ── */}
       <div
         style={{
           flex: 1,
-          background: "linear-gradient(180deg, #0D2B1A 0%, #0F3820 50%, #0D2B1A 100%)",
+          background: "linear-gradient(180deg, #0A0A0A 0%, #0F0A14 50%, #0A0A0A 100%)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          padding: "40px 24px 24px",
+          padding: "44px 28px 20px",
           position: "relative",
-          borderBottom: `2px solid ${border}`,
+          borderBottom: `1px solid ${border}`,
         }}
       >
-        {/* Stars / confetti */}
-        {["★", "✦", "★", "✦", "★"].map((s, i) => (
+        {/* Arcane confetti ✦ */}
+        {[
+          { t: 18, l: 28, s: 18, o: 0.5 },
+          { t: 30, l: 80, s: 12, o: 0.3 },
+          { t: 14, l: 200, s: 22, o: 0.4 },
+          { t: 40, l: 310, s: 14, o: 0.35 },
+          { t: 22, l: 350, s: 10, o: 0.25 },
+        ].map((x, i) => (
           <span
             key={i}
             style={{
               position: "absolute",
-              top: 20 + Math.sin(i * 1.5) * 30,
-              left: 40 + i * 70,
-              color: gold,
-              opacity: 0.4 + i * 0.1,
-              fontSize: 14 + i * 3,
+              top: x.t,
+              left: x.l,
+              fontSize: x.s,
+              color: gradStart,
+              opacity: x.o,
               userSelect: "none",
             }}
           >
-            {s}
+            ✦
           </span>
         ))}
 
-        {/* Victory crown */}
+        {/* Trophy */}
         <div
           style={{
-            width: 120,
-            height: 120,
-            borderRadius: 60,
-            background: "rgba(200,155,60,0.12)",
-            border: `2px solid ${gold}`,
+            width: 100,
+            height: 100,
+            borderRadius: 50,
+            background: "rgba(200,160,200,0.08)",
+            border: `1.5px solid rgba(200,160,200,0.3)`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 60,
-            marginBottom: 16,
-            boxShadow: `0 0 40px rgba(200,155,60,0.3), 0 0 80px rgba(200,155,60,0.1)`,
+            fontSize: 52,
+            marginBottom: 18,
+            boxShadow: `0 0 40px rgba(180,130,200,0.25), 0 0 80px rgba(180,130,200,0.08)`,
           }}
         >
           🏆
         </div>
 
+        {/* Victory title */}
         <div
           style={{
-            fontSize: 44,
-            fontWeight: 900,
-            color: gold,
-            textTransform: "uppercase",
-            letterSpacing: 3,
-            textShadow: `0 0 30px rgba(200,155,60,0.5)`,
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontSize: 52,
+            fontWeight: 400,
+            color: text,
+            letterSpacing: 1,
             marginBottom: 8,
+            textShadow: `0 0 40px rgba(200,160,200,0.4)`,
           }}
         >
           Victory!
         </div>
 
-        <div style={{ fontSize: 16, color: text, opacity: 0.7, marginBottom: 16 }}>
+        <div style={{ fontSize: 15, color: textMuted, marginBottom: 18, textAlign: "center" }}>
           You conquered all challengers
         </div>
 
-        {/* Suit celebration row */}
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            marginBottom: 20,
-          }}
-        >
-          {[{ s: "♠", c: text }, { s: "♥", c: red }, { s: "♦", c: "#1565C0" }, { s: "♣", c: text }].map((x) => (
-            <span key={x.s} style={{ fontSize: 24, color: x.c, opacity: 0.8 }}>{x.s}</span>
+        {/* Card fan decoration */}
+        <div style={{ display: "flex", gap: -8, marginBottom: 20, position: "relative", height: 60 }}>
+          {["A♠", "K♥", "Q♦", "J♣", "10♠"].map((card, i) => (
+            <div
+              key={i}
+              style={{
+                width: 38,
+                height: 54,
+                background: "#F8F4E9",
+                borderRadius: 5,
+                border: "1px solid #DDD",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 11,
+                fontWeight: 700,
+                color: i % 2 === 0 ? "#111" : red,
+                transform: `rotate(${(i - 2) * 8}deg) translateY(${Math.abs(i - 2) * 4}px)`,
+                position: "absolute",
+                left: i * 32,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+              }}
+            >
+              {card}
+            </div>
           ))}
         </div>
 
-        {/* Score summary */}
+        {/* Score strip */}
         <div
           style={{
             background: bgSurface,
-            borderRadius: 14,
-            padding: "14px 20px",
-            display: "flex",
-            gap: 20,
             border: `1px solid ${border}`,
+            borderRadius: 14,
+            padding: "14px 24px",
+            display: "flex",
+            gap: 24,
+            marginTop: 8,
           }}
         >
           {[
-            { icon: "♥", label: "Life Left", val: "3", color: red },
+            { icon: "♥", label: "Life", val: "3", color: red },
             { icon: "⚡", label: "Vault", val: "5", color: gold },
-            { icon: "⚔️", label: "Kills", val: "2", color: text },
+            { icon: "🎴", label: "Rounds", val: "8", color: textMuted },
           ].map((s) => (
             <div key={s.label} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 18 }}>{s.icon}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.val}</div>
+              <div style={{ fontSize: 16, marginBottom: 2 }}>{s.icon}</div>
+              <div style={{
+                fontFamily: "Georgia, serif",
+                fontSize: 24,
+                fontWeight: 400,
+                color: s.color,
+              }}>{s.val}</div>
               <div style={{ fontSize: 10, color: textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* === DEFEAT half (bottom) === */}
+      {/* ── DEFEAT section ── */}
       <div
         style={{
           flex: 1,
-          background: "linear-gradient(180deg, #1A0810 0%, #200B0F 50%, #1A0810 100%)",
+          background: "linear-gradient(180deg, #0A0A0A 0%, #140A0A 60%, #0A0A0A 100%)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          padding: "24px 24px 20px",
-          position: "relative",
+          padding: "24px 28px 16px",
         }}
       >
         {/* Skull */}
         <div
           style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            background: "rgba(192,57,43,0.12)",
-            border: `2px solid ${red}`,
+            width: 72,
+            height: 72,
+            borderRadius: 36,
+            background: "rgba(200,16,46,0.08)",
+            border: "1.5px solid rgba(200,16,46,0.25)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 40,
-            marginBottom: 10,
+            fontSize: 38,
+            marginBottom: 12,
           }}
         >
           💀
         </div>
 
-        <div style={{ fontSize: 32, fontWeight: 800, color: red, textTransform: "uppercase", letterSpacing: 2, marginBottom: 4 }}>
+        <div
+          style={{
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontSize: 36,
+            fontWeight: 400,
+            color: "rgba(255,255,255,0.5)",
+            marginBottom: 6,
+            letterSpacing: 1,
+          }}
+        >
           Defeated
         </div>
 
-        <div style={{ fontSize: 13, color: textMuted, marginBottom: 12 }}>
-          WizardKing42 wins the match!
+        <div style={{ fontSize: 13, color: textMuted, marginBottom: 14 }}>
+          WizardKing42 wins the match
         </div>
 
+        {/* Winner badge */}
         <div
           style={{
-            background: "rgba(200,155,60,0.1)",
-            border: `1px solid rgba(200,155,60,0.3)`,
+            background: "rgba(200,160,80,0.08)",
+            border: "1px solid rgba(200,160,80,0.25)",
             borderRadius: 20,
-            padding: "8px 20px",
+            padding: "8px 18px",
             display: "flex",
             alignItems: "center",
             gap: 8,
@@ -182,47 +219,53 @@ export function GameOver() {
           }}
         >
           <span style={{ fontSize: 14 }}>🏆</span>
-          <span style={{ fontSize: 15, fontWeight: 600, color: gold }}>WizardKing42</span>
+          <span style={{
+            fontFamily: "Georgia, serif",
+            fontSize: 15,
+            color: gold,
+          }}>WizardKing42</span>
         </div>
 
         {/* Buttons */}
         <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
-          <button
+          <div
             style={{
-              width: "100%",
-              background: `linear-gradient(135deg, ${green}, #1E6B3A)`,
-              border: "none",
-              borderRadius: 16,
-              padding: "16px 0",
+              background: `linear-gradient(135deg, ${gradStart}, ${gradEnd})`,
+              borderRadius: 32,
+              padding: "18px 28px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 10,
               cursor: "pointer",
-              boxShadow: `0 4px 16px rgba(46,139,87,0.3)`,
+              minHeight: 62,
+              boxShadow: `0 4px 20px rgba(180,130,200,0.3)`,
             }}
           >
             <span style={{ fontSize: 18 }}>🔄</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: "#FFF" }}>Rematch</span>
-          </button>
-          <button
+            <span style={{
+              fontFamily: "Georgia, 'Times New Roman', serif",
+              fontSize: 18,
+              fontWeight: 400,
+              color: "#FFF",
+            }}>Rematch</span>
+          </div>
+          <div
             style={{
-              width: "100%",
-              background: "transparent",
               border: `1px solid ${border}`,
-              borderRadius: 16,
-              padding: "14px 0",
+              borderRadius: 32,
+              padding: "16px 28px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
               cursor: "pointer",
-              color: textMuted,
+              minHeight: 56,
             }}
           >
             <span style={{ fontSize: 16 }}>🏠</span>
-            <span style={{ fontSize: 15, fontWeight: 500 }}>Back to Lobby</span>
-          </button>
+            <span style={{ fontSize: 15, color: textMuted, fontWeight: 500 }}>Back to Lobby</span>
+          </div>
         </div>
       </div>
     </div>

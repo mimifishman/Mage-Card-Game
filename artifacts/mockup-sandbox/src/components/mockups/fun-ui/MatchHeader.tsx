@@ -1,22 +1,149 @@
 export function MatchHeader() {
-  const bg = "#0D2B1A";
-  const bgCard = "#122019";
-  const bgSurface = "#1A3A28";
-  const gold = "#C89B3C";
-  const goldDim = "#9A7530";
+  const bg = "#0A0A0A";
+  const bgSurface = "#1C1C1C";
+  const bgCard = "#141414";
+  const border = "#2A2A2A";
+  const text = "#FFFFFF";
+  const textMuted = "#888888";
+  const gradStart = "#C8A0C8";
+  const gradEnd = "#9080C8";
+  const gold = "#C8A050";
   const red = "#C8102E";
-  const blue = "#1565C0";
-  const green = "#2E8B57";
-  const text = "#E8EFE8";
-  const textMuted = "#7A9E88";
-  const border = "#2A4A36";
 
-  const PHASE_COLORS: Record<string, { bg: string; border: string; text: string; label: string }> = {
-    draw: { bg: "rgba(21,101,192,0.2)", border: "#1565C0", text: "#64B5F6", label: "DRAW" },
-    main: { bg: "rgba(46,139,87,0.2)", border: green, text: "#6FCF97", label: "MAIN" },
-    attack: { bg: "rgba(200,16,46,0.2)", border: red, text: "#F28B82", label: "ATTACK ⚔" },
-    block: { bg: "rgba(200,16,46,0.15)", border: "#A0102E", text: "#F48FB1", label: "BLOCKS 🛡" },
-    end: { bg: "rgba(150,100,50,0.15)", border: goldDim, text: gold, label: "END" },
+  type Phase = { label: string; color: string; glow: string };
+  const phases: Record<string, Phase> = {
+    DRAW:   { label: "DRAW",   color: "#5090D0", glow: "rgba(80,144,208,0.3)" },
+    MAIN:   { label: "MAIN",   color: "#50C880", glow: "rgba(80,200,128,0.3)" },
+    ATTACK: { label: "ATTACK ⚔", color: "#C85050", glow: "rgba(200,80,80,0.3)" },
+    BLOCK:  { label: "BLOCKS 🛡", color: "#C06030", glow: "rgba(192,96,48,0.3)" },
+    END:    { label: "END",    color: gold,       glow: "rgba(200,160,80,0.3)" },
+  };
+
+  const Stat = ({ icon, label, value, color, bg: statBg, borderColor }: { icon: string; label: string; value: string | number; color: string; bg: string; borderColor: string }) => (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: statBg,
+        border: `1px solid ${borderColor}`,
+        borderRadius: 14,
+        padding: "8px 14px",
+        minWidth: 64,
+        gap: 1,
+      }}
+    >
+      <span style={{ fontSize: 13, color, opacity: 0.8 }}>{icon}</span>
+      <span style={{
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        fontSize: 28,
+        fontWeight: 400,
+        color,
+        lineHeight: 1,
+      }}>
+        {value}
+      </span>
+      <span style={{ fontSize: 9, color, opacity: 0.6, textTransform: "uppercase", letterSpacing: 1 }}>{label}</span>
+    </div>
+  );
+
+  const HeaderVariant = ({
+    phase,
+    isMyTurn,
+    turnNum,
+    life,
+    vault,
+  }: {
+    phase: keyof typeof phases;
+    isMyTurn: boolean;
+    turnNum: number;
+    life: number;
+    vault: number;
+  }) => {
+    const p = phases[phase];
+    return (
+      <div
+        style={{
+          background: "rgba(10,10,10,0.97)",
+          borderBottom: `1px solid ${border}`,
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        {/* Left: phase + end game */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, alignItems: "flex-start" }}>
+          <div
+            style={{
+              borderRadius: 20,
+              paddingLeft: 12,
+              paddingRight: 12,
+              paddingTop: 5,
+              paddingBottom: 5,
+              border: `1px solid ${p.color}`,
+              background: `rgba(${parseInt(p.color.slice(1,3),16)},${parseInt(p.color.slice(3,5),16)},${parseInt(p.color.slice(5,7),16)},0.12)`,
+              boxShadow: `0 0 10px ${p.glow}`,
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 700, color: p.color, letterSpacing: 1.5 }}>
+              {p.label}
+            </span>
+          </div>
+          <div
+            style={{
+              borderRadius: 6,
+              paddingLeft: 8,
+              paddingRight: 8,
+              paddingTop: 3,
+              paddingBottom: 3,
+              border: "1px solid rgba(200,16,46,0.3)",
+              background: "rgba(200,16,46,0.06)",
+              cursor: "pointer",
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#C84040", letterSpacing: 0.5 }}>⚑ End Game</span>
+          </div>
+        </div>
+
+        {/* Center: turn */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+          {isMyTurn ? (
+            <div
+              style={{
+                background: `linear-gradient(135deg, ${gradStart}, ${gradEnd})`,
+                borderRadius: 20,
+                paddingLeft: 14,
+                paddingRight: 14,
+                paddingTop: 7,
+                paddingBottom: 7,
+                boxShadow: `0 0 14px rgba(180,130,200,0.5)`,
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 800, color: "#FFF", letterSpacing: 2 }}>YOUR TURN</span>
+            </div>
+          ) : (
+            <span
+              style={{
+                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontSize: 14,
+                color: text,
+              }}
+            >
+              DarkMage's Turn
+            </span>
+          )}
+          <span style={{ fontSize: 10, color: textMuted }}>Turn {turnNum}</span>
+        </div>
+
+        {/* Right: life + vault */}
+        <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
+          <Stat icon="♥" label="Life" value={life} color={red} bg="rgba(200,16,46,0.1)" borderColor="rgba(200,16,46,0.35)" />
+          <Stat icon="⚡" label="Vault" value={vault} color={gold} bg="rgba(200,160,80,0.1)" borderColor="rgba(200,160,80,0.35)" />
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -25,243 +152,105 @@ export function MatchHeader() {
         width: 390,
         minHeight: 844,
         background: bg,
-        fontFamily: "'Inter', system-ui, sans-serif",
+        fontFamily: "system-ui, sans-serif",
         display: "flex",
         flexDirection: "column",
         position: "relative",
         overflow: "hidden",
       }}
     >
-      {/* Background gradient */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backgroundImage: "radial-gradient(ellipse at 50% 0%, rgba(26,58,40,0.7) 0%, rgba(8,20,13,0.4) 60%)",
-          pointerEvents: "none",
-        }}
-      />
+      {/* Three header variants stacked with labels */}
+      <div style={{ paddingTop: 56, display: "flex", flexDirection: "column", gap: 0 }}>
 
-      {/* === HEADER VARIANTS === */}
-      {/* We show all 3 phase variants stacked for the mockup */}
-
-      {Object.entries(PHASE_COLORS).slice(0, 3).map(([phase, col], idx) => (
-        <div
-          key={phase}
-          style={{
-            position: "relative",
-            zIndex: 1,
-            background: "rgba(10,31,19,0.92)",
-            borderBottom: `1px solid ${border}`,
-            paddingTop: idx === 0 ? 56 : 16,
-            paddingBottom: 12,
-            paddingLeft: 16,
-            paddingRight: 16,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: idx < 2 ? 0 : 24,
-          }}
-        >
-          {/* Left: Phase + End Game */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, alignItems: "flex-start" }}>
-            <div
-              style={{
-                background: col.bg,
-                borderRadius: 8,
-                paddingLeft: 10,
-                paddingRight: 10,
-                paddingTop: 4,
-                paddingBottom: 4,
-                border: `1px solid ${col.border}`,
-              }}
-            >
-              <span style={{ fontSize: 11, fontWeight: 700, color: col.text, letterSpacing: 1.5 }}>
-                {col.label}
-              </span>
-            </div>
-            <div
-              style={{
-                borderRadius: 6,
-                paddingLeft: 8,
-                paddingRight: 8,
-                paddingTop: 3,
-                paddingBottom: 3,
-                border: `1px solid rgba(200,16,46,0.35)`,
-                background: "rgba(200,16,46,0.08)",
-                cursor: "pointer",
-              }}
-            >
-              <span style={{ fontSize: 10, fontWeight: 700, color: red, letterSpacing: 0.5 }}>⚑ End Game</span>
-            </div>
-          </div>
-
-          {/* Center: Turn indicator */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-            {idx === 0 ? (
-              <div
-                style={{
-                  background: `linear-gradient(135deg, ${gold}, ${goldDim})`,
-                  borderRadius: 10,
-                  paddingLeft: 14,
-                  paddingRight: 14,
-                  paddingTop: 6,
-                  paddingBottom: 6,
-                  boxShadow: `0 0 12px rgba(200,155,60,0.4)`,
-                }}
-              >
-                <span style={{ fontSize: 13, fontWeight: 800, color: "#0D2B1A", letterSpacing: 2 }}>YOUR TURN</span>
-              </div>
-            ) : (
-              <span style={{ fontSize: 14, fontWeight: 700, color: text }}>DarkMage's Turn</span>
-            )}
-            <span style={{ fontSize: 11, color: textMuted }}>Turn {idx + 3}</span>
-          </div>
-
-          {/* Right: Vault + Life — BIGGER */}
-          <div style={{ flex: 1, display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                background: "rgba(200,155,60,0.12)",
-                borderRadius: 12,
-                paddingLeft: 10,
-                paddingRight: 10,
-                paddingTop: 6,
-                paddingBottom: 6,
-                border: `1px solid rgba(200,155,60,0.4)`,
-                minWidth: 50,
-                gap: 1,
-              }}
-            >
-              <span style={{ fontSize: 11, color: gold, opacity: 0.7 }}>⚡ Vault</span>
-              <span style={{ fontSize: 22, fontWeight: 800, color: gold, lineHeight: 1 }}>7</span>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                background: "rgba(200,16,46,0.12)",
-                borderRadius: 12,
-                paddingLeft: 10,
-                paddingRight: 10,
-                paddingTop: 6,
-                paddingBottom: 6,
-                border: `1px solid rgba(200,16,46,0.4)`,
-                minWidth: 50,
-                gap: 1,
-              }}
-            >
-              <span style={{ fontSize: 11, color: red, opacity: 0.8 }}>♥ Life</span>
-              <span style={{ fontSize: 22, fontWeight: 800, color: red, lineHeight: 1 }}>3</span>
-            </div>
-          </div>
+        {/* Label */}
+        <div style={{ padding: "12px 16px 8px", fontSize: 10, color: textMuted, letterSpacing: 2, textTransform: "uppercase" }}>
+          YOUR TURN — Main Phase
         </div>
-      ))}
+        <HeaderVariant phase="MAIN" isMyTurn={true} turnNum={4} life={3} vault={7} />
 
-      {/* Board area — abbreviated */}
-      <div style={{ flex: 1, padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, position: "relative", zIndex: 1 }}>
-        {/* Label callouts */}
-        <div style={{ background: bgSurface, borderRadius: 10, padding: "10px 14px", border: `1px solid ${border}` }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>
-            Color-coded phase badges
-          </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {Object.entries(PHASE_COLORS).map(([p, c]) => (
-              <div
-                key={p}
-                style={{
-                  background: c.bg,
-                  border: `1px solid ${c.border}`,
-                  borderRadius: 6,
-                  padding: "3px 8px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: c.text,
-                  letterSpacing: 1,
-                }}
-              >
-                {c.label}
-              </div>
-            ))}
-          </div>
+        <div style={{ padding: "16px 16px 8px", fontSize: 10, color: textMuted, letterSpacing: 2, textTransform: "uppercase" }}>
+          Opponent's Turn — Attack Phase
+        </div>
+        <HeaderVariant phase="ATTACK" isMyTurn={false} turnNum={5} life={2} vault={4} />
+
+        <div style={{ padding: "16px 16px 8px", fontSize: 10, color: textMuted, letterSpacing: 2, textTransform: "uppercase" }}>
+          YOUR TURN — Draw Phase
+        </div>
+        <HeaderVariant phase="DRAW" isMyTurn={true} turnNum={6} life={1} vault={9} />
+      </div>
+
+      {/* Action button examples */}
+      <div style={{ padding: "24px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: 10, color: textMuted, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>
+          Action Buttons — Thumb Zone
         </div>
 
-        <div style={{ background: bgSurface, borderRadius: 10, padding: "10px 14px", border: `1px solid ${border}` }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: textMuted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>
-            Bigger Life &amp; Vault display
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            {[
-              { icon: "♥", label: "Life", value: "3", color: red, bg: "rgba(200,16,46,0.12)", bdr: "rgba(200,16,46,0.4)" },
-              { icon: "⚡", label: "Vault", value: "7", color: gold, bg: "rgba(200,155,60,0.12)", bdr: "rgba(200,155,60,0.4)" },
-            ].map((s) => (
-              <div
-                key={s.label}
-                style={{
-                  flex: 1,
-                  background: s.bg,
-                  border: `1px solid ${s.bdr}`,
-                  borderRadius: 14,
-                  padding: "14px 0",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <span style={{ fontSize: 20, color: s.color }}>{s.icon}</span>
-                <span style={{ fontSize: 36, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</span>
-                <span style={{ fontSize: 11, color: s.color, opacity: 0.7, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</span>
-              </div>
-            ))}
-          </div>
+        {/* Phase color pills showcase */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          {Object.values(phases).map((p, i) => (
+            <div
+              key={i}
+              style={{
+                borderRadius: 20,
+                paddingLeft: 12,
+                paddingRight: 12,
+                paddingTop: 5,
+                paddingBottom: 5,
+                border: `1px solid ${p.color}`,
+                background: `rgba(${parseInt(p.color.slice(1,3),16)},${parseInt(p.color.slice(3,5),16)},${parseInt(p.color.slice(5,7),16)},0.12)`,
+              }}
+            >
+              <span style={{ fontSize: 10, fontWeight: 700, color: p.color, letterSpacing: 1 }}>{p.label}</span>
+            </div>
+          ))}
         </div>
 
-        {/* Action buttons */}
         <div style={{ display: "flex", gap: 10 }}>
-          <button
+          <div
             style={{
               flex: 1,
-              background: `linear-gradient(135deg, ${red}, #8B1A1A)`,
-              border: "none",
-              borderRadius: 14,
+              background: "rgba(200,16,46,0.12)",
+              border: "1px solid rgba(200,16,46,0.4)",
+              borderRadius: 16,
               padding: "16px 0",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
               cursor: "pointer",
-              boxShadow: `0 4px 16px rgba(200,16,46,0.3)`,
+              minHeight: 56,
             }}
           >
             <span style={{ fontSize: 16 }}>⚔️</span>
-            <span style={{ fontSize: 16, fontWeight: 700, color: "#FFF" }}>Attack!</span>
-          </button>
-          <button
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#C85050" }}>Attack!</span>
+          </div>
+          <div
             style={{
               flex: 1.2,
-              background: `linear-gradient(135deg, ${gold}, ${goldDim})`,
-              border: "none",
-              borderRadius: 14,
+              background: `linear-gradient(135deg, ${gradStart}, ${gradEnd})`,
+              borderRadius: 16,
               padding: "16px 0",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
               cursor: "pointer",
-              boxShadow: `0 4px 16px rgba(200,155,60,0.3)`,
+              minHeight: 56,
+              boxShadow: `0 4px 16px rgba(180,130,200,0.3)`,
             }}
           >
-            <span style={{ fontSize: 15, fontWeight: 800, color: "#0D2B1A" }}>End Turn →</span>
-          </button>
+            <span
+              style={{
+                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontSize: 15,
+                color: "#FFF",
+              }}
+            >
+              End Turn →
+            </span>
+          </div>
         </div>
       </div>
-
-      <div style={{ height: 40 }} />
     </div>
   );
 }
