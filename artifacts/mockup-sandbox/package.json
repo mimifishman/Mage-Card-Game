@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "PORT=8081 BASE_PATH=/__mockup vite dev",
+    "dev": "fuser -k 8081/tcp 2>/dev/null; PORT=8081 BASE_PATH=/__mockup vite dev",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit"
