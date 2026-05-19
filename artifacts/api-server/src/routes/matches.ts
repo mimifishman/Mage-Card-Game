@@ -202,6 +202,18 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
 
     const result = dispatchAction(engineState, userId, action);
     if (!result.ok) {
+      req.log.warn(
+        {
+          matchId: id,
+          userId,
+          actionType: action.type,
+          action,
+          phase: engineState.phase,
+          activePlayerId: engineState.activePlayerId,
+          rejectionReason: result.error,
+        },
+        "Game action rejected by engine",
+      );
       res.status(422).json({ error: result.error });
       return;
     }

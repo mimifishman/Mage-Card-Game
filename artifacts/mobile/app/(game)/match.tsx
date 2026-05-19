@@ -217,7 +217,25 @@ export default function MatchScreen() {
         }
       },
       onError: (err) => {
-        const msg = (err as { data?: { error?: string } })?.data?.error ?? "Action failed";
+        const errObj = err as {
+          data?: { error?: string } | string | null;
+          message?: string;
+          status?: number;
+          statusText?: string;
+        };
+        let msg: string | undefined;
+        if (errObj?.data && typeof errObj.data === "object" && typeof errObj.data.error === "string") {
+          msg = errObj.data.error;
+        } else if (typeof errObj?.data === "string" && errObj.data.trim()) {
+          msg = errObj.data.trim();
+        } else if (typeof errObj?.message === "string" && errObj.message.trim()) {
+          msg = errObj.message.trim();
+        }
+        if (!msg) {
+          msg = errObj?.status
+            ? `Action failed (HTTP ${errObj.status}${errObj.statusText ? " " + errObj.statusText : ""})`
+            : "Action failed — could not reach the server";
+        }
         Alert.alert("Action rejected", msg);
       },
     },
