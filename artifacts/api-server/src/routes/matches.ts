@@ -178,13 +178,16 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
   const action = parsed.data;
 
   try {
-    const member = await isMatchPlayer(id, userId);
+    const [member, matchData, engineState] = await Promise.all([
+      isMatchPlayer(id, userId),
+      getMatchWithPlayers(id),
+      loadEngineState(id),
+    ]);
+
     if (!member) {
       res.status(403).json({ error: "Not a member of this match" });
       return;
     }
-
-    const matchData = await getMatchWithPlayers(id);
     if (!matchData) {
       res.status(404).json({ error: "Match not found" });
       return;
@@ -193,8 +196,6 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
       res.status(400).json({ error: `Match is not in progress (status: ${matchData.match.status})` });
       return;
     }
-
-    const engineState = await loadEngineState(id);
     if (!engineState) {
       res.status(400).json({ error: "Match state is missing" });
       return;
@@ -225,9 +226,10 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
 
     if (isGameOver(newState)) {
       const winner = getWinner(newState);
-      await saveEngineState(id, newState);
-      if (winner) await finishMatch(id, winner);
-      await logAction(id, userId, action, newState.turnNumber);
+      await Promise.all([
+        saveEngineState(id, newState).then(() => winner ? finishMatch(id, winner) : Promise.resolve()),
+        logAction(id, userId, action, newState.turnNumber),
+      ]);
 
       broadcastViews(newState, playerIds, (uid, view) => {
         sendToUser(id, uid, {
@@ -239,8 +241,10 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
 
       res.json({ ok: true, phase: newState.phase, state: myView, winnerUserId: winner ?? null });
     } else {
-      await saveEngineState(id, newState);
-      await logAction(id, userId, action, newState.turnNumber);
+      await Promise.all([
+        saveEngineState(id, newState),
+        logAction(id, userId, action, newState.turnNumber),
+      ]);
 
       broadcastViews(newState, playerIds, (uid, view) => {
         sendToUser(id, uid, { type: "state_update", state: view });
@@ -259,13 +263,15 @@ router.get("/:id/state", async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
 
   try {
-    const member = await isMatchPlayer(id, userId);
+    const [member, engineState] = await Promise.all([
+      isMatchPlayer(id, userId),
+      loadEngineState(id),
+    ]);
+
     if (!member) {
       res.status(403).json({ error: "Not a member of this match" });
       return;
     }
-
-    const engineState = await loadEngineState(id);
     if (!engineState) {
       res.status(400).json({ error: "Match has not started yet" });
       return;

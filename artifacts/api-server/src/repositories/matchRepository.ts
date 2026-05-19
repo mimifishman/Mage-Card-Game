@@ -149,29 +149,30 @@ export async function loadEngineState(matchId: string): Promise<EngineGameState 
 }
 
 export async function saveEngineState(matchId: string, engineState: EngineGameState): Promise<void> {
-  await db
-    .update(gameStateTable)
-    .set({
-      fullState: engineState as unknown as Record<string, unknown>,
-      deck: engineState.deck as unknown as Record<string, unknown>,
-      abyss: engineState.abyss as unknown as Record<string, unknown>,
-      handByPlayer: Object.fromEntries(
-        Object.entries(engineState.players).map(([id, p]) => [id, p.hand]),
-      ) as unknown as Record<string, unknown>,
-      courtByPlayer: Object.fromEntries(
-        Object.entries(engineState.players).map(([id, p]) => [id, p.court]),
-      ) as unknown as Record<string, unknown>,
-      updatedAt: new Date(),
-    })
-    .where(eq(gameStateTable.matchId, matchId));
-
-  await db
-    .update(matchesTable)
-    .set({
-      currentTurnPlayerId: engineState.activePlayerId,
-      turnNumber: engineState.turnNumber,
-    })
-    .where(eq(matchesTable.id, matchId));
+  await Promise.all([
+    db
+      .update(gameStateTable)
+      .set({
+        fullState: engineState as unknown as Record<string, unknown>,
+        deck: engineState.deck as unknown as Record<string, unknown>,
+        abyss: engineState.abyss as unknown as Record<string, unknown>,
+        handByPlayer: Object.fromEntries(
+          Object.entries(engineState.players).map(([id, p]) => [id, p.hand]),
+        ) as unknown as Record<string, unknown>,
+        courtByPlayer: Object.fromEntries(
+          Object.entries(engineState.players).map(([id, p]) => [id, p.court]),
+        ) as unknown as Record<string, unknown>,
+        updatedAt: new Date(),
+      })
+      .where(eq(gameStateTable.matchId, matchId)),
+    db
+      .update(matchesTable)
+      .set({
+        currentTurnPlayerId: engineState.activePlayerId,
+        turnNumber: engineState.turnNumber,
+      })
+      .where(eq(matchesTable.id, matchId)),
+  ]);
 }
 
 export async function finishMatch(matchId: string, winnerUserId: string | null): Promise<void> {
