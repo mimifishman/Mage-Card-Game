@@ -16,6 +16,9 @@ export function playRoyalToCourt(
   if (state.phase === "declare_blocks") {
     return err(`Cannot play a Royal to Court during phase "declare_blocks"`);
   }
+  if (state.phase === "respond_to_club") {
+    return err(`Cannot play Royals to Court during a Club response window`);
+  }
 
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;

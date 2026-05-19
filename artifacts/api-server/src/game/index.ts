@@ -2,6 +2,7 @@ export type {
   Card,
   CardId,
   GameState,
+  PendingClubDebuff,
   PlayerState,
   Rank,
   Result,
@@ -39,7 +40,7 @@ export { playRoyalToCourt, attachRoyalSupport } from "./royals";
 
 export { attachHeart, attachSpade, discardHeartToHeal, discardSpadeToReturn } from "./attachments";
 
-export { applyClub, applyClubToRoyal } from "./clubs";
+export { applyClub, applyClubToRoyal, confirmClubResponse } from "./clubs";
 
 export { playJokerDestroyRoyal, playJokerDamagePlayer, playJoker } from "./joker";
 export type { JokerMode } from "./joker";

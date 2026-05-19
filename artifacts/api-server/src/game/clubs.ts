@@ -1,5 +1,5 @@
-import { effectiveHealth, getCard } from "./cards";
-import type { CardId, GameState, PlayerState, Result } from "./types";
+import { effectiveHealth, getCard, royalBaseHealth } from "./cards";
+import type { CardId, GameState, PlayerState, Rank, Result } from "./types";
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
 import { canPlayCard } from "./validation";
@@ -19,6 +19,56 @@ function destroyRoyalToAbyss(
     },
     abyss: [...abyss, ...destroyed],
   };
+}
+
+function applyDebuffToRoyal(
+  state: GameState,
+  attackerPlayerId: string,
+  clubCardId: CardId,
+  targetPlayerId: string,
+  targetRoyalId: CardId,
+): Result<GameState> {
+  const card = getCard(clubCardId);
+  const targetPlayer = state.players[targetPlayerId];
+  if (!targetPlayer) return err(`Player ${targetPlayerId} not found`);
+
+  const royalIdx = targetPlayer.court.findIndex((r) => r.cardId === targetRoyalId);
+  if (royalIdx === -1) {
+    return err(`Royal ${targetRoyalId} is not in ${targetPlayerId}'s Court`);
+  }
+
+  const royal = targetPlayer.court[royalIdx]!;
+  const debuffedRoyal = {
+    ...royal,
+    buffAttack: royal.buffAttack - card.pipValue,
+    buffHealth: royal.buffHealth - card.pipValue,
+  };
+
+  let updatedTargetPlayer: PlayerState;
+  let currentAbyss = [...state.abyss, clubCardId];
+
+  const hp = effectiveHealth(debuffedRoyal);
+
+  if (hp <= 0) {
+    const result = destroyRoyalToAbyss(targetPlayer, targetRoyalId, currentAbyss);
+    updatedTargetPlayer = result.player;
+    currentAbyss = result.abyss;
+  } else {
+    const updatedCourt = [...targetPlayer.court];
+    updatedCourt[royalIdx] = debuffedRoyal;
+    updatedTargetPlayer = { ...targetPlayer, court: updatedCourt };
+  }
+
+  return ok({
+    ...state,
+    abyss: currentAbyss,
+    pendingClubDebuff: undefined,
+    players: {
+      ...state.players,
+      [attackerPlayerId]: state.players[attackerPlayerId]!,
+      [targetPlayerId]: updatedTargetPlayer,
+    },
+  });
 }
 
 export function applyClub(
@@ -45,7 +95,6 @@ export function applyClub(
   const player = state.players[playerId]!;
   const withoutCard = { ...player, hand: player.hand.filter((c) => c !== cardId) };
   const afterSpend = spendVault(withoutCard, card.vaultCost);
-  const updatedAbyss = [...state.abyss, cardId];
 
   if (!targetCardId) {
     const damagedTarget: PlayerState = {
@@ -54,7 +103,7 @@ export function applyClub(
     };
     return ok({
       ...state,
-      abyss: updatedAbyss,
+      abyss: [...state.abyss, cardId],
       players: {
         ...state.players,
         [playerId]: afterSpend,
@@ -68,37 +117,73 @@ export function applyClub(
     return err(`Royal ${targetCardId} is not in ${targetPlayerId}'s Court`);
   }
 
-  const royal = targetPlayer.court[royalIdx]!;
-  const debuffedRoyal = {
-    ...royal,
-    buffAttack: royal.buffAttack - card.pipValue,
-    buffHealth: royal.buffHealth - card.pipValue,
-  };
-
-  let updatedTargetPlayer: PlayerState;
-  let currentAbyss = updatedAbyss;
-
-  const hp = effectiveHealth(debuffedRoyal);
-
-  if (hp <= 0) {
-    const result = destroyRoyalToAbyss(targetPlayer, targetCardId, currentAbyss);
-    updatedTargetPlayer = result.player;
-    currentAbyss = result.abyss;
-  } else {
-    const updatedCourt = [...targetPlayer.court];
-    updatedCourt[royalIdx] = debuffedRoyal;
-    updatedTargetPlayer = { ...targetPlayer, court: updatedCourt };
+  // If we're already in respond_to_club, resolve immediately without nesting.
+  // Preserve the original pendingClubDebuff so it can still be confirmed after this resolves.
+  if (state.phase === "respond_to_club") {
+    const result = applyDebuffToRoyal(
+      { ...state, players: { ...state.players, [playerId]: afterSpend } },
+      playerId,
+      cardId,
+      targetPlayerId,
+      targetCardId,
+    );
+    if (!result.ok) return result;
+    return ok({ ...result.value, pendingClubDebuff: state.pendingClubDebuff });
   }
 
+  // During declare_blocks the combat phase must not be interrupted by a response window —
+  // resolve immediately so combat can proceed normally.
+  if (state.phase === "declare_blocks") {
+    return applyDebuffToRoyal(
+      { ...state, players: { ...state.players, [playerId]: afterSpend } },
+      playerId,
+      cardId,
+      targetPlayerId,
+      targetCardId,
+    );
+  }
+
+  // Stage the debuff and enter respond_to_club phase (main phase only)
   return ok({
     ...state,
-    abyss: currentAbyss,
+    phase: "respond_to_club",
+    pendingClubDebuff: {
+      attackerPlayerId: playerId,
+      clubCardId: cardId,
+      targetPlayerId,
+      targetRoyalId: targetCardId,
+    },
     players: {
       ...state.players,
       [playerId]: afterSpend,
-      [targetPlayerId]: updatedTargetPlayer,
     },
   });
+}
+
+export function confirmClubResponse(
+  state: GameState,
+  playerId: string,
+): Result<GameState> {
+  if (state.phase !== "respond_to_club") {
+    return err(`Cannot confirm club response outside of respond_to_club phase`);
+  }
+
+  const pending = state.pendingClubDebuff;
+  if (!pending) {
+    return err("No pending club debuff to confirm");
+  }
+
+  if (playerId !== pending.targetPlayerId) {
+    return err("Only the defending player can confirm the club response");
+  }
+
+  return applyDebuffToRoyal(
+    { ...state, phase: "main" },
+    pending.attackerPlayerId,
+    pending.clubCardId,
+    pending.targetPlayerId,
+    pending.targetRoyalId,
+  );
 }
 
 export const applyClubToRoyal = applyClub;

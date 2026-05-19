@@ -44,6 +44,7 @@ import MineAbyssRow from "@/components/game/MineAbyssRow";
 import CardActionSheet from "@/components/game/CardActionSheet";
 import type { ActionParams } from "@/components/game/CardActionSheet";
 import BlockingModal from "@/components/game/BlockingModal";
+import CardView from "@/components/game/CardView";
 import { parseCardId } from "@/lib/gameUtils";
 import type { CardAction } from "@/lib/gameUtils";
 
@@ -170,6 +171,14 @@ export default function MatchScreen() {
     }
   }, [gameState?.phase]);
 
+  // Clear selected card when entering respond_to_club (avoid stale selection)
+  useEffect(() => {
+    if (!gameState) return;
+    if (gameState.phase === "respond_to_club") {
+      setSelectedCardId(null);
+    }
+  }, [gameState?.phase]);
+
   const { mutate: abandonMatchMutate } = useAbandonMatch({
     mutation: {
       onSuccess: () => {
@@ -248,19 +257,21 @@ export default function MatchScreen() {
 
       // Guard: abort if the local state says it's no longer our turn,
       // UNLESS we are the defending player during declare_blocks (defenders
-      // are never the active player but are still allowed to play cards).
+      // are never the active player but are still allowed to play cards),
+      // OR we are the club responder during respond_to_club.
       const actingAsDefender =
         gameState?.phase === "declare_blocks" &&
         gameState.attacks.some((a) => a.targetPlayerId === user?.id);
-      if (gameState?.activePlayerId !== user?.id && !actingAsDefender) {
+      const actingAsClubResponder =
+        gameState?.phase === "respond_to_club" &&
+        gameState.pendingClubDebuff?.targetPlayerId === user?.id;
+      if (gameState?.activePlayerId !== user?.id && !actingAsDefender && !actingAsClubResponder) {
         Alert.alert("Not your turn", "The turn has moved on. Please wait.");
         setSelectedCardId(null);
         return;
       }
 
       // Guard: abort if the card is no longer in our hand.
-      // Prevents submitting an action for a card already played/discarded
-      // (e.g. state refreshed via WebSocket between sheet-open and confirm).
       const handOnlyActions: CardAction[] = [
         "attach_royal_support", "attach_heart", "attach_spade",
         "discard_heart_to_heal", "discard_spade_to_return",
@@ -371,6 +382,11 @@ export default function MatchScreen() {
     submitAction({ matchId, data: { type: "resolve_combat" } });
   }, [matchId, submitAction]);
 
+  const handleConfirmClubResponse = useCallback(() => {
+    if (!matchId) return;
+    submitAction({ matchId, data: { type: "confirm_club_response" } });
+  }, [matchId, submitAction]);
+
   if (isLoading && !gameState) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -405,8 +421,15 @@ export default function MatchScreen() {
   const inMainPhase = phase === "main";
   const inDeclareAttacks = phase === "declare_attacks";
   const inDeclareBlocks = phase === "declare_blocks";
+  const inRespondToClub = phase === "respond_to_club";
   const attacksTargetingMe = gameState.attacks.filter((a) => a.targetPlayerId === myId);
   const isDefender = inDeclareBlocks && attacksTargetingMe.length > 0;
+
+  // Club response window: defender is the targetPlayerId in pendingClubDebuff
+  const pendingClub = gameState.pendingClubDebuff;
+  const isClubResponder = inRespondToClub && pendingClub?.targetPlayerId === myId;
+  const isClubAttacker = inRespondToClub && pendingClub?.attackerPlayerId === myId;
+
   const vault = myState?.vault.available ?? 0;
 
   const inDiscardPhase = isMyTurn && phase === "discard";
@@ -445,7 +468,7 @@ export default function MatchScreen() {
   };
 
   const handleOwnRoyalPress = (royalId: string) => {
-    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks);
+    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks) || isClubResponder;
     if (!canPlay) return;
 
     if (selectedCardId) {
@@ -467,7 +490,7 @@ export default function MatchScreen() {
 
   // When user taps an opponent royal — could be: Club targeting, Joker targeting, or attack target
   const handleOpponentRoyalPress = (royalId: string, targetPlayerId: string) => {
-    if (!isMyTurn && !isDefender) return;
+    if (!isMyTurn && !isDefender && !isClubResponder) return;
 
     // Attack mode: only for the active player (attacker), not the defender
     if (isMyTurn && pendingAttackerRoyalId && inAttackPhase) {
@@ -484,7 +507,7 @@ export default function MatchScreen() {
     const card = parseCardId(selectedCardId);
 
     if (card.suit === "C") {
-      // Club directly targets the royal — dispatch immediately (allowed for defender too)
+      // Club directly targets the royal — dispatch immediately (allowed for defender and club responder too)
       handleAction({ cardId: selectedCardId, action: "apply_club", targetPlayerId, targetRoyalId: royalId });
       setSelectedCardId(null);
     } else if (card.isJoker && isMyTurn) {
@@ -531,14 +554,24 @@ export default function MatchScreen() {
   const activePlayerName = displayNames[gameState.activePlayerId]
     ?? (gameState.activePlayerId === myId ? (user?.displayName ?? "You") : gameState.activePlayerId.slice(0, 8));
 
+  // Derive names for club response window
+  const clubAttackerName = pendingClub
+    ? (displayNames[pendingClub.attackerPlayerId] ?? pendingClub.attackerPlayerId.slice(0, 8))
+    : "";
+  const clubDefenderName = pendingClub
+    ? (displayNames[pendingClub.targetPlayerId] ?? pendingClub.targetPlayerId.slice(0, 8))
+    : "";
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={["#0D2B1A", "#0A1F13", "#0D2B1A"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
 
       <View style={[styles.header, { paddingTop: topInset + 8 }]}>
         <View style={styles.headerLeft}>
-          <View style={styles.phaseTag}>
-            <Text style={styles.phaseText}>{phase.replace("_", " ").toUpperCase()}</Text>
+          <View style={[styles.phaseTag, inRespondToClub && styles.phaseTagClub]}>
+            <Text style={[styles.phaseText, inRespondToClub && styles.phaseTextClub]}>
+              {phase.replace(/_/g, " ").toUpperCase()}
+            </Text>
           </View>
           <Pressable
             onPress={handleAbandon}
@@ -552,6 +585,10 @@ export default function MatchScreen() {
           {isMyTurn ? (
             <View style={styles.myTurnBadge}>
               <Text style={styles.myTurnText}>YOUR TURN</Text>
+            </View>
+          ) : isClubResponder ? (
+            <View style={styles.clubResponderBadge}>
+              <Text style={styles.clubResponderBadgeText}>RESPOND TO CLUB</Text>
             </View>
           ) : (
             <Text style={styles.turnText}>
@@ -607,7 +644,9 @@ export default function MatchScreen() {
                   isActive={gameState.activePlayerId === opp.id}
                   isEliminated={opp.isEliminated}
                   onRoyalPress={
-                    isMyTurn && inMainPhase && !opp.isEliminated && (selectedCardId || pendingAttackerRoyalId)
+                    ((isMyTurn && inMainPhase) || isClubResponder) && !opp.isEliminated && selectedCardId
+                      ? (royalId) => handleOpponentRoyalPress(royalId, opp.id)
+                      : isMyTurn && inMainPhase && !opp.isEliminated && pendingAttackerRoyalId
                       ? (royalId) => handleOpponentRoyalPress(royalId, opp.id)
                       : undefined
                   }
@@ -622,6 +661,37 @@ export default function MatchScreen() {
           abyss={gameState.abyss}
           deckCount={gameState.deck}
         />
+
+        {/* Club Response Window Banner */}
+        {inRespondToClub && pendingClub && (
+          <Animated.View entering={FadeIn.duration(300)} style={styles.clubResponseBanner}>
+            <View style={styles.clubResponseHeader}>
+              <Ionicons name="warning" size={18} color="#C89B3C" />
+              <Text style={styles.clubResponseTitle}>
+                {isClubResponder
+                  ? `${clubAttackerName} is playing a Club against your Royal!`
+                  : `Waiting for ${clubDefenderName} to respond to Club…`}
+              </Text>
+            </View>
+            {pendingClub && (
+              <View style={styles.clubResponseDetails}>
+                <View style={styles.clubCardPreview}>
+                  <Text style={styles.clubResponseLabel}>Club played:</Text>
+                  <CardView cardId={pendingClub.clubCardId} size="sm" />
+                </View>
+                <View style={styles.clubCardPreview}>
+                  <Text style={styles.clubResponseLabel}>Targeting:</Text>
+                  <CardView cardId={pendingClub.targetRoyalId} size="sm" />
+                </View>
+              </View>
+            )}
+            {isClubResponder && (
+              <Text style={styles.clubResponseHint}>
+                Play Hearts, Spades, or non-Royal Clubs to strengthen your Royal before the debuff lands. Diamonds may be discarded but not sent to the Mine.
+              </Text>
+            )}
+          </Animated.View>
+        )}
 
         <Animated.View entering={FadeIn.delay(100).duration(400)} style={styles.myCourtSection}>
           <Text style={styles.sectionLabel}>YOUR COURT</Text>
@@ -653,6 +723,8 @@ export default function MatchScreen() {
                   }
                 : isDefender && selectedCardId
                 ? (royalId) => handleOwnRoyalPress(royalId)
+                : isClubResponder && selectedCardId
+                ? (royalId) => handleOwnRoyalPress(royalId)
                 : undefined
             }
             selectedTargetId={selectedTargetRoyalId}
@@ -665,6 +737,33 @@ export default function MatchScreen() {
             <Text style={styles.discardBannerText}>
               Discard {discardCount} card{discardCount !== 1 ? "s" : ""} to end your turn
             </Text>
+          </Animated.View>
+        )}
+
+        {/* Club response: Confirm button for the defender */}
+        {isClubResponder && (
+          <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.actionRow}>
+            <Pressable
+              onPress={handleConfirmClubResponse}
+              disabled={isSubmitting}
+              style={({ pressed }) => [styles.endTurnBtn, pressed && { opacity: 0.8 }]}
+            >
+              <LinearGradient
+                colors={["#8B6A00", "#C89B3C"]}
+                style={styles.endTurnBtnGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color={Colors.bgDeep} />
+                ) : (
+                  <>
+                    <Text style={[styles.endTurnText, { color: Colors.bgDeep }]}>Confirm — Apply Club</Text>
+                    <Ionicons name="checkmark" size={18} color={Colors.bgDeep} />
+                  </>
+                )}
+              </LinearGradient>
+            </Pressable>
           </Animated.View>
         )}
 
@@ -747,7 +846,7 @@ export default function MatchScreen() {
           </Animated.View>
         )}
 
-        {!isMyTurn && !inDeclareBlocks && (
+        {!isMyTurn && !inDeclareBlocks && !inRespondToClub && (
           <View style={styles.waitingBanner}>
             <ActivityIndicator size="small" color={Colors.textMuted} />
             <Text style={styles.waitingText}>
@@ -759,6 +858,14 @@ export default function MatchScreen() {
           <View style={styles.waitingBanner}>
             <ActivityIndicator size="small" color={Colors.textMuted} />
             <Text style={styles.waitingText}>Others declaring blocks...</Text>
+          </View>
+        )}
+        {inRespondToClub && !isClubResponder && (
+          <View style={styles.waitingBanner}>
+            <ActivityIndicator size="small" color={Colors.textMuted} />
+            <Text style={styles.waitingText}>
+              Waiting for {clubDefenderName} to respond…
+            </Text>
           </View>
         )}
       </ScrollView>
@@ -800,18 +907,20 @@ export default function MatchScreen() {
         selectedCardId={selectedCardId}
         isMyTurn={isMyTurn}
         isDefender={isDefender}
+        isClubResponder={isClubResponder}
         phase={phase}
         onCardPress={handleCardPress}
       />
 
       <View style={{ height: bottomInset }} />
 
-      {(selectedCardId && (isMyTurn || isDefender)) && (
+      {(selectedCardId && (isMyTurn || isDefender || isClubResponder)) && (
         <CardActionSheet
           cardId={selectedCardId}
           phase={phase}
           isMyTurn={isMyTurn}
           isDefender={isDefender}
+          isClubResponder={isClubResponder}
           myCourt={myState?.court ?? []}
           allPlayers={gameState.players}
           myPlayerId={myId}
@@ -896,11 +1005,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
+  phaseTagClub: {
+    backgroundColor: "rgba(200,155,60,0.15)",
+    borderColor: "#C89B3C",
+  },
   phaseText: {
     fontSize: 10,
     fontFamily: "Inter_700Bold",
     color: Colors.textSecondary,
     letterSpacing: 1.2,
+  },
+  phaseTextClub: {
+    color: "#C89B3C",
   },
   endGameBtn: {
     paddingHorizontal: 8,
@@ -945,6 +1061,20 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.bgDeep,
     letterSpacing: 1.5,
+  },
+  clubResponderBadge: {
+    backgroundColor: "rgba(200,155,60,0.25)",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "#C89B3C",
+  },
+  clubResponderBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: "#C89B3C",
+    letterSpacing: 1.2,
   },
   turnSub: {
     fontSize: 11,
@@ -1142,5 +1272,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
     color: Colors.textPrimary,
+  },
+  clubResponseBanner: {
+    marginHorizontal: 12,
+    backgroundColor: "rgba(200,155,60,0.12)",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#C89B3C",
+    padding: 14,
+    gap: 10,
+  },
+  clubResponseHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  clubResponseTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "#C89B3C",
+    flex: 1,
+  },
+  clubResponseDetails: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  clubCardPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  clubResponseLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  clubResponseHint: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    fontStyle: "italic",
   },
 });

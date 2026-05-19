@@ -10,6 +10,38 @@ export function canPlayCard(
   playerId: string,
   cardId: CardId,
 ): Result<true> {
+  if (state.phase === "respond_to_club") {
+    const pending = state.pendingClubDebuff;
+    if (!pending) {
+      return err(`No pending club debuff in respond_to_club phase`);
+    }
+    if (playerId !== pending.targetPlayerId) {
+      return err(`Only the defending player can act during respond_to_club`);
+    }
+
+    const player = state.players[playerId];
+    if (!player) return err(`Player ${playerId} not found`);
+
+    if (!player.hand.includes(cardId)) {
+      return err(`Card ${cardId} is not in your hand`);
+    }
+
+    const card = getCard(cardId);
+    if (card.isRoyal) {
+      return err(`Cannot play Royals during a Club response window`);
+    }
+    if (card.isJoker) {
+      return err(`Cannot play Jokers during a Club response window`);
+    }
+
+    const vault = availableVault(state.mine, player);
+    if (vault < card.vaultCost) {
+      return err(`Not enough vault: need ${card.vaultCost}, have ${vault}`);
+    }
+
+    return ok(true);
+  }
+
   if (state.phase === "declare_blocks") {
     const defenderPlayerId = state.attacks[0]?.targetPlayerId;
     if (!defenderPlayerId) {

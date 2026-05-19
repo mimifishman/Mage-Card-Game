@@ -135,4 +135,77 @@ describe("canPlayCard", () => {
     const result = canPlayCard(state, P1, "QD");
     expect(result.ok).toBe(true);
   });
+
+  describe("respond_to_club phase — card allowlist", () => {
+    function makeClubResponseState(hand: string[]) {
+      return makeState({
+        phase: "respond_to_club",
+        mine: ["10D"],
+        pendingClubDebuff: {
+          attackerPlayerId: P1,
+          clubCardId: "3C",
+          targetPlayerId: P2,
+          targetRoyalId: "KH",
+        },
+        players: {
+          [P1]: makePlayer(P1, { hand: [], vault: { tempBoost: 0, spent: 3 } }),
+          [P2]: makePlayer(P2, {
+            hand,
+            vault: { tempBoost: 0, spent: 0 },
+          }),
+        },
+      });
+    }
+
+    it("allows Hearts during respond_to_club", () => {
+      const state = makeClubResponseState(["5H"]);
+      expect(canPlayCard(state, P2, "5H").ok).toBe(true);
+    });
+
+    it("allows Spades during respond_to_club", () => {
+      const state = makeClubResponseState(["5S"]);
+      expect(canPlayCard(state, P2, "5S").ok).toBe(true);
+    });
+
+    it("allows non-Royal Clubs during respond_to_club", () => {
+      const state = makeClubResponseState(["5C"]);
+      expect(canPlayCard(state, P2, "5C").ok).toBe(true);
+    });
+
+    it("allows Diamonds during respond_to_club", () => {
+      const state = makeClubResponseState(["5D"]);
+      expect(canPlayCard(state, P2, "5D").ok).toBe(true);
+    });
+
+    it("rejects Royals during respond_to_club", () => {
+      const state = makeClubResponseState(["KH"]);
+      const result = canPlayCard(state, P2, "KH");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toMatch(/royal/i);
+    });
+
+    it("rejects Jokers during respond_to_club", () => {
+      const state = makeClubResponseState(["JOKER1"]);
+      const result = canPlayCard(state, P2, "JOKER1");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toMatch(/joker/i);
+    });
+
+    it("rejects the attacker from playing during respond_to_club", () => {
+      const state = makeClubResponseState([]);
+      const stateWithAttackerCard = {
+        ...state,
+        players: {
+          ...state.players,
+          [P1]: makePlayer(P1, { hand: ["5H"], vault: { tempBoost: 0, spent: 0 } }),
+        },
+      };
+      const result = canPlayCard(stateWithAttackerCard, P1, "5H");
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error).toMatch(/defending player/i);
+    });
+  });
 });

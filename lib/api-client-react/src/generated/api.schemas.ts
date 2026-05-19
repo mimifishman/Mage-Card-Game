@@ -144,6 +144,13 @@ export interface AttackDeclaration {
   passed?: boolean;
 }
 
+export interface PendingClubDebuff {
+  attackerPlayerId: string;
+  clubCardId: string;
+  targetPlayerId: string;
+  targetRoyalId: string;
+}
+
 export type PlayerGameViewPhase =
   (typeof PlayerGameViewPhase)[keyof typeof PlayerGameViewPhase];
 
@@ -155,6 +162,7 @@ export const PlayerGameViewPhase = {
   resolve_combat: "resolve_combat",
   end_turn: "end_turn",
   discard: "discard",
+  respond_to_club: "respond_to_club",
 } as const;
 
 export type PlayerGameViewPlayers = { [key: string]: PublicPlayerState };
@@ -174,6 +182,7 @@ export interface PlayerGameView {
   mine: string[];
   abyss: string[];
   attacks: AttackDeclaration[];
+  pendingClubDebuff?: PendingClubDebuff;
 }
 
 export interface MatchStateResponse {
@@ -203,6 +212,7 @@ export const GameActionRequestType = {
   resolve_combat: "resolve_combat",
   end_turn: "end_turn",
   discard_to_end_turn: "discard_to_end_turn",
+  confirm_club_response: "confirm_club_response",
 } as const;
 
 export type GameActionRequestMode =

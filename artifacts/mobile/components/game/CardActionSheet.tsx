@@ -21,6 +21,7 @@ interface CardActionSheetProps {
   phase: string;
   isMyTurn: boolean;
   isDefender?: boolean;
+  isClubResponder?: boolean;
   myCourt: RoyalInCourt[];
   allPlayers: Record<string, PublicPlayerState>;
   myPlayerId: string;
@@ -48,6 +49,7 @@ export default function CardActionSheet({
   phase,
   isMyTurn,
   isDefender = false,
+  isClubResponder = false,
   myCourt,
   allPlayers,
   myPlayerId,
@@ -73,6 +75,7 @@ export default function CardActionSheet({
     myVault,
     hasTakenDiamondAction,
     isDefender,
+    isClubResponder,
   );
 
   const handleActionPick = (action: ValidAction) => {
@@ -185,10 +188,12 @@ export default function CardActionSheet({
             <ScrollView contentContainerStyle={styles.actionList}>
               {validActions.length === 0 ? (
                 <Text style={styles.noActions}>
-                  {!isMyTurn && !isDefender
+                  {!isMyTurn && !isDefender && !isClubResponder
                     ? "Wait for your turn to play cards."
                     : phase === "declare_blocks" && isDefender
                     ? "This card cannot be played while blocking (Diamonds and Royals are not allowed)."
+                    : phase === "respond_to_club" && isClubResponder
+                    ? "This card cannot be played during the Club response window (Royals are not allowed)."
                     : phase !== "main"
                     ? `Cannot play cards during ${phase} phase.`
                     : "No valid actions for this card."}

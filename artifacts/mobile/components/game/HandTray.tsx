@@ -8,14 +8,25 @@ import {
 } from "react-native";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
+import { parseCardId } from "@/lib/gameUtils";
 
 interface HandTrayProps {
   cards: string[];
   selectedCardId: string | null;
   isMyTurn: boolean;
   isDefender?: boolean;
+  isClubResponder?: boolean;
   phase: string;
   onCardPress: (cardId: string) => void;
+}
+
+function isCardPlayableDuringClubResponse(cardId: string): boolean {
+  try {
+    const card = parseCardId(cardId);
+    return !card.isRoyal && !card.isJoker;
+  } catch {
+    return false;
+  }
 }
 
 export default function HandTray({
@@ -23,12 +34,21 @@ export default function HandTray({
   selectedCardId,
   isMyTurn,
   isDefender = false,
+  isClubResponder = false,
   phase,
   onCardPress,
 }: HandTrayProps) {
-  const canPlay =
+  const globalCanPlay =
     (isMyTurn && (phase === "main" || phase === "discard")) ||
-    (isDefender && phase === "declare_blocks");
+    (isDefender && phase === "declare_blocks") ||
+    (isClubResponder && phase === "respond_to_club");
+
+  const hintText = () => {
+    if (phase === "discard") return "Tap a card to discard";
+    if (phase === "declare_blocks") return "Tap a card to play while blocking";
+    if (phase === "respond_to_club") return "Hearts, Spades, Clubs, Diamonds only";
+    return "Tap a card to play";
+  };
 
   return (
     <View style={styles.container}>
@@ -37,14 +57,8 @@ export default function HandTray({
         <View style={styles.countBadge}>
           <Text style={styles.count}>{cards.length}</Text>
         </View>
-        {canPlay && (
-          <Text style={styles.hint}>
-            {phase === "discard"
-              ? "Tap a card to discard"
-              : phase === "declare_blocks"
-              ? "Tap a card to play while blocking"
-              : "Tap a card to play"}
-          </Text>
+        {globalCanPlay && (
+          <Text style={styles.hint}>{hintText()}</Text>
         )}
       </View>
       {cards.length === 0 ? (
@@ -57,24 +71,33 @@ export default function HandTray({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {cards.map((cardId) => (
-            <Pressable
-              key={cardId}
-              onPress={() => canPlay && onCardPress(cardId)}
-              style={({ pressed }) => [
-                styles.cardWrapper,
-                pressed && canPlay && { opacity: 0.75 },
-                selectedCardId === cardId && styles.cardWrapperSelected,
-              ]}
-            >
-              <CardView
-                cardId={cardId}
-                size="lg"
-                selected={selectedCardId === cardId}
-                dimmed={!canPlay}
-              />
-            </Pressable>
-          ))}
+          {cards.map((cardId) => {
+            const cardPlayable =
+              globalCanPlay &&
+              (isClubResponder
+                ? isCardPlayableDuringClubResponse(cardId)
+                : true);
+            const isSelected = selectedCardId === cardId;
+
+            return (
+              <Pressable
+                key={cardId}
+                onPress={() => cardPlayable && onCardPress(cardId)}
+                style={({ pressed }) => [
+                  styles.cardWrapper,
+                  pressed && cardPlayable && { opacity: 0.75 },
+                  isSelected && styles.cardWrapperSelected,
+                ]}
+              >
+                <CardView
+                  cardId={cardId}
+                  size="lg"
+                  selected={isSelected}
+                  dimmed={!cardPlayable}
+                />
+              </Pressable>
+            );
+          })}
         </ScrollView>
       )}
     </View>

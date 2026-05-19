@@ -59,6 +59,13 @@ export interface AttackDeclaration {
   passed?: boolean;
 }
 
+export interface PendingClubDebuff {
+  attackerPlayerId: string;
+  clubCardId: CardId;
+  targetPlayerId: string;
+  targetRoyalId: CardId;
+}
+
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";
 
 export type TurnPhase =
@@ -68,7 +75,8 @@ export type TurnPhase =
   | "declare_blocks"
   | "resolve_combat"
   | "end_turn"
-  | "discard";
+  | "discard"
+  | "respond_to_club";
 
 export interface GameState {
   matchId: string;
@@ -81,6 +89,7 @@ export interface GameState {
   mine: CardId[];
   abyss: CardId[];
   attacks: AttackDeclaration[];
+  pendingClubDebuff?: PendingClubDebuff;
 }
 
 export type Result<T, E extends string = string> =

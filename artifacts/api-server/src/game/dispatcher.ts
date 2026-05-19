@@ -13,6 +13,7 @@ import {
   discardHeartToHeal,
   discardSpadeToReturn,
   applyClub,
+  confirmClubResponse,
   playJokerDestroyRoyal,
   playJokerDamagePlayer,
   declareAttack,
@@ -68,6 +69,9 @@ export function dispatchAction(
         action.targetPlayerId,
         action.targetRoyalId,
       );
+
+    case "confirm_club_response":
+      return confirmClubResponse(state, playerId);
 
     case "play_joker": {
       if (action.mode === "destroy_royal") {

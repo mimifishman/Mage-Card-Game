@@ -1,4 +1,4 @@
-import type { AttackDeclaration, CardId, GameState, PlayerState, RoyalInCourt } from "./types";
+import type { AttackDeclaration, CardId, GameState, PendingClubDebuff, PlayerState, RoyalInCourt } from "./types";
 import { availableVault } from "./vault";
 
 export interface PublicPlayerState {
@@ -27,6 +27,7 @@ export interface PlayerGameView {
   mine: string[];
   abyss: string[];
   attacks: AttackDeclaration[];
+  pendingClubDebuff?: PendingClubDebuff;
 }
 
 function serializePlayer(player: PlayerState, mine: CardId[]): PublicPlayerState {
@@ -66,6 +67,7 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
     mine: state.mine,
     abyss: state.abyss,
     attacks: state.attacks,
+    pendingClubDebuff: state.pendingClubDebuff,
   };
 }
 

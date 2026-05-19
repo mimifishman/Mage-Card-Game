@@ -103,6 +103,10 @@ export const DiscardToEndTurnActionSchema = z.object({
   cardId: z.string(),
 });
 
+export const ConfirmClubResponseActionSchema = z.object({
+  type: z.literal("confirm_club_response"),
+});
+
 export const GameActionSchema = z.discriminatedUnion("type", [
   PlayDiamondToMineActionSchema,
   DiscardDiamondToDrawActionSchema,
@@ -123,6 +127,7 @@ export const GameActionSchema = z.discriminatedUnion("type", [
   ResolveCombatActionSchema,
   EndTurnActionSchema,
   DiscardToEndTurnActionSchema,
+  ConfirmClubResponseActionSchema,
 ]);
 
 export type GameAction = z.infer<typeof GameActionSchema>;

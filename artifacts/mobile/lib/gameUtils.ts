@@ -150,8 +150,9 @@ export function getValidActionsForCard(
   vault: number,
   hasTakenDiamondAction = false,
   isDefender = false,
+  isClubResponder = false,
 ): ValidAction[] {
-  if (!isMyTurn && !isDefender) return [];
+  if (!isMyTurn && !isDefender && !isClubResponder) return [];
 
   if (phase === "discard") {
     return [
@@ -164,11 +165,17 @@ export function getValidActionsForCard(
   }
 
   const inDeclareBlocks = phase === "declare_blocks" && isDefender;
+  const inClubResponse = phase === "respond_to_club" && isClubResponder;
 
-  if (phase !== "main" && !inDeclareBlocks) return [];
+  if (phase !== "main" && !inDeclareBlocks && !inClubResponse) return [];
 
-  // During declare_blocks the defender cannot play Royals, Jokers, or Diamonds
+  // During declare_blocks, the defender cannot play Royals, Jokers, or Diamonds
   if (inDeclareBlocks && (card.isRoyal || card.isJoker || card.suit === "D")) {
+    return [];
+  }
+
+  // During respond_to_club, Royals and Jokers are forbidden; Diamonds to Mine forbidden (handled server-side)
+  if (inClubResponse && (card.isRoyal || card.isJoker)) {
     return [];
   }
 
@@ -215,7 +222,10 @@ export function getValidActionsForCard(
         disabled: true,
       });
     } else {
-      actions.push({ action: "play_diamond_to_mine", label: "Play to Mine", requiresTarget: false });
+      // During respond_to_club, playing to Mine is forbidden
+      if (!inClubResponse) {
+        actions.push({ action: "play_diamond_to_mine", label: "Play to Mine", requiresTarget: false });
+      }
       actions.push({ action: "discard_diamond_to_draw", label: "Discard to Draw a Card", requiresTarget: false });
       actions.push({ action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false });
     }

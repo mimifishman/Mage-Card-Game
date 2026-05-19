@@ -54,6 +54,9 @@ export function playDiamondToMine(
   if (state.phase === "declare_blocks") {
     return err(`Cannot play a Diamond to the Mine during phase "declare_blocks"`);
   }
+  if (state.phase === "respond_to_club") {
+    return err(`Cannot send Diamonds to the Mine during a Club response window`);
+  }
 
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
