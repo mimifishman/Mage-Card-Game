@@ -13,6 +13,10 @@ export function playRoyalToCourt(
   playerId: string,
   cardId: CardId,
 ): Result<GameState> {
+  if (state.phase === "declare_blocks") {
+    return err(`Cannot play a Royal to Court during phase "declare_blocks"`);
+  }
+
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
 
@@ -46,23 +50,27 @@ export function playRoyalToCourt(
 }
 
 export function attachRoyalSupport(
-  state: GameState,
-  playerId: string,
-  supportCardId: CardId,
-  targetCardId: CardId,
+  _state: GameState,
+  _playerId: string,
+  _supportCardId: CardId,
+  _targetCardId: CardId,
 ): Result<GameState> {
-  const canPlay = canPlayCard(state, playerId, supportCardId);
+  return err("Royals cannot be attached to other Royals.");
+
+  // The code below is preserved for potential future reversal.
+  /* eslint-disable no-unreachable */
+  const canPlay = canPlayCard(_state, _playerId, _supportCardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
 
-  const supportCard = getCard(supportCardId);
+  const supportCard = getCard(_supportCardId);
   if (!supportCard.isRoyal) {
-    return err(`Card ${supportCardId} is not a Royal — cannot be played as support`);
+    return err(`Card ${_supportCardId} is not a Royal — cannot be played as support`);
   }
 
-  const player = state.players[playerId]!;
-  const targetIdx = player.court.findIndex((r) => r.cardId === targetCardId);
+  const player = _state.players[_playerId]!;
+  const targetIdx = player.court.findIndex((r) => r.cardId === _targetCardId);
   if (targetIdx === -1) {
-    return err(`Target Royal ${targetCardId} is not in your Court`);
+    return err(`Target Royal ${_targetCardId} is not in your Court`);
   }
 
   const target = player.court[targetIdx]!;
@@ -72,25 +80,26 @@ export function attachRoyalSupport(
     ...target,
     buffAttack: target.buffAttack + buff.attack,
     buffHealth: target.buffHealth + buff.health,
-    attachedCards: [...target.attachedCards, supportCardId],
+    attachedCards: [...target.attachedCards, _supportCardId],
   };
 
   const updatedCourt = [...player.court];
   updatedCourt[targetIdx] = updatedTarget;
 
-  const afterSpend = spendVault(removeFromHand(player, supportCardId), supportCard.vaultCost);
+  const afterSpend = spendVault(removeFromHand(player, _supportCardId), supportCard.vaultCost);
   const updated: PlayerState = {
     ...afterSpend,
     court: updatedCourt,
   };
 
-  const updatedAttacks = state.attacks.filter(
-    (a) => a.attackerCardId !== supportCardId,
+  const updatedAttacks = _state.attacks.filter(
+    (a) => a.attackerCardId !== _supportCardId,
   );
 
   return ok({
-    ...state,
+    ..._state,
     attacks: updatedAttacks,
-    players: { ...state.players, [playerId]: updated },
+    players: { ..._state.players, [_playerId]: updated },
   });
+  /* eslint-enable no-unreachable */
 }

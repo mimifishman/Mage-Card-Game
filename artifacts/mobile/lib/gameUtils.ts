@@ -149,8 +149,9 @@ export function getValidActionsForCard(
   myCourtSize: number,
   vault: number,
   hasTakenDiamondAction = false,
+  isDefender = false,
 ): ValidAction[] {
-  if (!isMyTurn) return [];
+  if (!isMyTurn && !isDefender) return [];
 
   if (phase === "discard") {
     return [
@@ -162,7 +163,14 @@ export function getValidActionsForCard(
     ];
   }
 
-  if (phase !== "main") return [];
+  const inDeclareBlocks = phase === "declare_blocks" && isDefender;
+
+  if (phase !== "main" && !inDeclareBlocks) return [];
+
+  // During declare_blocks the defender cannot play Royals, Jokers, or Diamonds
+  if (inDeclareBlocks && (card.isRoyal || card.isJoker || card.suit === "D")) {
+    return [];
+  }
 
   const actions: ValidAction[] = [];
 
@@ -187,14 +195,6 @@ export function getValidActionsForCard(
   if (card.isRoyal) {
     if (vault >= card.vaultCost) {
       actions.push({ action: "play_royal_to_court", label: `Play to Court [−${card.vaultCost} Vault]`, requiresTarget: false });
-      if (myCourtSize > 0) {
-        actions.push({
-          action: "attach_royal_support",
-          label: "Attach as Support to a Royal",
-          requiresTarget: true,
-          targetType: "own_royal",
-        });
-      }
     } else {
       actions.push({
         action: "play_royal_to_court",

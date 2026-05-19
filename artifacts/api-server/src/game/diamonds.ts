@@ -51,6 +51,10 @@ export function playDiamondToMine(
   playerId: string,
   cardId: CardId,
 ): Result<GameState> {
+  if (state.phase === "declare_blocks") {
+    return err(`Cannot play a Diamond to the Mine during phase "declare_blocks"`);
+  }
+
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
 
@@ -84,6 +88,10 @@ export function discardDiamondToDraw(
   playerId: string,
   cardId: CardId,
 ): Result<GameState> {
+  if (state.phase === "declare_blocks") {
+    return err(`Cannot use a Diamond action during phase "declare_blocks"`);
+  }
+
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
 
@@ -119,6 +127,10 @@ export function discardDiamondForBoost(
   playerId: string,
   cardId: CardId,
 ): Result<GameState> {
+  if (state.phase === "declare_blocks") {
+    return err(`Cannot use a Diamond action during phase "declare_blocks"`);
+  }
+
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
 

@@ -13,6 +13,7 @@ interface HandTrayProps {
   cards: string[];
   selectedCardId: string | null;
   isMyTurn: boolean;
+  isDefender?: boolean;
   phase: string;
   onCardPress: (cardId: string) => void;
 }
@@ -21,10 +22,13 @@ export default function HandTray({
   cards,
   selectedCardId,
   isMyTurn,
+  isDefender = false,
   phase,
   onCardPress,
 }: HandTrayProps) {
-  const canPlay = isMyTurn && (phase === "main" || phase === "discard");
+  const canPlay =
+    (isMyTurn && (phase === "main" || phase === "discard")) ||
+    (isDefender && phase === "declare_blocks");
 
   return (
     <View style={styles.container}>
@@ -35,7 +39,11 @@ export default function HandTray({
         </View>
         {canPlay && (
           <Text style={styles.hint}>
-            {phase === "discard" ? "Tap a card to discard" : "Tap a card to play"}
+            {phase === "discard"
+              ? "Tap a card to discard"
+              : phase === "declare_blocks"
+              ? "Tap a card to play while blocking"
+              : "Tap a card to play"}
           </Text>
         )}
       </View>

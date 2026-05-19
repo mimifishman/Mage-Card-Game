@@ -10,12 +10,22 @@ export function canPlayCard(
   playerId: string,
   cardId: CardId,
 ): Result<true> {
-  if (state.activePlayerId !== playerId) {
-    return err("It is not your turn");
-  }
+  if (state.phase === "declare_blocks") {
+    const defenderPlayerId = state.attacks[0]?.targetPlayerId;
+    if (!defenderPlayerId) {
+      return err(`Cannot play cards during phase "declare_blocks": no active attack`);
+    }
+    if (playerId !== defenderPlayerId) {
+      return err(`Cannot play cards during phase "declare_blocks"`);
+    }
+  } else {
+    if (state.activePlayerId !== playerId) {
+      return err("It is not your turn");
+    }
 
-  if (!PLAY_PHASES.includes(state.phase)) {
-    return err(`Cannot play cards during phase "${state.phase}"`);
+    if (!PLAY_PHASES.includes(state.phase)) {
+      return err(`Cannot play cards during phase "${state.phase}"`);
+    }
   }
 
   const player = state.players[playerId];

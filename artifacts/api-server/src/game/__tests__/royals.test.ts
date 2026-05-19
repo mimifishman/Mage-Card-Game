@@ -45,10 +45,26 @@ describe("playRoyalToCourt", () => {
     const result = playRoyalToCourt(state, P1, "5H");
     expect(result.ok).toBe(false);
   });
+
+  it("rejects playing a Royal to Court during declare_blocks", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      mine: ["3D"],
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "QS", targetPlayerId: P2 }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("QS", { hasAttackedThisTurn: true })] }),
+        [P2]: makePlayer(P2, { hand: ["KH"] }),
+      },
+    });
+    const result = playRoyalToCourt(state, P2, "KH");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/declare_blocks/i);
+  });
 });
 
 describe("attachRoyalSupport", () => {
-  it("buffs target Royal and puts support in attachedCards", () => {
+  it("always rejects — Royals cannot be attached to other Royals", () => {
     const state = makeState({
       mine: ["AD"],
       players: {
@@ -60,16 +76,12 @@ describe("attachRoyalSupport", () => {
       },
     });
     const result = attachRoyalSupport(state, P1, "JC", "KH");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const king = result.value.players[P1]!.court.find((r) => r.cardId === "KH")!;
-    expect(king.buffAttack).toBe(1);
-    expect(king.buffHealth).toBe(2);
-    expect(king.attachedCards).toContain("JC");
-    expect(result.value.players[P1]!.hand).not.toContain("JC");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/cannot be attached to other Royals/i);
   });
 
-  it("removes supporting Royal from state.attacks if it was declared as an attacker", () => {
+  it("rejects even when the support Royal was an attacker", () => {
     const state = makeState({
       phase: "declare_attacks",
       mine: ["AD"],
@@ -83,10 +95,9 @@ describe("attachRoyalSupport", () => {
       },
     });
     const result = attachRoyalSupport(state, P1, "JC", "KH");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const attacks = result.value.attacks;
-    expect(attacks.find((a) => a.attackerCardId === "JC")).toBeUndefined();
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/cannot be attached to other Royals/i);
   });
 
   it("rejects if target Royal not in Court", () => {

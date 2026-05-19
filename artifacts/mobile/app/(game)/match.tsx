@@ -246,10 +246,13 @@ export default function MatchScreen() {
     (params: ActionParams) => {
       if (!matchId) return;
 
-      // Guard: abort if the local state says it's no longer our turn.
-      // This catches the stale-UI race between a 2-second poll update
-      // and a card action the player had the action sheet open for.
-      if (gameState?.activePlayerId !== user?.id) {
+      // Guard: abort if the local state says it's no longer our turn,
+      // UNLESS we are the defending player during declare_blocks (defenders
+      // are never the active player but are still allowed to play cards).
+      const actingAsDefender =
+        gameState?.phase === "declare_blocks" &&
+        gameState.attacks.some((a) => a.targetPlayerId === user?.id);
+      if (gameState?.activePlayerId !== user?.id && !actingAsDefender) {
         Alert.alert("Not your turn", "The turn has moved on. Please wait.");
         setSelectedCardId(null);
         return;
@@ -402,6 +405,8 @@ export default function MatchScreen() {
   const inMainPhase = phase === "main";
   const inDeclareAttacks = phase === "declare_attacks";
   const inDeclareBlocks = phase === "declare_blocks";
+  const attacksTargetingMe = gameState.attacks.filter((a) => a.targetPlayerId === myId);
+  const isDefender = inDeclareBlocks && attacksTargetingMe.length > 0;
   const vault = myState?.vault.available ?? 0;
 
   const inDiscardPhase = isMyTurn && phase === "discard";
@@ -429,7 +434,6 @@ export default function MatchScreen() {
   const showAttackButton = isMyTurn && inMainPhase && hasEligibleAttackers;
 
   // Blocking modal: shown to defender in declare_blocks phase
-  const attacksTargetingMe = gameState.attacks.filter((a) => a.targetPlayerId === myId);
   const showBlockingModal = inDeclareBlocks && !isMyTurn && attacksTargetingMe.length > 0 && !blockingDismissed;
 
   const handleCardPress = (cardId: string) => {
@@ -441,7 +445,8 @@ export default function MatchScreen() {
   };
 
   const handleOwnRoyalPress = (royalId: string) => {
-    if (!isMyTurn || !inMainPhase) return;
+    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks);
+    if (!canPlay) return;
 
     if (selectedCardId) {
       const card = parseCardId(selectedCardId);
@@ -462,10 +467,10 @@ export default function MatchScreen() {
 
   // When user taps an opponent royal — could be: Club targeting, Joker targeting, or attack target
   const handleOpponentRoyalPress = (royalId: string, targetPlayerId: string) => {
-    if (!isMyTurn || !inMainPhase) return;
+    if (!isMyTurn && !isDefender) return;
 
-    // Attack mode: if a royal is pending as attacker, declare the attack at this opponent
-    if (pendingAttackerRoyalId && inAttackPhase) {
+    // Attack mode: only for the active player (attacker), not the defender
+    if (isMyTurn && pendingAttackerRoyalId && inAttackPhase) {
       if (!matchId) return;
       submitAction({
         matchId,
@@ -479,11 +484,11 @@ export default function MatchScreen() {
     const card = parseCardId(selectedCardId);
 
     if (card.suit === "C") {
-      // Club directly targets the royal — dispatch immediately
+      // Club directly targets the royal — dispatch immediately (allowed for defender too)
       handleAction({ cardId: selectedCardId, action: "apply_club", targetPlayerId, targetRoyalId: royalId });
       setSelectedCardId(null);
-    } else if (card.isJoker) {
-      // Tapping an opponent royal with Joker selected = destroy_royal intent
+    } else if (card.isJoker && isMyTurn) {
+      // Joker only during main phase for the active player
       handleAction({ cardId: selectedCardId, action: "play_joker", mode: "destroy_royal", targetPlayerId, targetRoyalId: royalId });
       setSelectedCardId(null);
     }
@@ -646,6 +651,8 @@ export default function MatchScreen() {
                       handleOwnRoyalPress(royalId);
                     }
                   }
+                : isDefender && selectedCardId
+                ? (royalId) => handleOwnRoyalPress(royalId)
                 : undefined
             }
             selectedTargetId={selectedTargetRoyalId}
@@ -792,17 +799,19 @@ export default function MatchScreen() {
         cards={gameState.myHand}
         selectedCardId={selectedCardId}
         isMyTurn={isMyTurn}
+        isDefender={isDefender}
         phase={phase}
         onCardPress={handleCardPress}
       />
 
       <View style={{ height: bottomInset }} />
 
-      {selectedCardId && (
+      {(selectedCardId && (isMyTurn || isDefender)) && (
         <CardActionSheet
           cardId={selectedCardId}
           phase={phase}
           isMyTurn={isMyTurn}
+          isDefender={isDefender}
           myCourt={myState?.court ?? []}
           allPlayers={gameState.players}
           myPlayerId={myId}
