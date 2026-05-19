@@ -252,7 +252,7 @@ describe("resolveCombat", () => {
     const result = resolveCombat(state, P1);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P2]!.life).toBe(19);
+    expect(result.value.players[P2]!.life).toBe(20);
     const jd = result.value.players[P2]!.court.find((r) => r.cardId === "JD");
     expect(jd).toBeUndefined();
     expect(result.value.abyss).toContain("JD");
@@ -326,7 +326,7 @@ describe("resolveCombat", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("Royal dies at exactly 0 health — each player loses that Royal's total health", () => {
+  it("Royal dies at exactly 0 health — both Royals removed, no player life loss", () => {
     const state = makeState({
       phase: "declare_blocks",
       attacks: [{ attackerPlayerId: P1, attackerCardId: "JH", targetPlayerId: P2, blockerCardId: "JS" }],
@@ -338,13 +338,13 @@ describe("resolveCombat", () => {
     const result = resolveCombat(state, P1);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P1]!.life).toBe(19);
-    expect(result.value.players[P2]!.life).toBe(19);
+    expect(result.value.players[P1]!.life).toBe(20);
+    expect(result.value.players[P2]!.life).toBe(20);
     expect(result.value.abyss).toContain("JH");
     expect(result.value.abyss).toContain("JS");
   });
 
-  it("Royal dies below 0, no buffs — player loses base health only", () => {
+  it("Royal dies below 0, no buffs — Royal removed, player life unchanged", () => {
     const state = makeState({
       phase: "declare_blocks",
       attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardId: "JD" }],
@@ -356,11 +356,11 @@ describe("resolveCombat", () => {
     const result = resolveCombat(state, P1);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P2]!.life).toBe(19);
+    expect(result.value.players[P2]!.life).toBe(20);
     expect(result.value.abyss).toContain("JD");
   });
 
-  it("Royal dies at exactly 0 with health buff — player loses base + buff health", () => {
+  it("Royal dies at exactly 0 with health buff — Royal removed, player life unchanged", () => {
     const state = makeState({
       phase: "declare_blocks",
       attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardId: "JD" }],
@@ -372,11 +372,11 @@ describe("resolveCombat", () => {
     const result = resolveCombat(state, P1);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P2]!.life).toBe(17);
+    expect(result.value.players[P2]!.life).toBe(20);
     expect(result.value.abyss).toContain("JD");
   });
 
-  it("attacker survives, only defender's player loses life from dying Royal", () => {
+  it("attacker survives, defender's Royal is destroyed but defender's life is unchanged", () => {
     const state = makeState({
       phase: "declare_blocks",
       attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardId: "JD" }],
@@ -389,7 +389,7 @@ describe("resolveCombat", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.players[P1]!.life).toBe(20);
-    expect(result.value.players[P2]!.life).toBe(19);
+    expect(result.value.players[P2]!.life).toBe(20);
     const kh = result.value.players[P1]!.court.find((r) => r.cardId === "KH");
     expect(kh).toBeDefined();
     expect(kh!.damageTaken).toBe(1);

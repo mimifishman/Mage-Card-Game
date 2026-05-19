@@ -1,5 +1,5 @@
-import { effectiveHealth, getCard, royalBaseHealth } from "./cards";
-import type { CardId, GameState, PlayerState, Rank, Result } from "./types";
+import { effectiveHealth, getCard } from "./cards";
+import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
 import { canPlayCard } from "./validation";
@@ -81,13 +81,8 @@ export function applyClub(
   const hp = effectiveHealth(debuffedRoyal);
 
   if (hp <= 0) {
-    const royalCard = getCard(targetCardId);
-    const lifeLoss = Math.max(0, royalBaseHealth(royalCard.rank as Rank) + debuffedRoyal.buffHealth);
     const result = destroyRoyalToAbyss(targetPlayer, targetCardId, currentAbyss);
-    updatedTargetPlayer = {
-      ...result.player,
-      life: result.player.life - lifeLoss,
-    };
+    updatedTargetPlayer = result.player;
     currentAbyss = result.abyss;
   } else {
     const updatedCourt = [...targetPlayer.court];

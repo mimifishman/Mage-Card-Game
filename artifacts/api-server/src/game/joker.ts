@@ -1,5 +1,5 @@
-import { getCard, royalBaseHealth } from "./cards";
-import type { CardId, GameState, PlayerState, Rank, Result } from "./types";
+import { getCard } from "./cards";
+import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { availableVault, spendVault } from "./vault";
 import { canPlayCard } from "./validation";
@@ -49,9 +49,6 @@ export function playJokerDestroyRoyal(
     return err(`Royal ${targetCardId} is not in ${targetPlayerId}'s Court`);
   }
 
-  const royalCard = getCard(targetCardId);
-  const lifeLoss = royalBaseHealth(royalCard.rank as Rank) + targetRoyal.buffHealth;
-
   const withoutJoker = { ...player, hand: player.hand.filter((c) => c !== jokerCardId) };
   const afterSpend = spendVault(withoutJoker, JOKER_COST);
 
@@ -63,18 +60,13 @@ export function playJokerDestroyRoyal(
   );
   updatedAbyss = abyss;
 
-  const updatedTarget: PlayerState = {
-    ...destroyedTarget,
-    life: destroyedTarget.life - lifeLoss,
-  };
-
   return ok({
     ...state,
     abyss: updatedAbyss,
     players: {
       ...state.players,
       [playerId]: afterSpend,
-      [targetPlayerId]: updatedTarget,
+      [targetPlayerId]: destroyedTarget,
     },
   });
 }

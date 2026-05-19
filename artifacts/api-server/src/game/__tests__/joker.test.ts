@@ -66,21 +66,21 @@ describe("playJokerDestroyRoyal", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("reduces target player life by Royal base health (unbuffed King → -3)", () => {
+  it("does not reduce target player life when Royal is destroyed (unbuffed King)", () => {
     const state = richState("JOKER1", { court: [mkRoyal("KH")] });
     const result = playJokerDestroyRoyal(state, P1, "JOKER1", P2, "KH");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P2]!.life).toBe(17);
+    expect(result.value.players[P2]!.life).toBe(20);
     expect(result.value.players[P1]!.life).toBe(20);
   });
 
-  it("reduces target player life by Royal base health + buffHealth (buffed King → -5)", () => {
+  it("does not reduce target player life when buffed Royal is destroyed (buffed King)", () => {
     const state = richState("JOKER1", { court: [mkRoyal("KH", { buffHealth: 2 })] });
     const result = playJokerDestroyRoyal(state, P1, "JOKER1", P2, "KH");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P2]!.life).toBe(15);
+    expect(result.value.players[P2]!.life).toBe(20);
     expect(result.value.players[P1]!.life).toBe(20);
   });
 

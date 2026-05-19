@@ -65,7 +65,7 @@ describe("applyClubToRoyal", () => {
     expect(result.value.abyss).toContain("10C");
   });
 
-  it("reduces target player life by Royal maxHp when debuff kills (positive lifeLoss)", () => {
+  it("does not reduce target player life when debuff kills the Royal", () => {
     const state = makeState({
       mine: ["10D"],
       players: {
@@ -82,11 +82,11 @@ describe("applyClubToRoyal", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.players[P2]!.court).toHaveLength(0);
-    expect(result.value.players[P2]!.life).toBe(17);
+    expect(result.value.players[P2]!.life).toBe(20);
     expect(result.value.players[P1]!.life).toBe(20);
   });
 
-  it("clamps life loss to 0 when debuff makes maxHp negative", () => {
+  it("does not reduce target player life when debuff kills a heavily buffed Royal", () => {
     const state = makeState({
       mine: ["10D"],
       players: {
