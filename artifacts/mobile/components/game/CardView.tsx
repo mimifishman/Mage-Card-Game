@@ -73,10 +73,10 @@ export default function CardView({
 }
 
 const SIZE_MAP = {
-  sm: { w: 38, h: 52, rankFont: 10, symbolFont: 9, iconFont: 7 },
-  md: { w: 52, h: 72, rankFont: 13, symbolFont: 11, iconFont: 8 },
-  lg: { w: 68, h: 96, rankFont: 17, symbolFont: 14, iconFont: 9 },
-  xl: { w: 84, h: 118, rankFont: 22, symbolFont: 18, iconFont: 11 },
+  sm: { w: 38, h: 52, rankFont: 14, symbolFont: 12, iconFont: 7 },
+  md: { w: 52, h: 72, rankFont: 18, symbolFont: 15, iconFont: 8 },
+  lg: { w: 68, h: 96, rankFont: 22, symbolFont: 19, iconFont: 9 },
+  xl: { w: 84, h: 118, rankFont: 28, symbolFont: 23, iconFont: 11 },
 };
 
 const styles = StyleSheet.create({
