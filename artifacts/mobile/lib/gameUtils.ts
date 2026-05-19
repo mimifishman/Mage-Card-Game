@@ -131,7 +131,8 @@ export type CardAction =
   | "discard_spade_to_return"
   | "apply_club"
   | "apply_club_damage"
-  | "play_joker";
+  | "play_joker"
+  | "discard_to_end_turn";
 
 export interface ValidAction {
   action: CardAction;
@@ -149,7 +150,19 @@ export function getValidActionsForCard(
   vault: number,
   hasTakenDiamondAction = false,
 ): ValidAction[] {
-  if (!isMyTurn || phase !== "main") return [];
+  if (!isMyTurn) return [];
+
+  if (phase === "discard") {
+    return [
+      {
+        action: "discard_to_end_turn",
+        label: "Discard (end-of-turn)",
+        requiresTarget: false,
+      },
+    ];
+  }
+
+  if (phase !== "main") return [];
 
   const actions: ValidAction[] = [];
 

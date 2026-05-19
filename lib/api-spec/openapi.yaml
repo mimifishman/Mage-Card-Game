@@ -714,7 +714,7 @@ components:
           type: string
         phase:
           type: string
-          enum: [draw, main, declare_attacks, declare_blocks, resolve_combat, end_turn]
+          enum: [draw, main, declare_attacks, declare_blocks, resolve_combat, end_turn, discard]
         turnNumber:
           type: integer
         activePlayerId:
@@ -780,6 +780,7 @@ components:
             - pass_block
             - resolve_combat
             - end_turn
+            - discard_to_end_turn
         cardId:
           type: string
         supportCardId:

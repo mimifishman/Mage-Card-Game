@@ -67,7 +67,8 @@ export type TurnPhase =
   | "declare_attacks"
   | "declare_blocks"
   | "resolve_combat"
-  | "end_turn";
+  | "end_turn"
+  | "discard";
 
 export interface GameState {
   matchId: string;

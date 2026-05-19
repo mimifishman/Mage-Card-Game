@@ -24,7 +24,7 @@ export default function HandTray({
   phase,
   onCardPress,
 }: HandTrayProps) {
-  const canPlay = isMyTurn && phase === "main";
+  const canPlay = isMyTurn && (phase === "main" || phase === "discard");
 
   return (
     <View style={styles.container}>
@@ -33,7 +33,11 @@ export default function HandTray({
         <View style={styles.countBadge}>
           <Text style={styles.count}>{cards.length}</Text>
         </View>
-        {canPlay && <Text style={styles.hint}>Tap a card to play</Text>}
+        {canPlay && (
+          <Text style={styles.hint}>
+            {phase === "discard" ? "Tap a card to discard" : "Tap a card to play"}
+          </Text>
+        )}
       </View>
       {cards.length === 0 ? (
         <View style={styles.empty}>

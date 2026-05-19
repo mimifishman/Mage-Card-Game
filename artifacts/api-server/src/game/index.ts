@@ -46,4 +46,4 @@ export type { JokerMode } from "./joker";
 
 export { beginDeclareBlocks, declareAttack, declareBlock, passBlock, resolveCombat } from "./combat";
 
-export { endTurn, eliminatePlayerIfNeeded, advanceTurn, isGameOver, getWinner } from "./turn";
+export { endTurn, endTurnCleanupAndAdvance, eliminatePlayerIfNeeded, advanceTurn, isGameOver, getWinner } from "./turn";

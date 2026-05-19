@@ -68,12 +68,8 @@ export function advanceTurn(state: GameState): Result<GameState> {
   return drawCard(preparedState, nextPlayerId);
 }
 
-function healAllRoyals(state: GameState): {
-  state: GameState;
-  abyss: string[];
-} {
+function healAllRoyals(state: GameState): GameState {
   const updatedPlayers: Record<string, PlayerState> = { ...state.players };
-  const discarded: string[] = [];
 
   for (const [playerId, player] of Object.entries(state.players)) {
     if (player.isEliminated) continue;
@@ -88,38 +84,10 @@ function healAllRoyals(state: GameState): {
     updatedPlayers[playerId] = { ...player, court: healedCourt };
   }
 
-  const activePlayerId = state.activePlayerId;
-  const activePlayer = updatedPlayers[activePlayerId];
-
-  if (activePlayer) {
-    let hand = [...activePlayer.hand];
-
-    if (hand.length > MAX_HAND_SIZE) {
-      const excess = hand.slice(MAX_HAND_SIZE);
-      discarded.push(...excess);
-      hand = hand.slice(0, MAX_HAND_SIZE);
-    }
-
-    updatedPlayers[activePlayerId] = { ...activePlayer, hand };
-  }
-
-  return {
-    state: { ...state, players: updatedPlayers },
-    abyss: discarded,
-  };
+  return { ...state, players: updatedPlayers };
 }
 
-export function endTurn(state: GameState): Result<GameState> {
-  if (
-    state.phase !== "end_turn" &&
-    state.phase !== "resolve_combat" &&
-    state.phase !== "declare_attacks" &&
-    state.phase !== "declare_blocks" &&
-    state.phase !== "main"
-  ) {
-    return err(`Cannot end turn during phase "${state.phase}"`);
-  }
-
+export function endTurnCleanupAndAdvance(state: GameState): Result<GameState> {
   let current = state;
 
   for (const playerId of current.turnOrder) {
@@ -139,15 +107,31 @@ export function endTurn(state: GameState): Result<GameState> {
     });
   }
 
-  const { state: healed, abyss: discarded } = healAllRoyals(current);
-
   current = {
-    ...healed,
-    abyss: [...healed.abyss, ...discarded],
+    ...healAllRoyals(current),
     attacks: [],
   };
 
   return advanceTurn(current);
+}
+
+export function endTurn(state: GameState): Result<GameState> {
+  if (
+    state.phase !== "end_turn" &&
+    state.phase !== "resolve_combat" &&
+    state.phase !== "declare_attacks" &&
+    state.phase !== "declare_blocks" &&
+    state.phase !== "main"
+  ) {
+    return err(`Cannot end turn during phase "${state.phase}"`);
+  }
+
+  const activePlayer = state.players[state.activePlayerId];
+  if (activePlayer && activePlayer.hand.length > MAX_HAND_SIZE) {
+    return ok({ ...state, phase: "discard" });
+  }
+
+  return endTurnCleanupAndAdvance(state);
 }
 
 export function isGameOver(state: GameState): boolean {

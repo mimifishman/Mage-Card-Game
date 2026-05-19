@@ -265,6 +265,7 @@ export default function MatchScreen() {
         "discard_to_abyss",
         "play_diamond_to_mine", "discard_diamond_to_draw",
         "discard_diamond_for_boost", "play_royal_to_court",
+        "discard_to_end_turn",
       ];
       if (handOnlyActions.includes(params.action as CardAction)) {
         const hand = gameState?.myHand ?? [];
@@ -403,7 +404,10 @@ export default function MatchScreen() {
   const inDeclareBlocks = phase === "declare_blocks";
   const vault = myState?.vault.available ?? 0;
 
-  const canEndTurn = isMyTurn && (inMainPhase || phase === "end_turn");
+  const inDiscardPhase = isMyTurn && phase === "discard";
+  const discardCount = inDiscardPhase ? Math.max(0, (gameState.myHand ?? []).length - 7) : 0;
+
+  const canEndTurn = isMyTurn && (inMainPhase || phase === "end_turn") && !inDiscardPhase;
 
   // "Done Attacking" button: only valid in declare_attacks phase (after ≥1 attack declared)
   const canDoneAttacking = isMyTurn && inDeclareAttacks;
@@ -647,6 +651,15 @@ export default function MatchScreen() {
             selectedTargetId={selectedTargetRoyalId}
           />
         </Animated.View>
+
+        {inDiscardPhase && (
+          <Animated.View entering={FadeIn.duration(300)} style={styles.discardBanner}>
+            <Ionicons name="trash" size={16} color="#C89B3C" />
+            <Text style={styles.discardBannerText}>
+              Discard {discardCount} card{discardCount !== 1 ? "s" : ""} to end your turn
+            </Text>
+          </Animated.View>
+        )}
 
         {(canEndTurn || canDoneAttacking || showAttackButton || canResolveCombat) && (
           <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.actionRow}>
@@ -1049,6 +1062,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
+  },
+  discardBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(200,155,60,0.18)",
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: "#C89B3C",
+    marginHorizontal: 12,
+  },
+  discardBannerText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#C89B3C",
+    flex: 1,
   },
   attackTargetBanner: {
     flexDirection: "row",

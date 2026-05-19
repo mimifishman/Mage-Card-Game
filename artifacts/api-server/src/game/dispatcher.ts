@@ -1,6 +1,6 @@
 import type { GameState, Result } from "./types";
 import type { GameAction } from "./actions";
-import { err } from "./types";
+import { err, ok } from "./types";
 import {
   playDiamondToMine,
   discardDiamondToDraw,
@@ -21,6 +21,7 @@ import {
   passBlock,
   resolveCombat,
   endTurn,
+  endTurnCleanupAndAdvance,
 } from "./index";
 
 export function dispatchAction(
@@ -99,6 +100,36 @@ export function dispatchAction(
 
     case "end_turn":
       return endTurn(state);
+
+    case "discard_to_end_turn": {
+      if (state.phase !== "discard") {
+        return err(`Cannot discard_to_end_turn outside of discard phase`);
+      }
+      const activePlayer = state.players[playerId];
+      if (!activePlayer) {
+        return err(`Player ${playerId} not found`);
+      }
+      if (state.activePlayerId !== playerId) {
+        return err(`It is not your turn`);
+      }
+      const cardIndex = activePlayer.hand.indexOf(action.cardId);
+      if (cardIndex === -1) {
+        return err(`Card ${action.cardId} is not in your hand`);
+      }
+      const newHand = activePlayer.hand.filter((_, i) => i !== cardIndex);
+      const updatedState: GameState = {
+        ...state,
+        players: {
+          ...state.players,
+          [playerId]: { ...activePlayer, hand: newHand },
+        },
+        abyss: [...state.abyss, action.cardId],
+      };
+      if (newHand.length <= 7) {
+        return endTurnCleanupAndAdvance(updatedState);
+      }
+      return ok(updatedState);
+    }
 
     default: {
       const _exhaustive: never = action;

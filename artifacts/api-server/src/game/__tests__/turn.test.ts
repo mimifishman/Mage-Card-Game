@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { endTurn, eliminatePlayerIfNeeded, advanceTurn, isGameOver, getWinner } from "../turn";
+import { dispatchAction } from "../dispatcher";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
 
@@ -87,7 +88,7 @@ describe("endTurn", () => {
     expect(result.value.players[P2]!.court[0]!.damageTaken).toBe(0);
   });
 
-  it("enforces 7-card hand limit by discarding excess to Abyss", () => {
+  it("transitions to discard phase when active player has more than 7 cards", () => {
     const bigHand = ["AC", "2C", "3C", "4C", "5C", "6C", "7C", "8C", "9C", "10C"];
     const state = makeState({
       phase: "end_turn",
@@ -99,8 +100,9 @@ describe("endTurn", () => {
     const result = endTurn(state);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.players[P1]!.hand).toHaveLength(7);
-    expect(result.value.abyss).toHaveLength(3);
+    expect(result.value.phase).toBe("discard");
+    expect(result.value.players[P1]!.hand).toHaveLength(10);
+    expect(result.value.abyss).toHaveLength(0);
   });
 
   it("advances turn in cycle", () => {
@@ -112,6 +114,79 @@ describe("endTurn", () => {
     });
     const after1 = endTurn(state);
     expect(after1.ok && after1.value.activePlayerId).toBe(P2);
+  });
+});
+
+describe("discard_to_end_turn dispatch", () => {
+  it("removes the discarded card to Abyss and stays in discard phase when hand > 7", () => {
+    const bigHand = ["AC", "2C", "3C", "4C", "5C", "6C", "7C", "8C", "9C"];
+    const state = makeState({
+      phase: "discard",
+      players: {
+        [P1]: makePlayer(P1, { hand: bigHand, hasHadFirstTurn: true }),
+        [P2]: makePlayer(P2, { hasHadFirstTurn: true }),
+      },
+    });
+    const result = dispatchAction(state, P1, { type: "discard_to_end_turn", cardId: "9C" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("discard");
+    expect(result.value.players[P1]!.hand).toHaveLength(8);
+    expect(result.value.players[P1]!.hand).not.toContain("9C");
+    expect(result.value.abyss).toContain("9C");
+  });
+
+  it("auto-advances the turn when discard brings hand to exactly 7", () => {
+    const hand8 = ["AC", "2C", "3C", "4C", "5C", "6C", "7C", "8C"];
+    const state = makeState({
+      phase: "discard",
+      deck: ["KD", "QH"],
+      players: {
+        [P1]: makePlayer(P1, { hand: hand8, hasHadFirstTurn: true }),
+        [P2]: makePlayer(P2, { hasHadFirstTurn: true }),
+      },
+    });
+    const result = dispatchAction(state, P1, { type: "discard_to_end_turn", cardId: "8C" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.activePlayerId).toBe(P2);
+    expect(result.value.abyss).toContain("8C");
+  });
+
+  it("rejects discard_to_end_turn outside of discard phase", () => {
+    const state = makeState({
+      phase: "main",
+      players: {
+        [P1]: makePlayer(P1, { hand: ["AC", "2C", "3C"] }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = dispatchAction(state, P1, { type: "discard_to_end_turn", cardId: "AC" });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects discard_to_end_turn when card is not in hand", () => {
+    const state = makeState({
+      phase: "discard",
+      players: {
+        [P1]: makePlayer(P1, { hand: ["AC", "2C", "3C", "4C", "5C", "6C", "7C", "8C"] }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = dispatchAction(state, P1, { type: "discard_to_end_turn", cardId: "KH" });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects normal card actions during discard phase", () => {
+    const state = makeState({
+      phase: "discard",
+      players: {
+        [P1]: makePlayer(P1, { hand: ["AC", "2C", "3C", "4C", "5C", "6C", "7C", "8C"] }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = dispatchAction(state, P1, { type: "discard_to_abyss", cardId: "AC" });
+    expect(result.ok).toBe(false);
   });
 });
 

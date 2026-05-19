@@ -154,6 +154,7 @@ export const PlayerGameViewPhase = {
   declare_blocks: "declare_blocks",
   resolve_combat: "resolve_combat",
   end_turn: "end_turn",
+  discard: "discard",
 } as const;
 
 export type PlayerGameViewPlayers = { [key: string]: PublicPlayerState };
@@ -201,6 +202,7 @@ export const GameActionRequestType = {
   pass_block: "pass_block",
   resolve_combat: "resolve_combat",
   end_turn: "end_turn",
+  discard_to_end_turn: "discard_to_end_turn",
 } as const;
 
 export type GameActionRequestMode =
