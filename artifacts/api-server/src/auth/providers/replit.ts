@@ -99,10 +99,10 @@ async function upsertUser(
 async function tryRefreshSession(
   sid: string,
   record: SessionRecord,
-): Promise<SessionRecord | null> {
+): Promise<SessionRecord> {
   const now = Math.floor(Date.now() / 1000);
   if (!record.expires_at || now <= record.expires_at) return record;
-  if (!record.refresh_token) return null;
+  if (!record.refresh_token) return record;
 
   try {
     const config = await getOidcConfig();
@@ -118,7 +118,11 @@ async function tryRefreshSession(
     await updateSession(sid, updated);
     return updated;
   } catch {
-    return null;
+    // Refresh failed (e.g. Replit OIDC didn't issue a refresh token, or it
+    // has already been rotated). The session record itself is still valid —
+    // the session TTL (7 days) is the actual lifetime boundary. Keep the
+    // session alive so the user isn't silently logged out mid-game.
+    return record;
   }
 }
 
@@ -131,11 +135,6 @@ export class ReplitAuthService implements AuthService {
     if (!record?.session) return null;
 
     const refreshed = await tryRefreshSession(sid, record);
-    if (!refreshed) {
-      await deleteSession(sid);
-      return null;
-    }
-
     return refreshed.session;
   }
 
