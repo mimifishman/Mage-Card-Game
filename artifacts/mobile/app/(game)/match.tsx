@@ -45,6 +45,7 @@ import CardActionSheet from "@/components/game/CardActionSheet";
 import type { ActionParams } from "@/components/game/CardActionSheet";
 import BlockingModal from "@/components/game/BlockingModal";
 import { parseCardId } from "@/lib/gameUtils";
+import type { CardAction } from "@/lib/gameUtils";
 
 export default function MatchScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
@@ -244,6 +245,36 @@ export default function MatchScreen() {
   const handleAction = useCallback(
     (params: ActionParams) => {
       if (!matchId) return;
+
+      // Guard: abort if the local state says it's no longer our turn.
+      // This catches the stale-UI race between a 2-second poll update
+      // and a card action the player had the action sheet open for.
+      if (gameState?.activePlayerId !== user?.id) {
+        Alert.alert("Not your turn", "The turn has moved on. Please wait.");
+        setSelectedCardId(null);
+        return;
+      }
+
+      // Guard: abort if the card is no longer in our hand.
+      // Prevents submitting an action for a card already played/discarded
+      // (e.g. state refreshed via WebSocket between sheet-open and confirm).
+      const handOnlyActions: CardAction[] = [
+        "attach_royal_support", "attach_heart", "attach_spade",
+        "discard_heart_to_heal", "discard_spade_to_return",
+        "apply_club", "apply_club_damage", "play_joker",
+        "discard_to_abyss",
+        "play_diamond_to_mine", "discard_diamond_to_draw",
+        "discard_diamond_for_boost", "play_royal_to_court",
+      ];
+      if (handOnlyActions.includes(params.action as CardAction)) {
+        const hand = gameState?.myHand ?? [];
+        if (!hand.includes(params.cardId)) {
+          Alert.alert("Card not in hand", "That card is no longer in your hand.");
+          setSelectedCardId(null);
+          return;
+        }
+      }
+
       let body: GameActionRequest;
       switch (params.action) {
         case "attach_royal_support":
@@ -315,7 +346,7 @@ export default function MatchScreen() {
       }
       submitAction({ matchId, data: body });
     },
-    [matchId, submitAction],
+    [matchId, gameState, user, submitAction],
   );
 
   const handleEndTurn = useCallback(() => {
