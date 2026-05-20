@@ -41,6 +41,7 @@ export function createInitialGameState(
     mine: [],
     abyss: [],
     attacks: [],
+    hasAttackedThisTurn: false,
   });
 }
 

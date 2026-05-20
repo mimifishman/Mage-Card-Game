@@ -110,6 +110,7 @@ export function endTurnCleanupAndAdvance(state: GameState): Result<GameState> {
   current = {
     ...healAllRoyals(current),
     attacks: [],
+    hasAttackedThisTurn: false,
   };
 
   return advanceTurn(current);

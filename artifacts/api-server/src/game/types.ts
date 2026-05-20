@@ -89,6 +89,7 @@ export interface GameState {
   mine: CardId[];
   abyss: CardId[];
   attacks: AttackDeclaration[];
+  hasAttackedThisTurn: boolean;
   pendingClubDebuff?: PendingClubDebuff;
 }
 

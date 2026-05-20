@@ -33,7 +33,7 @@ export function declareAttack(
   if (attackerPlayerId === targetPlayerId) {
     return err("Cannot attack yourself");
   }
-  if (state.attacks.length > 0) {
+  if (state.hasAttackedThisTurn) {
     return err("Only one Royal may attack per turn");
   }
 
@@ -77,6 +77,7 @@ export function declareAttack(
   return ok({
     ...state,
     phase: "declare_attacks",
+    hasAttackedThisTurn: true,
     players: { ...state.players, [attackerPlayerId]: updatedAttacker },
     attacks: [...state.attacks, newAttack],
   });
@@ -248,7 +249,7 @@ export function resolveCombat(state: GameState, callerPlayerId: string): Result<
 
   return ok({
     ...state,
-    phase: "end_turn",
+    phase: "main",
     players,
     abyss,
     attacks: [],

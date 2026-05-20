@@ -35,6 +35,7 @@ export function makeState(overrides: Partial<GameState> = {}): GameState {
     mine: [],
     abyss: [],
     attacks: [],
+    hasAttackedThisTurn: false,
     ...overrides,
   };
 }

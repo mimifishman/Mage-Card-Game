@@ -125,13 +125,13 @@ export default function MatchScreen() {
     }
   }, [matchData?.match?.status, matchData?.match?.winnerUserId, matchId]);
 
-  // Detect combat resolution: phase moved from declare_blocks → end_turn
+  // Detect combat resolution: phase moved from declare_blocks → main
   useEffect(() => {
     if (!gameState) return;
     const prev = prevPhaseRef.current;
     const prevPlayers = prevPlayersRef.current;
 
-    if (prev === "declare_blocks" && (gameState.phase === "end_turn" || gameState.phase === "draw")) {
+    if (prev === "declare_blocks" && (gameState.phase === "main" || gameState.phase === "draw")) {
       const parts: string[] = [];
       for (const [id, p] of Object.entries(gameState.players)) {
         const before = prevPlayers[id];
@@ -453,8 +453,8 @@ export default function MatchScreen() {
   const eligibleAttackers = (myState?.court ?? []).filter((r) => !r.hasAttackedThisTurn && !r.hasteLocked);
   const hasEligibleAttackers = eligibleAttackers.length > 0;
 
-  // "Attack!" button: visible in main phase when eligible royals exist
-  const showAttackButton = isMyTurn && inMainPhase && hasEligibleAttackers;
+  // "Attack!" button: visible in main phase when eligible royals exist and no attack used yet this turn
+  const showAttackButton = isMyTurn && inMainPhase && hasEligibleAttackers && !gameState.hasAttackedThisTurn;
 
   // Blocking modal: shown to defender in declare_blocks phase
   const showBlockingModal = inDeclareBlocks && !isMyTurn && attacksTargetingMe.length > 0 && !blockingDismissed;

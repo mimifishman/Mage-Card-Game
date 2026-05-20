@@ -88,6 +88,7 @@ describe("declareAttack", () => {
   it("rejects multiple attacks from same Royal", () => {
     const state = makeState({
       phase: "declare_attacks",
+      hasAttackedThisTurn: true,
       attacks: [
         {
           attackerPlayerId: P1,
@@ -109,6 +110,7 @@ describe("declareAttack", () => {
   it("rejects a second attack declaration even from a different Royal", () => {
     const state = makeState({
       phase: "declare_attacks",
+      hasAttackedThisTurn: true,
       attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
       players: {
         [P1]: makePlayer(P1, {
@@ -211,8 +213,29 @@ describe("resolveCombat", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.players[P2]!.life).toBe(17);
-    expect(result.value.phase).toBe("end_turn");
+    expect(result.value.phase).toBe("main");
     expect(result.value.attacks).toHaveLength(0);
+  });
+
+  it("returns to main phase and hasAttackedThisTurn stays true, blocking a second attack", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      hasAttackedThisTurn: true,
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, passed: true }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH", { hasAttackedThisTurn: true }), mkRoyal("QH")] }),
+        [P2]: makePlayer(P2, { life: 20 }),
+      },
+    });
+    const resolved = resolveCombat(state, P1);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.value.phase).toBe("main");
+    expect(resolved.value.hasAttackedThisTurn).toBe(true);
+    const secondAttack = declareAttack(resolved.value, P1, "QH", P2);
+    expect(secondAttack.ok).toBe(false);
+    if (secondAttack.ok) return;
+    expect(secondAttack.error).toMatch(/one Royal/i);
   });
 
   it("rejects resolve_combat when called from declare_attacks phase", () => {

@@ -27,6 +27,7 @@ export interface PlayerGameView {
   mine: string[];
   abyss: string[];
   attacks: AttackDeclaration[];
+  hasAttackedThisTurn: boolean;
   pendingClubDebuff?: PendingClubDebuff;
 }
 
@@ -67,6 +68,7 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
     mine: state.mine,
     abyss: state.abyss,
     attacks: state.attacks,
+    hasAttackedThisTurn: state.hasAttackedThisTurn,
     pendingClubDebuff: state.pendingClubDebuff,
   };
 }

@@ -145,7 +145,11 @@ export async function loadEngineState(matchId: string): Promise<EngineGameState 
     .from(gameStateTable)
     .where(eq(gameStateTable.matchId, matchId));
   if (!row || !row.fullState) return null;
-  return row.fullState as unknown as EngineGameState;
+  const state = row.fullState as unknown as EngineGameState;
+  return {
+    ...state,
+    hasAttackedThisTurn: state.hasAttackedThisTurn ?? false,
+  };
 }
 
 export async function saveEngineState(matchId: string, engineState: EngineGameState): Promise<void> {
