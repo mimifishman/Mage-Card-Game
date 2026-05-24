@@ -1,4 +1,4 @@
-import type { AttackDeclaration, CardId, GameState, PendingClubDebuff, PlayerState, RoyalInCourt } from "./types";
+import type { AttackDeclaration, CardId, CombatSummary, DuelContext, GameState, PendingClubDebuff, PlayerState, RoyalInCourt } from "./types";
 import { availableVault } from "./vault";
 
 export interface PublicPlayerState {
@@ -28,6 +28,8 @@ export interface PlayerGameView {
   abyss: string[];
   attacks: AttackDeclaration[];
   hasAttackedThisTurn: boolean;
+  duelContext?: DuelContext;
+  lastCombatSummary?: CombatSummary;
   pendingClubDebuff?: PendingClubDebuff;
 }
 
@@ -69,6 +71,8 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
     abyss: state.abyss,
     attacks: state.attacks,
     hasAttackedThisTurn: state.hasAttackedThisTurn,
+    duelContext: state.duelContext,
+    lastCombatSummary: state.lastCombatSummary,
     pendingClubDebuff: state.pendingClubDebuff,
   };
 }

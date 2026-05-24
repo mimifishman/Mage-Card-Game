@@ -111,12 +111,18 @@ export function endTurnCleanupAndAdvance(state: GameState): Result<GameState> {
     ...healAllRoyals(current),
     attacks: [],
     hasAttackedThisTurn: false,
+    duelContext: undefined,
   };
 
   return advanceTurn(current);
 }
 
 export function endTurn(state: GameState): Result<GameState> {
+  const isDuelPhase = state.phase === "duel_attacker_turn" || state.phase === "duel_blocker_turn";
+  if (isDuelPhase) {
+    return err(`Cannot end turn during a duel. The duel must complete first.`);
+  }
+
   if (
     state.phase !== "end_turn" &&
     state.phase !== "resolve_combat" &&

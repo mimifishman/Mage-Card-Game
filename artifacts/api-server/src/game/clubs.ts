@@ -2,7 +2,7 @@ import { effectiveHealth, getCard, royalBaseHealth } from "./cards";
 import type { CardId, GameState, PlayerState, Rank, Result } from "./types";
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
-import { canPlayCard } from "./validation";
+import { canPlayCard, isDuelPhase } from "./validation";
 
 function destroyRoyalToAbyss(
   player: PlayerState,
@@ -50,8 +50,13 @@ function applyDebuffToRoyal(
   const hp = effectiveHealth(debuffedRoyal);
 
   if (hp <= 0) {
+    const rank = targetRoyalId.slice(0, -1) as Rank;
+    const lifeLoss = Math.max(0, royalBaseHealth(rank) + debuffedRoyal.buffHealth);
     const result = destroyRoyalToAbyss(targetPlayer, targetRoyalId, currentAbyss);
-    updatedTargetPlayer = result.player;
+    updatedTargetPlayer = {
+      ...result.player,
+      life: Math.max(0, result.player.life - lifeLoss),
+    };
     currentAbyss = result.abyss;
   } else {
     const updatedCourt = [...targetPlayer.court];
@@ -131,9 +136,8 @@ export function applyClub(
     return ok({ ...result.value, pendingClubDebuff: state.pendingClubDebuff });
   }
 
-  // During declare_blocks the combat phase must not be interrupted by a response window —
-  // resolve immediately so combat can proceed normally.
-  if (state.phase === "declare_blocks") {
+  // During declare_blocks or duel phases, resolve immediately so those phases are not interrupted.
+  if (state.phase === "declare_blocks" || isDuelPhase(state.phase)) {
     return applyDebuffToRoyal(
       { ...state, players: { ...state.players, [playerId]: afterSpend } },
       playerId,

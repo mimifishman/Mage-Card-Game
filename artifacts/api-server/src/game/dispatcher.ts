@@ -17,13 +17,33 @@ import {
   playJokerDestroyRoyal,
   playJokerDamagePlayer,
   declareAttack,
-  beginDeclareBlocks,
-  declareBlock,
-  passBlock,
-  resolveCombat,
+  confirmDeclareBlocks,
+  duelPass,
   endTurn,
   endTurnCleanupAndAdvance,
 } from "./index";
+import { advanceDuelTurn, resolveCombat } from "./combat";
+import { isDuelPhase } from "./validation";
+
+const DUEL_CARD_ACTIONS = new Set([
+  "discard_diamond_to_draw",
+  "discard_diamond_for_boost",
+  "discard_to_abyss",
+  "attach_heart",
+  "attach_spade",
+  "discard_heart_to_heal",
+  "discard_spade_to_return",
+  "apply_club",
+  "play_joker",
+  "attach_royal_support",
+]);
+
+function wrapDuelTurn(result: Result<GameState>, actionType: string, playerId: string): Result<GameState> {
+  if (!result.ok) return result;
+  if (!isDuelPhase(result.value.phase)) return result;
+  if (!DUEL_CARD_ACTIONS.has(actionType)) return result;
+  return advanceDuelTurn(result.value, playerId);
+}
 
 export function dispatchAction(
   state: GameState,
@@ -35,72 +55,63 @@ export function dispatchAction(
       return playDiamondToMine(state, playerId, action.cardId);
 
     case "discard_diamond_to_draw":
-      return discardDiamondToDraw(state, playerId, action.cardId);
+      return wrapDuelTurn(discardDiamondToDraw(state, playerId, action.cardId), action.type, playerId);
 
     case "discard_diamond_for_boost":
-      return discardDiamondForBoost(state, playerId, action.cardId);
+      return wrapDuelTurn(discardDiamondForBoost(state, playerId, action.cardId), action.type, playerId);
 
     case "discard_to_abyss":
-      return discardToAbyss(state, playerId, action.cardId);
+      return wrapDuelTurn(discardToAbyss(state, playerId, action.cardId), action.type, playerId);
 
     case "play_royal_to_court":
       return playRoyalToCourt(state, playerId, action.cardId);
 
     case "attach_royal_support":
-      return attachRoyalSupport(state, playerId, action.supportCardId, action.targetRoyalId);
+      return wrapDuelTurn(attachRoyalSupport(state, playerId, action.supportCardId, action.targetRoyalId), action.type, playerId);
 
     case "attach_heart":
-      return attachHeart(state, playerId, action.heartCardId, action.targetRoyalId);
+      return wrapDuelTurn(attachHeart(state, playerId, action.heartCardId, action.targetRoyalId), action.type, playerId);
 
     case "attach_spade":
-      return attachSpade(state, playerId, action.spadeCardId, action.targetRoyalId);
+      return wrapDuelTurn(attachSpade(state, playerId, action.spadeCardId, action.targetRoyalId), action.type, playerId);
 
     case "discard_heart_to_heal":
-      return discardHeartToHeal(state, playerId, action.heartCardId);
+      return wrapDuelTurn(discardHeartToHeal(state, playerId, action.heartCardId), action.type, playerId);
 
     case "discard_spade_to_return":
-      return discardSpadeToReturn(state, playerId, action.spadeCardId, action.targetCardId);
+      return wrapDuelTurn(discardSpadeToReturn(state, playerId, action.spadeCardId, action.targetCardId), action.type, playerId);
 
     case "apply_club":
-      return applyClub(
-        state,
-        playerId,
-        action.clubCardId,
-        action.targetPlayerId,
-        action.targetRoyalId,
-      );
+      return wrapDuelTurn(applyClub(state, playerId, action.clubCardId, action.targetPlayerId, action.targetRoyalId), action.type, playerId);
 
     case "confirm_club_response":
       return confirmClubResponse(state, playerId);
 
     case "play_joker": {
-      if (action.mode === "destroy_royal") {
-        if (!action.targetPlayerId || !action.targetRoyalId) {
-          return err("play_joker destroy_royal requires targetPlayerId and targetRoyalId");
-        }
-        return playJokerDestroyRoyal(state, playerId, action.cardId, action.targetPlayerId, action.targetRoyalId);
-      } else {
-        if (!action.targetPlayerId) {
-          return err("play_joker damage_player requires targetPlayerId");
-        }
-        return playJokerDamagePlayer(state, playerId, action.cardId, action.targetPlayerId);
-      }
+      const result = action.mode === "destroy_royal"
+        ? (() => {
+            if (!action.targetPlayerId || !action.targetRoyalId) {
+              return err<GameState>("play_joker destroy_royal requires targetPlayerId and targetRoyalId");
+            }
+            return playJokerDestroyRoyal(state, playerId, action.cardId, action.targetPlayerId, action.targetRoyalId);
+          })()
+        : (() => {
+            if (!action.targetPlayerId) {
+              return err<GameState>("play_joker damage_player requires targetPlayerId");
+            }
+            return playJokerDamagePlayer(state, playerId, action.cardId, action.targetPlayerId);
+          })();
+      return wrapDuelTurn(result, action.type, playerId);
     }
 
     case "declare_attack":
-      return declareAttack(state, playerId, action.attackerRoyalId, action.targetPlayerId);
+      return declareAttack(state, playerId, action.targetPlayerId);
 
-    case "begin_declare_blocks":
-      return beginDeclareBlocks(state);
+    case "confirm_declare_blocks":
+      return confirmDeclareBlocks(state, playerId, action.blocks);
 
-    case "declare_block":
-      return declareBlock(state, playerId, action.blockerRoyalId, action.attackerRoyalId);
-
-    case "pass_block":
-      return passBlock(state, playerId, action.attackerRoyalId);
-
-    case "resolve_combat":
-      return resolveCombat(state, playerId);
+    case "duel_pass":
+      return duelPass(state, playerId);
 
     case "end_turn":
       return endTurn(state);

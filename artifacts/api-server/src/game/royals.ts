@@ -2,7 +2,7 @@ import { getCard, royalSupportBuff } from "./cards";
 import type { CardId, GameState, PlayerState, Rank, Result, RoyalInCourt } from "./types";
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
-import { canPlayCard } from "./validation";
+import { canPlayCard, isDuelPhase } from "./validation";
 
 function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return { ...player, hand: player.hand.filter((c) => c !== cardId) };
@@ -18,6 +18,9 @@ export function playRoyalToCourt(
   }
   if (state.phase === "respond_to_club") {
     return err(`Cannot play Royals to Court during a Club response window`);
+  }
+  if (isDuelPhase(state.phase)) {
+    return err(`Cannot play a Royal to Court during a duel phase`);
   }
 
   const canPlay = canPlayCard(state, playerId, cardId);

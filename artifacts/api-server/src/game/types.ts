@@ -66,6 +66,28 @@ export interface PendingClubDebuff {
   targetRoyalId: CardId;
 }
 
+export interface DuelContext {
+  attackerPlayerId: string;
+  defenderPlayerId: string;
+  duelAttackerPassed: boolean;
+  duelBlockerPassed: boolean;
+  attackerDiamondUsed: boolean;
+  defenderDiamondUsed: boolean;
+}
+
+export interface CombatPairOutcome {
+  attackerCardId: CardId;
+  blockerCardId: CardId | null;
+  attackerDestroyed: boolean;
+  blockerDestroyed: boolean;
+  directDamage: number;
+  targetPlayerId: string;
+}
+
+export interface CombatSummary {
+  pairs: CombatPairOutcome[];
+}
+
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";
 
 export type TurnPhase =
@@ -73,6 +95,8 @@ export type TurnPhase =
   | "main"
   | "declare_attacks"
   | "declare_blocks"
+  | "duel_attacker_turn"
+  | "duel_blocker_turn"
   | "resolve_combat"
   | "end_turn"
   | "discard"
@@ -90,6 +114,8 @@ export interface GameState {
   abyss: CardId[];
   attacks: AttackDeclaration[];
   hasAttackedThisTurn: boolean;
+  duelContext?: DuelContext;
+  lastCombatSummary?: CombatSummary;
   pendingClubDebuff?: PendingClubDebuff;
 }
 

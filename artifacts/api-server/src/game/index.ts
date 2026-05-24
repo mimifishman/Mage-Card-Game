@@ -1,6 +1,7 @@
 export type {
   Card,
   CardId,
+  DuelContext,
   GameState,
   PendingClubDebuff,
   PlayerState,
@@ -32,7 +33,7 @@ export { drawCard, drawCards } from "./draw";
 
 export { createInitialGameState, dealInitialHands, determineFirstPlayer } from "./setup";
 
-export { canPlayCard } from "./validation";
+export { canPlayCard, isDuelPhase } from "./validation";
 
 export { playDiamondToMine, discardDiamondToDraw, discardDiamondForBoost, discardToAbyss } from "./diamonds";
 
@@ -45,6 +46,12 @@ export { applyClub, applyClubToRoyal, confirmClubResponse } from "./clubs";
 export { playJokerDestroyRoyal, playJokerDamagePlayer, playJoker } from "./joker";
 export type { JokerMode } from "./joker";
 
-export { beginDeclareBlocks, declareAttack, declareBlock, passBlock, resolveCombat } from "./combat";
+export {
+  declareAttack,
+  confirmDeclareBlocks,
+  duelPass,
+  advanceDuelTurn,
+  resolveCombat,
+} from "./combat";
 
 export { endTurn, endTurnCleanupAndAdvance, eliminatePlayerIfNeeded, advanceTurn, isGameOver, getWinner } from "./turn";

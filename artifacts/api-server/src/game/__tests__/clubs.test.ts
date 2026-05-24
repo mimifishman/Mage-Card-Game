@@ -356,7 +356,7 @@ describe("confirmClubResponse", () => {
           attackerPlayerId: P1,
           attackerCardId: "QH",
           targetPlayerId: P2,
-          blockerCardId: null,
+          blockerCardId: undefined,
           passed: false,
         },
       ],

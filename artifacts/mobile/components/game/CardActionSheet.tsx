@@ -22,6 +22,7 @@ interface CardActionSheetProps {
   isMyTurn: boolean;
   isDefender?: boolean;
   isClubResponder?: boolean;
+  isMyDuelTurn?: boolean;
   myCourt: RoyalInCourt[];
   allPlayers: Record<string, PublicPlayerState>;
   myPlayerId: string;
@@ -50,6 +51,7 @@ export default function CardActionSheet({
   isMyTurn,
   isDefender = false,
   isClubResponder = false,
+  isMyDuelTurn = false,
   myCourt,
   allPlayers,
   myPlayerId,
@@ -76,6 +78,7 @@ export default function CardActionSheet({
     hasTakenDiamondAction,
     isDefender,
     isClubResponder,
+    isMyDuelTurn,
   );
 
   const handleActionPick = (action: ValidAction) => {

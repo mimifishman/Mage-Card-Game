@@ -151,6 +151,28 @@ export interface PendingClubDebuff {
   targetRoyalId: string;
 }
 
+export interface DuelContext {
+  attackerPlayerId: string;
+  defenderPlayerId: string;
+  duelAttackerPassed: boolean;
+  duelBlockerPassed: boolean;
+  attackerDiamondUsed: boolean;
+  defenderDiamondUsed: boolean;
+}
+
+export interface CombatPairOutcome {
+  attackerCardId: string;
+  blockerCardId: string | null;
+  attackerDestroyed: boolean;
+  blockerDestroyed: boolean;
+  directDamage: number;
+  targetPlayerId: string;
+}
+
+export interface CombatSummary {
+  pairs: CombatPairOutcome[];
+}
+
 export type PlayerGameViewPhase =
   (typeof PlayerGameViewPhase)[keyof typeof PlayerGameViewPhase];
 
@@ -159,6 +181,8 @@ export const PlayerGameViewPhase = {
   main: "main",
   declare_attacks: "declare_attacks",
   declare_blocks: "declare_blocks",
+  duel_attacker_turn: "duel_attacker_turn",
+  duel_blocker_turn: "duel_blocker_turn",
   resolve_combat: "resolve_combat",
   end_turn: "end_turn",
   discard: "discard",
@@ -182,6 +206,9 @@ export interface PlayerGameView {
   mine: string[];
   abyss: string[];
   attacks: AttackDeclaration[];
+  hasAttackedThisTurn?: boolean;
+  duelContext?: DuelContext;
+  lastCombatSummary?: CombatSummary;
   pendingClubDebuff?: PendingClubDebuff;
 }
 
@@ -206,10 +233,8 @@ export const GameActionRequestType = {
   apply_club: "apply_club",
   play_joker: "play_joker",
   declare_attack: "declare_attack",
-  begin_declare_blocks: "begin_declare_blocks",
-  declare_block: "declare_block",
-  pass_block: "pass_block",
-  resolve_combat: "resolve_combat",
+  confirm_declare_blocks: "confirm_declare_blocks",
+  duel_pass: "duel_pass",
   end_turn: "end_turn",
   discard_to_end_turn: "discard_to_end_turn",
   confirm_club_response: "confirm_club_response",
@@ -230,12 +255,12 @@ export interface GameActionRequest {
   heartCardId?: string;
   spadeCardId?: string;
   clubCardId?: string;
+  diamondCardId?: string;
   targetRoyalId?: string;
   targetPlayerId?: string;
-  attackerRoyalId?: string;
-  blockerRoyalId?: string;
-  attackerCardId?: string;
   targetCardId?: string;
+  /** Map from attackerCardId to blockerCardId or "pass" */
+  blocks?: Record<string, string>;
   mode?: GameActionRequestMode;
 }
 

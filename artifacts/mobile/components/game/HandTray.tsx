@@ -16,6 +16,7 @@ interface HandTrayProps {
   isMyTurn: boolean;
   isDefender?: boolean;
   isClubResponder?: boolean;
+  isMyDuelTurn?: boolean;
   phase: string;
   onCardPress: (cardId: string) => void;
 }
@@ -35,18 +36,21 @@ export default function HandTray({
   isMyTurn,
   isDefender = false,
   isClubResponder = false,
+  isMyDuelTurn = false,
   phase,
   onCardPress,
 }: HandTrayProps) {
   const globalCanPlay =
     (isMyTurn && (phase === "main" || phase === "discard")) ||
     (isDefender && phase === "declare_blocks") ||
-    (isClubResponder && phase === "respond_to_club");
+    (isClubResponder && phase === "respond_to_club") ||
+    isMyDuelTurn;
 
   const hintText = () => {
     if (phase === "discard") return "Tap a card to discard";
     if (phase === "declare_blocks") return "Tap a card to play while blocking";
     if (phase === "respond_to_club") return "Hearts, Spades, Clubs, Diamonds only";
+    if (isMyDuelTurn) return "Tap a card to play during duel";
     return "Tap a card to play";
   };
 

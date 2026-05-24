@@ -3,19 +3,25 @@ import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { addTempBoost } from "./vault";
 import { drawCard } from "./draw";
-import { canPlayCard } from "./validation";
+import { canPlayCard, isDuelPhase } from "./validation";
 
 export function discardToAbyss(
   state: GameState,
   playerId: string,
   cardId: CardId,
 ): Result<GameState> {
-  if (state.activePlayerId !== playerId) {
-    return err("It is not your turn");
+  if (!isDuelPhase(state.phase)) {
+    if (state.activePlayerId !== playerId) {
+      return err("It is not your turn");
+    }
+    if (state.phase !== "main") {
+      return err(`Cannot discard during phase "${state.phase}"`);
+    }
   }
-  if (state.phase !== "main") {
-    return err(`Cannot discard during phase "${state.phase}"`);
-  }
+
+  const canPlay = canPlayCard(state, playerId, cardId);
+  if (!canPlay.ok) return canPlay as Result<GameState>;
+
   const player = state.players[playerId];
   if (!player) return err(`Player ${playerId} not found`);
   if (!player.hand.includes(cardId)) {
@@ -56,6 +62,9 @@ export function playDiamondToMine(
   }
   if (state.phase === "respond_to_club") {
     return err(`Cannot send Diamonds to the Mine during a Club response window`);
+  }
+  if (isDuelPhase(state.phase)) {
+    return err(`Cannot play a Diamond to the Mine during a duel phase`);
   }
 
   const canPlay = canPlayCard(state, playerId, cardId);
@@ -107,6 +116,28 @@ export function discardDiamondToDraw(
   }
 
   const player = state.players[playerId]!;
+
+  if (isDuelPhase(state.phase) && state.duelContext) {
+    const ctx = state.duelContext;
+    const isAttacker = playerId === ctx.attackerPlayerId;
+    const diamondUsed = isAttacker ? ctx.attackerDiamondUsed : ctx.defenderDiamondUsed;
+    if (diamondUsed) {
+      return err("You have already used your Diamond action this duel");
+    }
+    const withoutCard: PlayerState = removeFromHand(player, cardId);
+    const afterDiscard: GameState = {
+      ...state,
+      players: { ...state.players, [playerId]: withoutCard },
+      abyss: [...state.abyss, cardId],
+      duelContext: {
+        ...ctx,
+        attackerDiamondUsed: isAttacker ? true : ctx.attackerDiamondUsed,
+        defenderDiamondUsed: !isAttacker ? true : ctx.defenderDiamondUsed,
+      },
+    };
+    return drawCard(afterDiscard, playerId);
+  }
+
   if (player.hasPlayedDiamondThisTurn) {
     return err("You can only take one Diamond action per turn");
   }
@@ -146,12 +177,41 @@ export function discardDiamondForBoost(
   }
 
   const player = state.players[playerId]!;
+
+  if (isDuelPhase(state.phase) && state.duelContext) {
+    const ctx = state.duelContext;
+    const isAttacker = playerId === ctx.attackerPlayerId;
+    const diamondUsed = isAttacker ? ctx.attackerDiamondUsed : ctx.defenderDiamondUsed;
+    if (diamondUsed) {
+      return err("You have already used your Diamond action this duel");
+    }
+    const withoutCard = removeFromHand(player, cardId);
+    const boosted = addTempBoost(withoutCard, card.pipValue);
+    const updatedState: GameState = {
+      ...state,
+      players: { ...state.players, [playerId]: boosted },
+      abyss: [...state.abyss, cardId],
+      duelContext: {
+        ...ctx,
+        attackerDiamondUsed: isAttacker ? true : ctx.attackerDiamondUsed,
+        defenderDiamondUsed: !isAttacker ? true : ctx.defenderDiamondUsed,
+      },
+    };
+    return ok(updatedState);
+  }
+
   if (player.hasPlayedDiamondThisTurn) {
     return err("You can only take one Diamond action per turn");
   }
 
   const withoutCard = removeFromHand(player, cardId);
-  const boosted = addTempBoost({ ...withoutCard, hasPlayedDiamondThisTurn: true }, card.pipValue);
+  const boosted = addTempBoost(
+    {
+      ...withoutCard,
+      hasPlayedDiamondThisTurn: true,
+    },
+    card.pipValue,
+  );
 
   return ok({
     ...state,

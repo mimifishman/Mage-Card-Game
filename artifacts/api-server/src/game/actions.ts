@@ -71,27 +71,16 @@ export const PlayJokerActionSchema = z.object({
 
 export const DeclareAttackActionSchema = z.object({
   type: z.literal("declare_attack"),
-  attackerRoyalId: z.string(),
   targetPlayerId: z.string(),
 });
 
-export const BeginDeclareBlocksActionSchema = z.object({
-  type: z.literal("begin_declare_blocks"),
+export const ConfirmDeclareBlocksActionSchema = z.object({
+  type: z.literal("confirm_declare_blocks"),
+  blocks: z.record(z.string(), z.string()),
 });
 
-export const DeclareBlockActionSchema = z.object({
-  type: z.literal("declare_block"),
-  blockerRoyalId: z.string(),
-  attackerRoyalId: z.string(),
-});
-
-export const PassBlockActionSchema = z.object({
-  type: z.literal("pass_block"),
-  attackerRoyalId: z.string(),
-});
-
-export const ResolveCombatActionSchema = z.object({
-  type: z.literal("resolve_combat"),
+export const DuelPassActionSchema = z.object({
+  type: z.literal("duel_pass"),
 });
 
 export const EndTurnActionSchema = z.object({
@@ -121,10 +110,8 @@ export const GameActionSchema = z.discriminatedUnion("type", [
   ApplyClubActionSchema,
   PlayJokerActionSchema,
   DeclareAttackActionSchema,
-  BeginDeclareBlocksActionSchema,
-  DeclareBlockActionSchema,
-  PassBlockActionSchema,
-  ResolveCombatActionSchema,
+  ConfirmDeclareBlocksActionSchema,
+  DuelPassActionSchema,
   EndTurnActionSchema,
   DiscardToEndTurnActionSchema,
   ConfirmClubResponseActionSchema,

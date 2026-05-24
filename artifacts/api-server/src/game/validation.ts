@@ -4,6 +4,11 @@ import { err, ok } from "./types";
 import { availableVault } from "./vault";
 
 const PLAY_PHASES: TurnPhase[] = ["main", "declare_attacks"];
+const DUEL_PHASES: TurnPhase[] = ["duel_attacker_turn", "duel_blocker_turn"];
+
+export function isDuelPhase(phase: TurnPhase): boolean {
+  return DUEL_PHASES.includes(phase);
+}
 
 export function canPlayCard(
   state: GameState,
@@ -49,6 +54,17 @@ export function canPlayCard(
     }
     if (playerId !== defenderPlayerId) {
       return err(`Cannot play cards during phase "declare_blocks"`);
+    }
+  } else if (isDuelPhase(state.phase)) {
+    const ctx = state.duelContext;
+    if (!ctx) {
+      return err(`No duel context found during duel phase`);
+    }
+    if (state.phase === "duel_attacker_turn" && playerId !== ctx.attackerPlayerId) {
+      return err("It is the attacker's turn in the duel");
+    }
+    if (state.phase === "duel_blocker_turn" && playerId !== ctx.defenderPlayerId) {
+      return err("It is the blocker's turn in the duel");
     }
   } else {
     if (state.activePlayerId !== playerId) {

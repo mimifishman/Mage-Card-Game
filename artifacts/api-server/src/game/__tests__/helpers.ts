@@ -36,6 +36,7 @@ export function makeState(overrides: Partial<GameState> = {}): GameState {
     abyss: [],
     attacks: [],
     hasAttackedThisTurn: false,
+    duelContext: undefined,
     ...overrides,
   };
 }

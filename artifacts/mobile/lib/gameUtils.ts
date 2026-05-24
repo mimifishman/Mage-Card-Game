@@ -142,6 +142,10 @@ export interface ValidAction {
   targetType?: "own_royal" | "any_royal" | "any_player" | "pick_abyss";
 }
 
+export function isDuelTurnPhase(phase: string): boolean {
+  return phase === "duel_attacker_turn" || phase === "duel_blocker_turn";
+}
+
 export function getValidActionsForCard(
   card: ParsedCard,
   phase: string,
@@ -151,7 +155,105 @@ export function getValidActionsForCard(
   hasTakenDiamondAction = false,
   isDefender = false,
   isClubResponder = false,
+  isMyDuelTurn = false,
 ): ValidAction[] {
+  const inDuel = isDuelTurnPhase(phase);
+
+  if (inDuel) {
+    if (!isMyDuelTurn) return [];
+
+    if (card.isRoyal) return [];
+    if (card.isJoker) {
+      if (vault >= 10) {
+        return [
+          {
+            action: "play_joker",
+            label: "Destroy a Royal (−10 Vault)",
+            requiresTarget: true,
+            targetType: "any_royal",
+          },
+          {
+            action: "play_joker",
+            label: "Deal 10 damage to a player (−10 Vault)",
+            requiresTarget: true,
+            targetType: "any_player",
+          },
+        ];
+      }
+      return [];
+    }
+    if (card.suit === "D") {
+      const actions: ValidAction[] = [
+        { action: "discard_to_abyss", label: "Discard to Abyss", requiresTarget: false },
+      ];
+      if (!hasTakenDiamondAction) {
+        actions.unshift(
+          { action: "discard_diamond_to_draw", label: "Discard to Draw 2 Cards", requiresTarget: false },
+          { action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false },
+        );
+      }
+      return actions;
+    }
+    if (card.suit === "H") {
+      const actions: ValidAction[] = [];
+      if (myCourtSize > 0 && vault >= card.vaultCost) {
+        actions.push({
+          action: "attach_heart",
+          label: `Attach to a Royal (+${card.pipValue} Health) [−${card.vaultCost} Vault]`,
+          requiresTarget: true,
+          targetType: "own_royal",
+        });
+      }
+      if (vault >= card.vaultCost) {
+        actions.push({
+          action: "discard_heart_to_heal",
+          label: `Discard — heal yourself (+${card.pipValue} Life) [−${card.vaultCost} Vault]`,
+          requiresTarget: false,
+        });
+      }
+      return actions;
+    }
+    if (card.suit === "S") {
+      const actions: ValidAction[] = [];
+      if (myCourtSize > 0 && vault >= card.vaultCost) {
+        actions.push({
+          action: "attach_spade",
+          label: `Attach to a Royal (+${card.pipValue} Atk/Def) [−${card.vaultCost} Vault]`,
+          requiresTarget: true,
+          targetType: "own_royal",
+        });
+      }
+      if (vault >= card.vaultCost) {
+        actions.push({
+          action: "discard_spade_to_return",
+          label: `Discard — return a card from Abyss (value ≤ ${card.pipValue}) [−${card.vaultCost} Vault]`,
+          requiresTarget: true,
+          targetType: "pick_abyss",
+        });
+      }
+      return actions;
+    }
+    if (card.suit === "C") {
+      const actions: ValidAction[] = [];
+      if (vault >= card.vaultCost) {
+        actions.push({
+          action: "apply_club",
+          label: `Debuff opponent Royal (−${card.pipValue} ATK/HP) [−${card.vaultCost} Vault]`,
+          requiresTarget: true,
+          targetType: "any_royal",
+        });
+        actions.push({
+          action: "apply_club_damage",
+          label: `Deal ${card.pipValue} damage to a player [−${card.vaultCost} Vault]`,
+          requiresTarget: true,
+          targetType: "any_player",
+        });
+      }
+      return actions;
+    }
+    return [];
+  }
+
   if (!isMyTurn && !isDefender && !isClubResponder) return [];
 
   if (phase === "discard") {
@@ -169,12 +271,10 @@ export function getValidActionsForCard(
 
   if (phase !== "main" && !inDeclareBlocks && !inClubResponse) return [];
 
-  // During declare_blocks, the defender cannot play Royals, Jokers, or Diamonds
   if (inDeclareBlocks && (card.isRoyal || card.isJoker || card.suit === "D")) {
     return [];
   }
 
-  // During respond_to_club, Royals and Jokers are forbidden; Diamonds to Mine forbidden (handled server-side)
   if (inClubResponse && (card.isRoyal || card.isJoker)) {
     return [];
   }
@@ -222,7 +322,6 @@ export function getValidActionsForCard(
         disabled: true,
       });
     } else {
-      // During respond_to_club, playing to Mine is forbidden
       if (!inClubResponse) {
         actions.push({ action: "play_diamond_to_mine", label: "Play to Mine", requiresTarget: false });
       }
