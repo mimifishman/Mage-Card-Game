@@ -15,7 +15,7 @@ args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
 
 [workflows]
-runButton = "artifacts/mockup-sandbox: Component Preview Server"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "artifacts/mobile: expo"
@@ -31,8 +31,8 @@ task = "shell.exec"
 args = "pnpm --filter @workspace/mobile run dev"
 cwd = "./artifacts/mobile"
 waitForPort = 18115
-ensurePreviewReachable = "/status"
 router = "expo-domain"
+
 
 [workflows.workflow.tasks.env]
 PORT = "18115"
