@@ -21,6 +21,13 @@ interface CourtZoneProps {
   size?: "sm" | "md" | "lg" | "xl";
 }
 
+const ATTACHED_SIZE: Record<"sm" | "md" | "lg" | "xl", "sm" | "md" | "lg" | "xl"> = {
+  sm: "sm",
+  md: "sm",
+  lg: "md",
+  xl: "lg",
+};
+
 export default function CourtZone({
   court,
   label,
@@ -92,6 +99,18 @@ export default function CourtZone({
                     </Text>
                   </View>
                 </View>
+
+                {royal.attachedCards && royal.attachedCards.length > 0 && (
+                  <View style={styles.attachedRow}>
+                    {royal.attachedCards.map((attachedId) => (
+                      <CardView
+                        key={attachedId}
+                        cardId={attachedId}
+                        size={ATTACHED_SIZE[size]}
+                      />
+                    ))}
+                  </View>
+                )}
 
                 {royal.hasAttackedThisTurn && (
                   <View style={styles.attackedBadge}>
@@ -192,6 +211,12 @@ const styles = StyleSheet.create({
   },
   hpPillTextDamaged: {
     color: Colors.accentRed,
+  },
+  attachedRow: {
+    flexDirection: "row",
+    gap: 3,
+    flexWrap: "wrap",
+    justifyContent: "center",
   },
   attackedBadge: {
     backgroundColor: "rgba(200,155,60,0.2)",

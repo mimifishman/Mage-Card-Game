@@ -63,11 +63,6 @@ export default function CardView({
         </View>
       )}
 
-      {royal?.attachedCards && royal.attachedCards.length > 0 && (
-        <View style={styles.attachBadge}>
-          <Text style={[styles.attachText, { fontSize: s.iconFont }]}>+{royal.attachedCards.length}</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -105,17 +100,4 @@ const styles = StyleSheet.create({
     right: 3,
   },
   hasteLockText: {},
-  attachBadge: {
-    position: "absolute",
-    bottom: 3,
-    right: 3,
-    backgroundColor: "rgba(200,155,60,0.25)",
-    borderRadius: 4,
-    paddingHorizontal: 3,
-    paddingVertical: 0,
-  },
-  attachText: {
-    color: "#7A5000",
-    fontFamily: "Inter_600SemiBold",
-  },
 });
