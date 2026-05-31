@@ -1,8 +1,9 @@
-import { effectiveHealth, getCard, royalBaseHealth } from "./cards";
-import type { CardId, GameState, PlayerState, Rank, Result } from "./types";
+import { effectiveHealth, getCard } from "./cards";
+import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
 import { canPlayCard, isDuelPhase } from "./validation";
+import { checkAndApplyCancellation } from "./attachments";
 
 function destroyRoyalToAbyss(
   player: PlayerState,
@@ -42,38 +43,41 @@ function applyDebuffToRoyal(
     ...royal,
     buffAttack: royal.buffAttack - card.pipValue,
     buffHealth: royal.buffHealth - card.pipValue,
+    attachedCards: [...royal.attachedCards, clubCardId],
   };
 
-  let updatedTargetPlayer: PlayerState;
-  let currentAbyss = [...state.abyss, clubCardId];
+  const updatedCourt = [...targetPlayer.court];
+  updatedCourt[royalIdx] = debuffedRoyal;
+  const updatedTargetPlayer = { ...targetPlayer, court: updatedCourt };
 
-  const hp = effectiveHealth(debuffedRoyal);
-
-  if (hp <= 0) {
-    const rank = targetRoyalId.slice(0, -1) as Rank;
-    const lifeLoss = Math.max(0, royalBaseHealth(rank) + debuffedRoyal.buffHealth);
-    const result = destroyRoyalToAbyss(targetPlayer, targetRoyalId, currentAbyss);
-    updatedTargetPlayer = {
-      ...result.player,
-      life: Math.max(0, result.player.life - lifeLoss),
-    };
-    currentAbyss = result.abyss;
-  } else {
-    const updatedCourt = [...targetPlayer.court];
-    updatedCourt[royalIdx] = debuffedRoyal;
-    updatedTargetPlayer = { ...targetPlayer, court: updatedCourt };
-  }
-
-  return ok({
+  const stateWithDebuff: GameState = {
     ...state,
-    abyss: currentAbyss,
     pendingClubDebuff: undefined,
     players: {
       ...state.players,
       [attackerPlayerId]: state.players[attackerPlayerId]!,
       [targetPlayerId]: updatedTargetPlayer,
     },
-  });
+  };
+
+  const afterCancel = checkAndApplyCancellation(stateWithDebuff, targetPlayerId, targetRoyalId);
+
+  const finalTargetPlayer = afterCancel.players[targetPlayerId]!;
+  const finalRoyal = finalTargetPlayer.court.find((r) => r.cardId === targetRoyalId);
+
+  if (!finalRoyal || effectiveHealth(finalRoyal) <= 0) {
+    const result = destroyRoyalToAbyss(finalTargetPlayer, targetRoyalId, afterCancel.abyss);
+    return ok({
+      ...afterCancel,
+      abyss: result.abyss,
+      players: {
+        ...afterCancel.players,
+        [targetPlayerId]: result.player,
+      },
+    });
+  }
+
+  return ok(afterCancel);
 }
 
 export function applyClub(
@@ -122,8 +126,6 @@ export function applyClub(
     return err(`Royal ${targetCardId} is not in ${targetPlayerId}'s Court`);
   }
 
-  // If we're already in respond_to_club, resolve immediately without nesting.
-  // Preserve the original pendingClubDebuff so it can still be confirmed after this resolves.
   if (state.phase === "respond_to_club") {
     const result = applyDebuffToRoyal(
       { ...state, players: { ...state.players, [playerId]: afterSpend } },
@@ -136,8 +138,7 @@ export function applyClub(
     return ok({ ...result.value, pendingClubDebuff: state.pendingClubDebuff });
   }
 
-  // During declare_blocks or duel phases, resolve immediately so those phases are not interrupted.
-  if (state.phase === "declare_blocks" || isDuelPhase(state.phase)) {
+  if (state.phase === "declare_blocks") {
     return applyDebuffToRoyal(
       { ...state, players: { ...state.players, [playerId]: afterSpend } },
       playerId,
@@ -147,7 +148,8 @@ export function applyClub(
     );
   }
 
-  // Stage the debuff and enter respond_to_club phase (main phase only)
+  const returnPhase = isDuelPhase(state.phase) ? state.phase : undefined;
+
   return ok({
     ...state,
     phase: "respond_to_club",
@@ -156,6 +158,8 @@ export function applyClub(
       clubCardId: cardId,
       targetPlayerId,
       targetRoyalId: targetCardId,
+      defenderDiamondUsed: false,
+      returnPhase,
     },
     players: {
       ...state.players,
@@ -181,8 +185,9 @@ export function confirmClubResponse(
     return err("Only the defending player can confirm the club response");
   }
 
+  const returnPhase = pending.returnPhase ?? "main";
   return applyDebuffToRoyal(
-    { ...state, phase: "main" },
+    { ...state, phase: returnPhase },
     pending.attackerPlayerId,
     pending.clubCardId,
     pending.targetPlayerId,

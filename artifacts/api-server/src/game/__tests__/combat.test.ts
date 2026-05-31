@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { declareAttack, confirmDeclareBlocks, duelPass, resolveCombat } from "../combat";
+import { declareAttack, confirmDeclareBlocks, setDamageOrder, duelPass, resolveCombat } from "../combat";
 import { discardToAbyss, discardDiamondToDraw, discardDiamondForBoost } from "../diamonds";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
@@ -17,8 +17,8 @@ function mkRoyal(cardId: string, overrides: Partial<RoyalInCourt> = {}): RoyalIn
   };
 }
 
-describe("declareAttack (multi-Royal)", () => {
-  it("sends all eligible Royals into attack and transitions to declare_blocks", () => {
+describe("declareAttack (multi-Royal, Rule 1)", () => {
+  it("attacks with specified royal IDs and transitions to declare_blocks", () => {
     const state = makeState({
       phase: "main",
       players: {
@@ -26,7 +26,7 @@ describe("declareAttack (multi-Royal)", () => {
         [P2]: makePlayer(P2, { court: [mkRoyal("JD")] }),
       },
     });
-    const result = declareAttack(state, P1, P2);
+    const result = declareAttack(state, P1, P2, ["KH", "QS"]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.attacks).toHaveLength(2);
@@ -37,7 +37,24 @@ describe("declareAttack (multi-Royal)", () => {
     expect(result.value.players[P1]!.court.every((r) => r.hasAttackedThisTurn)).toBe(true);
   });
 
-  it("excludes haste-locked Royals from the attack", () => {
+  it("attacks with only a subset of eligible royals", () => {
+    const state = makeState({
+      phase: "main",
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = declareAttack(state, P1, P2, ["KH"]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.attacks).toHaveLength(1);
+    expect(result.value.attacks[0]!.attackerCardId).toBe("KH");
+    const qs = result.value.players[P1]!.court.find((r) => r.cardId === "QS");
+    expect(qs?.hasAttackedThisTurn).toBe(false);
+  });
+
+  it("rejects if a specified royal is haste-locked", () => {
     const state = makeState({
       phase: "main",
       players: {
@@ -45,25 +62,24 @@ describe("declareAttack (multi-Royal)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.attacks).toHaveLength(1);
-    expect(result.value.attacks[0]!.attackerCardId).toBe("KH");
+    const result = declareAttack(state, P1, P2, ["KH", "QS"]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/haste-locked/i);
   });
 
-  it("rejects if no eligible Royals (all haste-locked)", () => {
+  it("rejects an empty royalCardIds list", () => {
     const state = makeState({
       phase: "main",
       players: {
-        [P1]: makePlayer(P1, { court: [mkRoyal("KH", { hasteLocked: true })] }),
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2);
+    const result = declareAttack(state, P1, P2, []);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error).toMatch(/eligible/i);
+    expect(result.error).toMatch(/at least one/i);
   });
 
   it("rejects if not active player's turn", () => {
@@ -74,7 +90,7 @@ describe("declareAttack (multi-Royal)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2);
+    const result = declareAttack(state, P1, P2, ["KH"]);
     expect(result.ok).toBe(false);
   });
 
@@ -85,7 +101,7 @@ describe("declareAttack (multi-Royal)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P1);
+    const result = declareAttack(state, P1, P1, ["KH"]);
     expect(result.ok).toBe(false);
   });
 
@@ -97,7 +113,7 @@ describe("declareAttack (multi-Royal)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2);
+    const result = declareAttack(state, P1, P2, ["KH"]);
     expect(result.ok).toBe(false);
   });
 
@@ -109,13 +125,27 @@ describe("declareAttack (multi-Royal)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2);
+    const result = declareAttack(state, P1, P2, ["KH"]);
     expect(result.ok).toBe(false);
+  });
+
+  it("rejects duplicate Royal IDs in the attack list", () => {
+    const state = makeState({
+      phase: "main",
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = declareAttack(state, P1, P2, ["KH", "KH"]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/duplicate/i);
   });
 });
 
-describe("confirmDeclareBlocks", () => {
-  it("assigns blockers and transitions to duel_attacker_turn", () => {
+describe("confirmDeclareBlocks (Rule 2 — multi-blocker)", () => {
+  it("assigns single blocker array and transitions to duel_blocker_turn (blocker acts first)", () => {
     const state = makeState({
       phase: "declare_blocks",
       attacks: [
@@ -128,19 +158,40 @@ describe("confirmDeclareBlocks", () => {
       },
     });
     const result = confirmDeclareBlocks(state, P2, {
-      KH: "JD",
+      KH: ["JD"],
       QS: "pass",
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.phase).toBe("duel_attacker_turn");
+    expect(result.value.phase).toBe("duel_blocker_turn");
     const kh = result.value.attacks.find((a) => a.attackerCardId === "KH");
-    expect(kh?.blockerCardId).toBe("JD");
+    expect(kh?.blockerCardIds).toEqual(["JD"]);
     const qs = result.value.attacks.find((a) => a.attackerCardId === "QS");
     expect(qs?.passed).toBe(true);
     expect(result.value.duelContext).toBeDefined();
     expect(result.value.duelContext!.attackerPlayerId).toBe(P1);
     expect(result.value.duelContext!.defenderPlayerId).toBe(P2);
+  });
+
+  it("multi-blocker on one attacker transitions to assign_damage_order (Rule 2)", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 },
+      ],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("JD"), mkRoyal("QS")] }),
+      },
+    });
+    const result = confirmDeclareBlocks(state, P2, {
+      KH: ["JD", "QS"],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("assign_damage_order");
+    const kh = result.value.attacks.find((a) => a.attackerCardId === "KH");
+    expect(kh?.blockerCardIds).toEqual(["JD", "QS"]);
   });
 
   it("rejects if a blocker is used for multiple attacks", () => {
@@ -156,8 +207,8 @@ describe("confirmDeclareBlocks", () => {
       },
     });
     const result = confirmDeclareBlocks(state, P2, {
-      KH: "JD",
-      QS: "JD",
+      KH: ["JD"],
+      QS: ["JD"],
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -177,7 +228,7 @@ describe("confirmDeclareBlocks", () => {
       },
     });
     const result = confirmDeclareBlocks(state, P2, {
-      KH: "JD",
+      KH: ["JD"],
     });
     expect(result.ok).toBe(false);
   });
@@ -191,10 +242,25 @@ describe("confirmDeclareBlocks", () => {
         [P2]: makePlayer(P2, { court: [] }),
       },
     });
-    const result = confirmDeclareBlocks(state, P2, { KH: "JD" });
+    const result = confirmDeclareBlocks(state, P2, { KH: ["JD"] });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/not in your Court/i);
+  });
+
+  it("rejects a tapped Royal as blocker (Rule 5)", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("JD", { hasAttackedThisTurn: true })] }),
+      },
+    });
+    const result = confirmDeclareBlocks(state, P2, { KH: ["JD"] });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/already attacked/i);
   });
 
   it("rejects if not in declare_blocks phase", () => {
@@ -383,10 +449,10 @@ describe("resolveCombat (from duel phases)", () => {
     expect(result.value.duelContext).toBeUndefined();
   });
 
-  it("blocked attack: both Royals take damage", () => {
+  it("blocked attack: both Royals take damage (single blocker in array)", () => {
     const state = makeState({
       phase: "duel_attacker_turn",
-      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardId: "JD" }],
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardIds: ["JD"] }],
       duelContext: {
         attackerPlayerId: P1,
         defenderPlayerId: P2,
@@ -454,26 +520,26 @@ describe("full duel flow: attack → blocks → duel → resolve", () => {
       },
     });
 
-    const afterAttack = declareAttack(initial, P1, P2);
+    const afterAttack = declareAttack(initial, P1, P2, ["KH", "QS"]);
     expect(afterAttack.ok).toBe(true);
     if (!afterAttack.ok) return;
     expect(afterAttack.value.phase).toBe("declare_blocks");
     expect(afterAttack.value.attacks).toHaveLength(2);
 
     const afterBlocks = confirmDeclareBlocks(afterAttack.value, P2, {
-      KH: "JD",
+      KH: ["JD"],
       QS: "pass",
     });
     expect(afterBlocks.ok).toBe(true);
     if (!afterBlocks.ok) return;
-    expect(afterBlocks.value.phase).toBe("duel_attacker_turn");
+    expect(afterBlocks.value.phase).toBe("duel_blocker_turn");
 
-    const afterAttackerPass = duelPass(afterBlocks.value, P1);
-    expect(afterAttackerPass.ok).toBe(true);
-    if (!afterAttackerPass.ok) return;
-    expect(afterAttackerPass.value.phase).toBe("duel_blocker_turn");
+    const afterBlockerPass = duelPass(afterBlocks.value, P2);
+    expect(afterBlockerPass.ok).toBe(true);
+    if (!afterBlockerPass.ok) return;
+    expect(afterBlockerPass.value.phase).toBe("duel_attacker_turn");
 
-    const afterBothPass = duelPass(afterAttackerPass.value, P2);
+    const afterBothPass = duelPass(afterBlockerPass.value, P1);
     expect(afterBothPass.ok).toBe(true);
     if (!afterBothPass.ok) return;
     expect(afterBothPass.value.phase).toBe("main");
@@ -558,5 +624,97 @@ describe("Diamond rule enforcement during duel", () => {
     expect(result.value.phase).toBe("main");
     expect(result.value.players[P2]!.life).toBe(17);
     expect(result.value.duelContext).toBeUndefined();
+  });
+});
+
+describe("setDamageOrder (Rule 2 validation)", () => {
+  function multiBlockerState() {
+    // Give both players non-Royal cards so autoAdvanceDuelIfNeeded doesn't auto-resolve
+    return makeState({
+      phase: "assign_damage_order",
+      attacks: [
+        {
+          attackerPlayerId: P1,
+          attackerCardId: "KH",
+          targetPlayerId: P2,
+          blockerCardIds: ["JD", "QS"],
+        },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+      },
+      players: {
+        [P1]: makePlayer(P1, { hand: ["5H"], court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { hand: ["3H"], life: 20, court: [mkRoyal("JD"), mkRoyal("QS")] }),
+      },
+    });
+  }
+
+  it("accepts a valid permutation and advances to duel_blocker_turn (blocker acts first)", () => {
+    const state = multiBlockerState();
+    const result = setDamageOrder(state, P1, { KH: ["JD", "QS"] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("duel_blocker_turn");
+    const kh = result.value.attacks.find((a) => a.attackerCardId === "KH");
+    expect(kh?.blockerDamageOrder).toEqual(["JD", "QS"]);
+  });
+
+  it("accepts the reverse permutation", () => {
+    const state = multiBlockerState();
+    const result = setDamageOrder(state, P1, { KH: ["QS", "JD"] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const kh = result.value.attacks.find((a) => a.attackerCardId === "KH");
+    expect(kh?.blockerDamageOrder).toEqual(["QS", "JD"]);
+  });
+
+  it("rejects if the provided list is missing a blocker", () => {
+    const state = multiBlockerState();
+    const result = setDamageOrder(state, P1, { KH: ["JD"] });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/invalid damage order/i);
+  });
+
+  it("rejects if the provided list contains an unknown blocker ID", () => {
+    const state = multiBlockerState();
+    const result = setDamageOrder(state, P1, { KH: ["JD", "ZZ"] });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/invalid damage order/i);
+  });
+
+  it("rejects if a required attacker assignment is missing from the payload", () => {
+    const state = multiBlockerState();
+    const result = setDamageOrder(state, P1, {});
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/missing damage order/i);
+  });
+
+  it("rejects if called by the defender (not the attacker)", () => {
+    const state = multiBlockerState();
+    const result = setDamageOrder(state, P2, { KH: ["JD", "QS"] });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/only the attacker/i);
+  });
+
+  it("rejects if called outside assign_damage_order phase", () => {
+    const state = makeState({
+      phase: "main",
+      players: {
+        [P1]: makePlayer(P1),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = setDamageOrder(state, P1, {});
+    expect(result.ok).toBe(false);
   });
 });

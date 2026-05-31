@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { applyClubToRoyal, confirmClubResponse } from "../clubs";
+import { attachHeart } from "../attachments";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
 
@@ -39,6 +40,7 @@ describe("applyClubToRoyal (staging)", () => {
       clubCardId: "3C",
       targetPlayerId: P2,
       targetRoyalId: "KH",
+      defenderDiamondUsed: false,
     });
     // Club card removed from hand, not yet in abyss
     expect(result.value.players[P1]!.hand).not.toContain("3C");
@@ -133,7 +135,9 @@ describe("confirmClubResponse", () => {
     const king = result.value.players[P2]!.court.find((r) => r.cardId === "KH")!;
     expect(king.buffAttack).toBe(2);
     expect(king.buffHealth).toBe(2);
-    expect(result.value.abyss).toContain("3C");
+    // Rule 3: Club card stays in attachedCards for pip-cancellation tracking (not immediately sent to abyss)
+    expect(king.attachedCards).toContain("3C");
+    expect(result.value.abyss).not.toContain("3C");
   });
 
   it("destroys Royal when effective health <= 0 and sends Royal + attachments to Abyss", () => {
@@ -164,7 +168,8 @@ describe("confirmClubResponse", () => {
     expect(result.value.abyss).toContain("10C");
   });
 
-  it("reduces target player life by Royal maxHp when debuff kills (positive lifeLoss)", () => {
+  it("destroys Royal when debuff kills it, no life loss (Rule 6)", () => {
+    // Rule 6: When a Royal is killed by a Club, the controller does NOT lose life.
     const state = makeState({
       phase: "respond_to_club",
       mine: ["10D"],
@@ -185,7 +190,8 @@ describe("confirmClubResponse", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.players[P2]!.court).toHaveLength(0);
-    expect(result.value.players[P2]!.life).toBe(17);
+    // No life loss from Club kill (Rule 6)
+    expect(result.value.players[P2]!.life).toBe(20);
     expect(result.value.players[P1]!.life).toBe(20);
   });
 
@@ -270,7 +276,7 @@ describe("confirmClubResponse", () => {
     if (!result.ok) return;
 
     // Original pendingClubDebuff should still be present
-    expect(result.value.pendingClubDebuff).toEqual({
+    expect(result.value.pendingClubDebuff).toMatchObject({
       attackerPlayerId: P1,
       clubCardId: "3C",
       targetPlayerId: P2,
@@ -283,8 +289,9 @@ describe("confirmClubResponse", () => {
     expect(qh!.buffAttack).toBe(1); // 5 - 4
     expect(qh!.buffHealth).toBe(1); // 5 - 4
 
-    // 4C went to abyss; 3C not yet in abyss
-    expect(result.value.abyss).toContain("4C");
+    // Rule 3: 4C is now in QH's attachedCards (Club stored for pip-cancellation), not abyss
+    expect(qh!.attachedCards).toContain("4C");
+    expect(result.value.abyss).not.toContain("4C");
     expect(result.value.abyss).not.toContain("3C");
 
     // Phase stays respond_to_club
@@ -296,7 +303,10 @@ describe("confirmClubResponse", () => {
     if (!confirmed.ok) return;
     expect(confirmed.value.phase).toBe("main");
     expect(confirmed.value.pendingClubDebuff).toBeUndefined();
-    expect(confirmed.value.abyss).toContain("3C");
+    // Rule 3: 3C stays in KH's attachedCards (KH survives the 3-pip debuff with buffHealth 5→2)
+    const khAfterConfirm = confirmed.value.players[P2]!.court.find((r) => r.cardId === "KH");
+    expect(khAfterConfirm!.attachedCards).toContain("3C");
+    expect(confirmed.value.abyss).not.toContain("3C");
   });
 
   it("defender direct Club damage during window preserves pendingClubDebuff", () => {
@@ -332,7 +342,7 @@ describe("confirmClubResponse", () => {
     expect(result.value.abyss).toContain("2C");
 
     // Original pendingClubDebuff preserved
-    expect(result.value.pendingClubDebuff).toEqual({
+    expect(result.value.pendingClubDebuff).toMatchObject({
       attackerPlayerId: P1,
       clubCardId: "3C",
       targetPlayerId: P2,
@@ -356,7 +366,7 @@ describe("confirmClubResponse", () => {
           attackerPlayerId: P1,
           attackerCardId: "QH",
           targetPlayerId: P2,
-          blockerCardId: undefined,
+          blockerCardIds: undefined,
           passed: false,
         },
       ],
@@ -388,8 +398,9 @@ describe("confirmClubResponse", () => {
     expect(qh!.buffAttack).toBe(2); // 5 - 3
     expect(qh!.buffHealth).toBe(2); // 5 - 3
 
-    // 3C went to abyss
-    expect(result.value.abyss).toContain("3C");
+    // 3C is now attached to the Royal (Rule 3: Club stored in attachedCards for cancellation)
+    const qhAfter = result.value.players[P1]!.court.find((r) => r.cardId === "QH");
+    expect(qhAfter!.attachedCards).toContain("3C");
   });
 
   it("full flow: stage then confirm with Royal buffed during window", () => {
@@ -423,5 +434,118 @@ describe("confirmClubResponse", () => {
     const king = confirmed.value.players[P2]!.court.find((r) => r.cardId === "KH")!;
     // KH base HP = 3, pipValue of 3C = 3, so buffHealth = 0 - 3 = -3, effectiveHealth = 3 + (-3) - 0 = 0 => dead
     expect(confirmed.value.players[P2]!.court).toHaveLength(0);
+  });
+
+  it("Club-on-Royal during duel stages respond_to_club so defender can respond", () => {
+    // During a duel the attacker plays a Club on the blocker's Royal.
+    // This must enter respond_to_club (NOT apply immediately) so the defender
+    // has a window to play Hearts/Spades to save their Royal.
+    // After confirmClubResponse the game returns to the original duel phase.
+    const state = makeState({
+      phase: "duel_attacker_turn",
+      mine: ["10D"],
+      activePlayerId: P1,
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+      },
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["3C"],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+        [P2]: makePlayer(P2, {
+          court: [mkRoyal("KH", { buffAttack: 5, buffHealth: 5 })],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+      },
+    });
+
+    // Attacker plays 3C on defender's KH → must stage, NOT apply immediately
+    const staged = applyClubToRoyal(state, P1, "3C", P2, "KH");
+    expect(staged.ok).toBe(true);
+    if (!staged.ok) return;
+
+    expect(staged.value.phase).toBe("respond_to_club");
+    expect(staged.value.pendingClubDebuff).toMatchObject({
+      attackerPlayerId: P1,
+      clubCardId: "3C",
+      targetPlayerId: P2,
+      targetRoyalId: "KH",
+      returnPhase: "duel_attacker_turn",
+    });
+    // Royal NOT yet debuffed — defender still has a chance to respond
+    const khBeforeConfirm = staged.value.players[P2]!.court.find((r) => r.cardId === "KH")!;
+    expect(khBeforeConfirm.buffAttack).toBe(5);
+    expect(khBeforeConfirm.buffHealth).toBe(5);
+
+    // Defender (P2) confirms without playing any extra cards
+    const confirmed = confirmClubResponse(staged.value, P2);
+    expect(confirmed.ok).toBe(true);
+    if (!confirmed.ok) return;
+
+    // Phase returns to the duel
+    expect(confirmed.value.phase).toBe("duel_attacker_turn");
+    expect(confirmed.value.pendingClubDebuff).toBeUndefined();
+
+    // Debuff now applied
+    const khAfter = confirmed.value.players[P2]!.court.find((r) => r.cardId === "KH")!;
+    expect(khAfter.buffAttack).toBe(2); // 5 - 3
+    expect(khAfter.buffHealth).toBe(2); // 5 - 3
+    expect(khAfter.attachedCards).toContain("3C");
+  });
+
+  it("blocker can play Heart during duel respond_to_club window to save Royal", () => {
+    // Attacker plays 3C on blocker's KH (base hp=3, no buffs). Without intervention
+    // the Royal dies. Defender attaches 5H during the window, boosting hp enough to survive.
+    const staged = makeState({
+      phase: "respond_to_club",
+      mine: ["10D"],
+      pendingClubDebuff: {
+        attackerPlayerId: P1,
+        clubCardId: "3C",
+        targetPlayerId: P2,
+        targetRoyalId: "KH",
+        defenderDiamondUsed: false,
+        returnPhase: "duel_attacker_turn" as const,
+      },
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+      },
+      players: {
+        [P1]: makePlayer(P1, { vault: { tempBoost: 0, spent: 3 } }),
+        [P2]: makePlayer(P2, {
+          hand: ["5H"],
+          court: [mkRoyal("KH")], // base hp=3, no buffs — would die to 3C alone
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+      },
+    });
+
+    // Defender attaches 5H to shore up KH's health (+5 buff)
+    const withHeart = attachHeart(staged, P2, "5H", "KH");
+    expect(withHeart.ok).toBe(true);
+    if (!withHeart.ok) return;
+
+    // Confirm — 3C applied. effectiveHealth = 3+5-3 = 5 > 0, Royal survives
+    const confirmed = confirmClubResponse(withHeart.value, P2);
+    expect(confirmed.ok).toBe(true);
+    if (!confirmed.ok) return;
+    expect(confirmed.value.phase).toBe("duel_attacker_turn");
+
+    const kh = confirmed.value.players[P2]!.court.find((r) => r.cardId === "KH");
+    expect(kh).toBeDefined(); // KH alive!
+    expect(kh!.buffHealth).toBe(2); // 5H buff(+5) − 3C debuff(-3) = +2
+    expect(kh!.attachedCards).toContain("5H");
+    expect(kh!.attachedCards).toContain("3C");
   });
 });

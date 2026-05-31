@@ -8,6 +8,66 @@ function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return { ...player, hand: player.hand.filter((c) => c !== cardId) };
 }
 
+export function checkAndApplyCancellation(
+  state: GameState,
+  playerId: string,
+  royalCardId: CardId,
+): GameState {
+  const player = state.players[playerId];
+  if (!player) return state;
+
+  const royalIdx = player.court.findIndex((r) => r.cardId === royalCardId);
+  if (royalIdx === -1) return state;
+
+  const royal = player.court[royalIdx]!;
+
+  let spadePipTotal = 0;
+  let clubPipTotal = 0;
+  const heartIds: CardId[] = [];
+  const spadeAndClubIds: CardId[] = [];
+
+  for (const attachedId of royal.attachedCards) {
+    const card = getCard(attachedId);
+    if (card.suit === "S") {
+      spadePipTotal += card.pipValue;
+      spadeAndClubIds.push(attachedId);
+    } else if (card.suit === "C") {
+      clubPipTotal += card.pipValue;
+      spadeAndClubIds.push(attachedId);
+    } else if (card.suit === "H") {
+      heartIds.push(attachedId);
+    }
+  }
+
+  if (spadePipTotal === 0 || clubPipTotal === 0 || spadePipTotal !== clubPipTotal) {
+    return state;
+  }
+
+  const heartBuffHealth = heartIds.reduce((sum, id) => {
+    const c = getCard(id);
+    return sum + c.pipValue;
+  }, 0);
+
+  const cancelledRoyal: RoyalInCourt = {
+    ...royal,
+    buffAttack: 0,
+    buffHealth: heartBuffHealth,
+    attachedCards: heartIds,
+  };
+
+  const updatedCourt = [...player.court];
+  updatedCourt[royalIdx] = cancelledRoyal;
+
+  return {
+    ...state,
+    players: {
+      ...state.players,
+      [playerId]: { ...player, court: updatedCourt },
+    },
+    abyss: [...state.abyss, ...spadeAndClubIds],
+  };
+}
+
 export function attachHeart(
   state: GameState,
   playerId: string,
@@ -81,10 +141,12 @@ export function attachSpade(
   const afterSpend = spendVault(removeFromHand(player, cardId), card.vaultCost);
   const updated: PlayerState = { ...afterSpend, court: updatedCourt };
 
-  return ok({
+  const stateWithSpade: GameState = {
     ...state,
     players: { ...state.players, [playerId]: updated },
-  });
+  };
+
+  return ok(checkAndApplyCancellation(stateWithSpade, playerId, targetCardId));
 }
 
 export function discardHeartToHeal(

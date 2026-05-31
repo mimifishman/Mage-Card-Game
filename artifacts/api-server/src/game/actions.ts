@@ -72,11 +72,23 @@ export const PlayJokerActionSchema = z.object({
 export const DeclareAttackActionSchema = z.object({
   type: z.literal("declare_attack"),
   targetPlayerId: z.string(),
+  royalCardIds: z.array(z.string()).min(1),
 });
 
 export const ConfirmDeclareBlocksActionSchema = z.object({
   type: z.literal("confirm_declare_blocks"),
-  blocks: z.record(z.string(), z.string()),
+  blocks: z.record(
+    z.string(),
+    z.preprocess(
+      (val) => (Array.isArray(val) && val.length === 0 ? "pass" : val),
+      z.union([z.literal("pass"), z.array(z.string()).min(1)]),
+    ),
+  ),
+});
+
+export const SetDamageOrderActionSchema = z.object({
+  type: z.literal("set_damage_order"),
+  assignments: z.record(z.string(), z.array(z.string())),
 });
 
 export const DuelPassActionSchema = z.object({
@@ -111,6 +123,7 @@ export const GameActionSchema = z.discriminatedUnion("type", [
   PlayJokerActionSchema,
   DeclareAttackActionSchema,
   ConfirmDeclareBlocksActionSchema,
+  SetDamageOrderActionSchema,
   DuelPassActionSchema,
   EndTurnActionSchema,
   DiscardToEndTurnActionSchema,

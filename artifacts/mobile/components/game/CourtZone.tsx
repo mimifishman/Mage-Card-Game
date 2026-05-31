@@ -19,6 +19,10 @@ interface CourtZoneProps {
   selectedTargetId?: string | null;
   onRoyalPress?: (royalId: string) => void;
   size?: "sm" | "md" | "lg" | "xl";
+  phase?: string;
+  isDefender?: boolean;
+  highlightedIds?: Set<string>;
+  dimmedIds?: Set<string>;
 }
 
 const ATTACHED_SIZE: Record<"sm" | "md" | "lg" | "xl", "sm" | "md" | "lg" | "xl"> = {
@@ -36,6 +40,10 @@ export default function CourtZone({
   selectedTargetId = null,
   onRoyalPress,
   size = "md",
+  phase,
+  isDefender = false,
+  highlightedIds,
+  dimmedIds,
 }: CourtZoneProps) {
   const statFontSize = size === "xl" ? 14 : size === "lg" ? 13 : 11;
 
@@ -55,7 +63,11 @@ export default function CourtZone({
           contentContainerStyle={styles.scrollContent}
         >
           {court.map((royal) => {
-            const canInteract = !!onRoyalPress;
+            const isTapped = royal.hasAttackedThisTurn;
+            const isBlockerIneligible = isDefender && phase === "declare_blocks" && isTapped;
+            const isDimmed = dimmedIds?.has(royal.cardId) || isBlockerIneligible;
+            const isHighlighted = highlightedIds?.has(royal.cardId);
+            const canInteract = !!onRoyalPress && !isDimmed;
             const isSelected = selectedTargetId === royal.cardId;
 
             const card = parseCardId(royal.cardId);
@@ -70,6 +82,9 @@ export default function CourtZone({
                 onPress={() => canInteract && onRoyalPress?.(royal.cardId)}
                 style={({ pressed }) => [
                   styles.royalWrapper,
+                  isTapped && styles.royalTapped,
+                  isDimmed && styles.royalDimmed,
+                  isHighlighted && styles.royalHighlighted,
                   pressed && canInteract && { opacity: 0.75 },
                   isSelected && styles.royalSelected,
                 ]}
@@ -112,9 +127,9 @@ export default function CourtZone({
                   </View>
                 )}
 
-                {royal.hasAttackedThisTurn && (
-                  <View style={styles.attackedBadge}>
-                    <Text style={styles.attackedText}>ATK</Text>
+                {isTapped && (
+                  <View style={styles.tappedBadge}>
+                    <Text style={styles.tappedText}>TAPPED</Text>
                   </View>
                 )}
               </Pressable>
@@ -176,6 +191,16 @@ const styles = StyleSheet.create({
   royalSelected: {
     transform: [{ translateY: -4 }],
   },
+  royalTapped: {
+    opacity: 0.65,
+    transform: [{ rotate: "8deg" }],
+  },
+  royalDimmed: {
+    opacity: 0.35,
+  },
+  royalHighlighted: {
+    transform: [{ translateY: -4 }],
+  },
   statRow: {
     flexDirection: "row",
     gap: 4,
@@ -218,7 +243,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "center",
   },
-  attackedBadge: {
+  tappedBadge: {
     backgroundColor: "rgba(200,155,60,0.2)",
     borderRadius: 4,
     paddingHorizontal: 5,
@@ -226,7 +251,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(200,155,60,0.4)",
   },
-  attackedText: {
+  tappedText: {
     fontSize: 7,
     color: Colors.brand,
     fontFamily: "Inter_600SemiBold",

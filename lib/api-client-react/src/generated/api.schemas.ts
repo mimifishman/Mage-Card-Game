@@ -139,7 +139,7 @@ export interface AttackDeclaration {
   attackerPlayerId: string;
   attackerCardId: string;
   targetPlayerId: string;
-  blockerCardId?: string | null;
+  blockerCardIds?: string[] | null;
   /** True when the defending player chose to not block this attack */
   passed?: boolean;
 }
@@ -149,6 +149,7 @@ export interface PendingClubDebuff {
   clubCardId: string;
   targetPlayerId: string;
   targetRoyalId: string;
+  defenderDiamondUsed?: boolean;
 }
 
 export interface DuelContext {
@@ -162,7 +163,7 @@ export interface DuelContext {
 
 export interface CombatPairOutcome {
   attackerCardId: string;
-  blockerCardId: string | null;
+  blockerCardIds: string[];
   attackerDestroyed: boolean;
   blockerDestroyed: boolean;
   directDamage: number;
@@ -181,6 +182,7 @@ export const PlayerGameViewPhase = {
   main: "main",
   declare_attacks: "declare_attacks",
   declare_blocks: "declare_blocks",
+  assign_damage_order: "assign_damage_order",
   duel_attacker_turn: "duel_attacker_turn",
   duel_blocker_turn: "duel_blocker_turn",
   resolve_combat: "resolve_combat",
@@ -234,6 +236,7 @@ export const GameActionRequestType = {
   play_joker: "play_joker",
   declare_attack: "declare_attack",
   confirm_declare_blocks: "confirm_declare_blocks",
+  set_damage_order: "set_damage_order",
   duel_pass: "duel_pass",
   end_turn: "end_turn",
   discard_to_end_turn: "discard_to_end_turn",
@@ -259,8 +262,12 @@ export interface GameActionRequest {
   targetRoyalId?: string;
   targetPlayerId?: string;
   targetCardId?: string;
-  /** Map from attackerCardId to blockerCardId or "pass" */
-  blocks?: Record<string, string>;
+  /** Map from attackerCardId to blocker card ID(s) or "pass" */
+  blocks?: Record<string, string | string[]>;
+  /** Ordered list of Royal card IDs to attack with */
+  royalCardIds?: string[];
+  /** Map from attackerCardId to ordered blocker IDs for damage assignment */
+  assignments?: Record<string, string[]>;
   mode?: GameActionRequestMode;
 }
 

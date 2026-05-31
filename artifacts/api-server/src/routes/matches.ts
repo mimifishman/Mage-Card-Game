@@ -172,6 +172,7 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
 
   const parsed = GameActionSchema.safeParse(req.body);
   if (!parsed.success) {
+    req.log.warn({ body: req.body, errors: parsed.error.flatten() }, "Invalid action body — Zod rejected");
     res.status(400).json({ error: "Invalid action", details: parsed.error.flatten() });
     return;
   }

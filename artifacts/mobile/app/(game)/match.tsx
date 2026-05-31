@@ -45,8 +45,9 @@ import CardActionSheet from "@/components/game/CardActionSheet";
 import type { ActionParams } from "@/components/game/CardActionSheet";
 import BlockingModal from "@/components/game/BlockingModal";
 import DuelPhaseModal from "@/components/game/DuelPhaseModal";
+import DamageOrderModal from "@/components/game/DamageOrderModal";
 import CardView from "@/components/game/CardView";
-import { parseCardId, isDuelTurnPhase } from "@/lib/gameUtils";
+import { parseCardId, isDuelTurnPhase, effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
 import type { CardAction } from "@/lib/gameUtils";
 
 export default function MatchScreen() {
@@ -63,6 +64,11 @@ export default function MatchScreen() {
   const [pendingAttackTargetId, setPendingAttackTargetId] = useState<string | null>(null);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [combatResultText, setCombatResultText] = useState<string | null>(null);
+
+  const [attackSelectMode, setAttackSelectMode] = useState(false);
+  const [selectedAttackRoyalIds, setSelectedAttackRoyalIds] = useState<Set<string>>(new Set());
+  const [blockingMinimized, setBlockingMinimized] = useState(false);
+
   const prevPhaseRef = useRef<string | null>(null);
   const prevPlayersRef = useRef<Record<string, { life: number; courtSize: number }>>({});
 
@@ -127,10 +133,14 @@ export default function MatchScreen() {
     const prev = prevPhaseRef.current;
     const prevPlayers = prevPlayersRef.current;
 
-    const wasDuel = prev === "duel_attacker_turn" || prev === "duel_blocker_turn" || prev === "declare_blocks";
+    const wasCombat =
+      prev === "duel_attacker_turn" ||
+      prev === "duel_blocker_turn" ||
+      prev === "declare_blocks" ||
+      prev === "assign_damage_order";
     const nowResolved = gameState.phase === "main" || gameState.phase === "draw";
 
-    if (wasDuel && nowResolved) {
+    if (wasCombat && nowResolved) {
       const parts: string[] = [];
       for (const [id, p] of Object.entries(gameState.players)) {
         const before = prevPlayers[id];
@@ -166,6 +176,13 @@ export default function MatchScreen() {
     if (!gameState) return;
     if (gameState.phase === "respond_to_club" || isDuelTurnPhase(gameState.phase)) {
       setSelectedCardId(null);
+    }
+    if (gameState.phase !== "main") {
+      setAttackSelectMode(false);
+      setSelectedAttackRoyalIds(new Set());
+    }
+    if (gameState.phase !== "declare_blocks") {
+      setBlockingMinimized(false);
     }
   }, [gameState?.phase]);
 
@@ -207,6 +224,8 @@ export default function MatchScreen() {
         setSelectedCardId(null);
         setSelectedTargetRoyalId(null);
         setPendingAttackTargetId(null);
+        setAttackSelectMode(false);
+        setSelectedAttackRoyalIds(new Set());
         if (data.winnerUserId) {
           hasNavigatedRef.current = true;
           router.replace({
@@ -372,15 +391,32 @@ export default function MatchScreen() {
     submitAction({ matchId, data: { type: "confirm_club_response" } });
   }, [matchId, submitAction]);
 
-  const handleAttack = useCallback((targetPlayerId: string) => {
+  const handleAttack = useCallback((targetPlayerId: string, royalCardIds: string[]) => {
     if (!matchId) return;
-    submitAction({ matchId, data: { type: "declare_attack", targetPlayerId } });
+    submitAction({
+      matchId,
+      data: { type: "declare_attack", targetPlayerId, royalCardIds },
+    });
     setPendingAttackTargetId(null);
+    setAttackSelectMode(false);
+    setSelectedAttackRoyalIds(new Set());
   }, [matchId, submitAction]);
 
-  const handleConfirmBlocks = useCallback((blocks: Record<string, string>) => {
+  const handleConfirmBlocks = useCallback((blocks: Record<string, string[]>) => {
     if (!matchId) return;
-    submitAction({ matchId, data: { type: "confirm_declare_blocks", blocks } });
+    const converted: Record<string, string | string[]> = {};
+    for (const [atkId, blkIds] of Object.entries(blocks)) {
+      converted[atkId] = blkIds.length === 0 ? "pass" : blkIds;
+    }
+    if (__DEV__) {
+      console.log("[blocks] confirm_declare_blocks payload:", JSON.stringify(converted));
+    }
+    submitAction({ matchId, data: { type: "confirm_declare_blocks", blocks: converted as Record<string, string> } });
+  }, [matchId, submitAction]);
+
+  const handleSetDamageOrder = useCallback((assignments: Record<string, string[]>) => {
+    if (!matchId) return;
+    submitAction({ matchId, data: { type: "set_damage_order", assignments } as unknown as GameActionRequest });
   }, [matchId, submitAction]);
 
   const handleDuelPass = useCallback(() => {
@@ -426,6 +462,7 @@ export default function MatchScreen() {
   const inMainPhase = phase === "main";
   const inDeclareBlocks = phase === "declare_blocks";
   const inRespondToClub = phase === "respond_to_club";
+  const inAssignDamageOrder = phase === "assign_damage_order";
   const inDuel = isDuelTurnPhase(phase);
   const attacksTargetingMe = gameState.attacks.filter((a) => a.targetPlayerId === myId);
   const isDefender = inDeclareBlocks && attacksTargetingMe.length > 0;
@@ -442,21 +479,26 @@ export default function MatchScreen() {
   const pendingClub = gameState.pendingClubDebuff;
   const isClubResponder = inRespondToClub && pendingClub?.targetPlayerId === myId;
   const isClubAttacker = inRespondToClub && pendingClub?.attackerPlayerId === myId;
+  const targetedClubRoyal = pendingClub
+    ? gameState.players[pendingClub.targetPlayerId]?.court.find(
+        (r) => r.cardId === pendingClub.targetRoyalId,
+      )
+    : undefined;
 
   const vault = myState?.vault.available ?? 0;
 
   const inDiscardPhase = isMyTurn && phase === "discard";
   const discardCount = inDiscardPhase ? Math.max(0, (gameState.myHand ?? []).length - 7) : 0;
 
-  const canEndTurn = isMyTurn && (inMainPhase || phase === "end_turn") && !inDiscardPhase;
+  const canEndTurn = isMyTurn && (inMainPhase || phase === "end_turn") && !inDiscardPhase && !attackSelectMode;
 
   const eligibleAttackers = (myState?.court ?? []).filter((r) => !r.hasAttackedThisTurn && !r.hasteLocked);
   const hasEligibleAttackers = eligibleAttackers.length > 0;
 
-  const showAttackButton = isMyTurn && inMainPhase && hasEligibleAttackers && !gameState.hasAttackedThisTurn;
+  const showAttackButton = isMyTurn && inMainPhase && hasEligibleAttackers && !gameState.hasAttackedThisTurn && !attackSelectMode;
 
   const showBlockingModal = inDeclareBlocks && attacksTargetingMe.length > 0;
-
+  const showDamageOrderModal = inAssignDamageOrder && duelCtx && myId === duelCtx.attackerPlayerId;
   const showDuelModal = inDuel && !!duelCtx;
 
   const activePlayerName = displayNames[gameState.activePlayerId]
@@ -470,6 +512,7 @@ export default function MatchScreen() {
     : "";
 
   const handleCardPress = (cardId: string) => {
+    if (attackSelectMode) return;
     if (selectedCardId === cardId) {
       setSelectedCardId(null);
     } else {
@@ -477,8 +520,38 @@ export default function MatchScreen() {
     }
   };
 
+  const handleToggleAttackRoyal = (royalId: string) => {
+    const royal = myState?.court.find((r) => r.cardId === royalId);
+    if (!royal || royal.hasAttackedThisTurn || royal.hasteLocked) return;
+    setSelectedAttackRoyalIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(royalId)) {
+        next.delete(royalId);
+      } else {
+        next.add(royalId);
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmAttackSelection = () => {
+    if (selectedAttackRoyalIds.size === 0) return;
+    const royalCardIds = Array.from(selectedAttackRoyalIds);
+    const activeOpponents = opponents.filter((o) => !o.isEliminated);
+    if (activeOpponents.length === 0) return;
+    if (activeOpponents.length === 1) {
+      handleAttack(activeOpponents[0]!.id, royalCardIds);
+    } else {
+      setPendingAttackTargetId("__picking__");
+    }
+  };
+
   const handleOwnRoyalPress = (royalId: string) => {
-    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks) || isClubResponder;
+    if (attackSelectMode) {
+      handleToggleAttackRoyal(royalId);
+      return;
+    }
+    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks) || isClubResponder || !!isMyDuelTurn;
     if (!canPlay) return;
 
     if (selectedCardId) {
@@ -499,7 +572,7 @@ export default function MatchScreen() {
   };
 
   const handleOpponentRoyalPress = (royalId: string, targetPlayerId: string) => {
-    if (!isMyTurn && !isDefender && !isClubResponder) return;
+    if (!isMyTurn && !isDefender && !isClubResponder && !isMyDuelTurn) return;
     if (!selectedCardId) return;
     const card = parseCardId(selectedCardId);
 
@@ -513,21 +586,25 @@ export default function MatchScreen() {
   };
 
   const handleAttackButtonPress = () => {
-    const activeOpponents = opponents.filter((o) => !o.isEliminated);
-    if (activeOpponents.length === 0) return;
-    if (activeOpponents.length === 1) {
-      handleAttack(activeOpponents[0]!.id);
-    } else {
-      setPendingAttackTargetId("__picking__");
-    }
+    setSelectedCardId(null);
+    setAttackSelectMode(true);
+    setSelectedAttackRoyalIds(new Set());
   };
 
   const handleOpponentPanelPress = (opponentId: string) => {
     if (!pendingAttackTargetId || !isMyTurn || !inMainPhase) return;
-    handleAttack(opponentId);
+    const royalCardIds = Array.from(selectedAttackRoyalIds);
+    if (royalCardIds.length === 0) return;
+    handleAttack(opponentId, royalCardIds);
   };
 
   const isPickingAttackTarget = pendingAttackTargetId === "__picking__";
+
+  const ineligibleRoyalIds = new Set(
+    (myState?.court ?? [])
+      .filter((r) => r.hasAttackedThisTurn || r.hasteLocked)
+      .map((r) => r.cardId),
+  );
 
   return (
     <View style={styles.container}>
@@ -539,13 +616,17 @@ export default function MatchScreen() {
             styles.phaseTag,
             inRespondToClub && styles.phaseTagClub,
             inDuel && styles.phaseTagDuel,
+            attackSelectMode && styles.phaseTagAttack,
+            inAssignDamageOrder && styles.phaseTagDuel,
           ]}>
             <Text style={[
               styles.phaseText,
               inRespondToClub && styles.phaseTextClub,
               inDuel && styles.phaseTextDuel,
+              attackSelectMode && styles.phaseTextAttack,
+              inAssignDamageOrder && styles.phaseTextDuel,
             ]}>
-              {phase.replace(/_/g, " ").toUpperCase()}
+              {attackSelectMode ? "SELECT ROYALS" : phase.replace(/_/g, " ").toUpperCase()}
             </Text>
           </View>
           <Pressable
@@ -557,7 +638,12 @@ export default function MatchScreen() {
         </View>
 
         <View style={styles.headerCenter}>
-          {isMyTurn && !inDuel ? (
+          {attackSelectMode ? (
+            <View style={styles.attackSelectBadge}>
+              <Ionicons name="flash" size={13} color={Colors.bgDeep} />
+              <Text style={styles.attackSelectBadgeText}>SELECT TO ATTACK</Text>
+            </View>
+          ) : isMyTurn && !inDuel ? (
             <View style={styles.myTurnBadge}>
               <Text style={styles.myTurnText}>YOUR TURN</Text>
             </View>
@@ -601,10 +687,10 @@ export default function MatchScreen() {
               <View style={styles.attackTargetBanner}>
                 <Ionicons name="flash" size={14} color={Colors.accentRed} />
                 <Text style={styles.attackTargetText}>
-                  Tap an opponent to attack with all your Royals
+                  Tap an opponent to attack with {selectedAttackRoyalIds.size} selected Royal{selectedAttackRoyalIds.size !== 1 ? "s" : ""}
                 </Text>
                 <Pressable onPress={() => setPendingAttackTargetId(null)} style={styles.cancelAttackBtn}>
-                  <Text style={styles.cancelAttackText}>Cancel</Text>
+                  <Text style={styles.cancelAttackText}>Back</Text>
                 </Pressable>
               </View>
             )}
@@ -624,7 +710,7 @@ export default function MatchScreen() {
                   isActive={gameState.activePlayerId === opp.id}
                   isEliminated={opp.isEliminated}
                   onRoyalPress={
-                    ((isMyTurn && inMainPhase) || isClubResponder) && !opp.isEliminated && selectedCardId
+                    ((isMyTurn && inMainPhase) || isClubResponder || !!isMyDuelTurn) && !opp.isEliminated && selectedCardId
                       ? (royalId) => handleOpponentRoyalPress(royalId, opp.id)
                       : undefined
                   }
@@ -660,34 +746,87 @@ export default function MatchScreen() {
                 <View style={styles.clubCardPreview}>
                   <Text style={styles.clubResponseLabel}>Targeting:</Text>
                   <CardView cardId={pendingClub.targetRoyalId} size="sm" />
+                  {targetedClubRoyal && (
+                    <View style={styles.clubRoyalStats}>
+                      <View style={styles.clubStatPill}>
+                        <Text style={styles.clubStatPillAtk}>
+                          ⚔ {effectiveAttack(targetedClubRoyal.cardId, targetedClubRoyal.buffAttack)}
+                        </Text>
+                      </View>
+                      <View style={styles.clubStatPill}>
+                        <Text style={styles.clubStatPillHp}>
+                          ♥ {effectiveHealth(targetedClubRoyal.cardId, targetedClubRoyal.buffHealth, targetedClubRoyal.damageTaken)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
               </View>
             )}
             {isClubResponder && (
               <Text style={styles.clubResponseHint}>
-                Play Hearts, Spades, or non-Royal Clubs to strengthen your Royal before the debuff lands. Diamonds may be discarded but not sent to the Mine.
+                Play Hearts, Spades, Clubs, or Jokers to strengthen your Royal. You may also discard one Diamond to draw or gain Vault — but not add it to the Mine.
               </Text>
             )}
           </Animated.View>
         )}
 
+        {/* Attack Royal selection banner */}
+        {attackSelectMode && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.attackSelectBanner}>
+            <Ionicons name="flash" size={16} color={Colors.accentRed} />
+            <Text style={styles.attackSelectBannerText}>
+              Tap your Royals below to select attackers.
+              {selectedAttackRoyalIds.size > 0
+                ? ` ${selectedAttackRoyalIds.size} selected.`
+                : " Tapped/ineligible Royals are dimmed."}
+            </Text>
+          </Animated.View>
+        )}
+
+        {/* Assign damage order banner */}
+        {inAssignDamageOrder && duelCtx && myId === duelCtx.attackerPlayerId && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.damageOrderBanner}>
+            <Ionicons name="list" size={16} color={Colors.brand} />
+            <Text style={styles.damageOrderBannerText}>
+              Set the order your attackers deal damage to grouped blockers.
+            </Text>
+          </Animated.View>
+        )}
+        {inAssignDamageOrder && duelCtx && myId !== duelCtx.attackerPlayerId && (
+          <View style={styles.waitingBanner}>
+            <ActivityIndicator size="small" color={Colors.textMuted} />
+            <Text style={styles.waitingText}>
+              Waiting for attacker to set damage order…
+            </Text>
+          </View>
+        )}
+
         <Animated.View entering={FadeIn.delay(100).duration(400)} style={styles.myCourtSection}>
-          <Text style={styles.sectionLabel}>YOUR COURT</Text>
+          <Text style={styles.sectionLabel}>
+            {attackSelectMode ? "TAP ROYALS TO SELECT" : "YOUR COURT"}
+          </Text>
           <CourtZone
             court={myState?.court ?? []}
             isMyZone
             isMyTurn={isMyTurn}
             size="xl"
+            phase={phase}
+            isDefender={isDefender}
             onRoyalPress={
-              (isMyTurn && inMainPhase && selectedCardId)
-                ? (royalId) => handleOwnRoyalPress(royalId)
-                : (isDefender && selectedCardId)
-                ? (royalId) => handleOwnRoyalPress(royalId)
-                : (isClubResponder && selectedCardId)
-                ? (royalId) => handleOwnRoyalPress(royalId)
-                : undefined
+              attackSelectMode
+                ? handleToggleAttackRoyal
+                : (isMyTurn && inMainPhase && selectedCardId)
+                  ? (royalId) => handleOwnRoyalPress(royalId)
+                  : (isDefender && selectedCardId)
+                    ? (royalId) => handleOwnRoyalPress(royalId)
+                    : (isClubResponder && selectedCardId)
+                      ? (royalId) => handleOwnRoyalPress(royalId)
+                      : undefined
             }
             selectedTargetId={selectedTargetRoyalId}
+            highlightedIds={attackSelectMode ? selectedAttackRoyalIds : undefined}
+            dimmedIds={attackSelectMode ? ineligibleRoyalIds : undefined}
           />
         </Animated.View>
 
@@ -720,6 +859,51 @@ export default function MatchScreen() {
                   <>
                     <Text style={[styles.endTurnText, { color: Colors.bgDeep }]}>Confirm — Apply Club</Text>
                     <Ionicons name="checkmark" size={18} color={Colors.bgDeep} />
+                  </>
+                )}
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        {/* Attack selection mode buttons */}
+        {attackSelectMode && (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.actionRow}>
+            <Pressable
+              onPress={() => {
+                setAttackSelectMode(false);
+                setSelectedAttackRoyalIds(new Set());
+              }}
+              style={({ pressed }) => [styles.cancelSelectBtn, pressed && { opacity: 0.8 }]}
+            >
+              <Ionicons name="close" size={18} color={Colors.textSecondary} />
+              <Text style={styles.cancelSelectText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleConfirmAttackSelection}
+              disabled={selectedAttackRoyalIds.size === 0 || isSubmitting}
+              style={({ pressed }) => [
+                styles.attackBtn,
+                (selectedAttackRoyalIds.size === 0 || isSubmitting) && styles.attackBtnDisabled,
+                pressed && selectedAttackRoyalIds.size > 0 && { opacity: 0.8 },
+              ]}
+            >
+              <LinearGradient
+                colors={selectedAttackRoyalIds.size > 0 ? [Colors.accentRed, "#8B1A1A"] : [Colors.bgSurface, Colors.bgSurface]}
+                style={styles.attackBtnGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="flash" size={18} color={selectedAttackRoyalIds.size > 0 ? "#FFF" : Colors.textMuted} />
+                    <Text style={[styles.attackBtnText, selectedAttackRoyalIds.size === 0 && { color: Colors.textMuted }]}>
+                      {selectedAttackRoyalIds.size > 0
+                        ? `Attack with ${selectedAttackRoyalIds.size} Royal${selectedAttackRoyalIds.size !== 1 ? "s" : ""}`
+                        : "Select a Royal"}
+                    </Text>
                   </>
                 )}
               </LinearGradient>
@@ -772,7 +956,7 @@ export default function MatchScreen() {
           </Animated.View>
         )}
 
-        {!isMyTurn && !inDeclareBlocks && !inRespondToClub && !inDuel && (
+        {!isMyTurn && !inDeclareBlocks && !inRespondToClub && !inDuel && !inAssignDamageOrder && (
           <View style={styles.waitingBanner}>
             <ActivityIndicator size="small" color={Colors.textMuted} />
             <Text style={styles.waitingText}>
@@ -804,7 +988,7 @@ export default function MatchScreen() {
       )}
 
       <BlockingModal
-        visible={showBlockingModal}
+        visible={showBlockingModal && !blockingMinimized}
         attacks={gameState.attacks}
         myId={myId}
         myCourt={myState?.court ?? []}
@@ -816,7 +1000,19 @@ export default function MatchScreen() {
         displayNames={displayNames}
         isSubmitting={isSubmitting}
         onConfirm={handleConfirmBlocks}
+        onMinimize={() => setBlockingMinimized(true)}
       />
+
+      {showDamageOrderModal && duelCtx && (
+        <DamageOrderModal
+          visible={showDamageOrderModal}
+          attacks={gameState.attacks}
+          attackerCourt={gameState.players[duelCtx.attackerPlayerId]?.court ?? []}
+          defenderCourt={gameState.players[duelCtx.defenderPlayerId]?.court ?? []}
+          isSubmitting={isSubmitting}
+          onConfirm={handleSetDamageOrder}
+        />
+      )}
 
       {showDuelModal && duelCtx && (
         <DuelPhaseModal
@@ -831,6 +1027,20 @@ export default function MatchScreen() {
           isSubmitting={isSubmitting}
           onPass={handleDuelPass}
         />
+      )}
+
+      {showBlockingModal && blockingMinimized && (
+        <Pressable
+          onPress={() => setBlockingMinimized(false)}
+          style={({ pressed }) => [
+            styles.blockingPill,
+            pressed && { opacity: 0.8 },
+          ]}
+        >
+          <Ionicons name="shield" size={15} color={Colors.accentRed} />
+          <Text style={styles.blockingPillText}>Assign Blocks</Text>
+          <Ionicons name="chevron-up" size={14} color={Colors.textMuted} />
+        </Pressable>
       )}
 
       <HandTray
@@ -862,7 +1072,9 @@ export default function MatchScreen() {
           hasTakenDiamondAction={
             isMyDuelTurn && duelCtx
               ? (myId === duelCtx.attackerPlayerId ? !!duelCtx.attackerDiamondUsed : !!duelCtx.defenderDiamondUsed)
-              : (gameState.myDiamondPlayed ?? false)
+              : isClubResponder
+                ? !!(pendingClub?.defenderDiamondUsed)
+                : (gameState.myDiamondPlayed ?? false)
           }
           abyss={gameState.abyss}
           onClose={() => setSelectedCardId(null)}
@@ -950,6 +1162,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(200,155,60,0.12)",
     borderColor: "#C89B3C",
   },
+  phaseTagAttack: {
+    backgroundColor: "rgba(200,16,46,0.18)",
+    borderColor: Colors.accentRed,
+  },
   phaseText: {
     fontSize: 10,
     fontFamily: "Inter_700Bold",
@@ -961,6 +1177,9 @@ const styles = StyleSheet.create({
   },
   phaseTextDuel: {
     color: "#C89B3C",
+  },
+  phaseTextAttack: {
+    color: Colors.accentRed,
   },
   endGameBtn: {
     paddingHorizontal: 8,
@@ -992,6 +1211,21 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.bgDeep,
     letterSpacing: 1.5,
+  },
+  attackSelectBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.accentRed,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  attackSelectBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: Colors.bgDeep,
+    letterSpacing: 1.2,
   },
   duelTurnBadge: {
     flexDirection: "row",
@@ -1101,6 +1335,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
   },
+  attackBtnDisabled: {
+    opacity: 0.6,
+  },
   attackBtnGradient: {
     flexDirection: "row",
     alignItems: "center",
@@ -1113,6 +1350,23 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: "#FFF",
     letterSpacing: 0.5,
+  },
+  cancelSelectBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    backgroundColor: Colors.bgSurface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cancelSelectText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textSecondary,
   },
   endTurnBtn: {
     flex: 1,
@@ -1214,6 +1468,27 @@ const styles = StyleSheet.create({
     borderColor: Colors.accentRed,
     zIndex: 200,
   },
+  blockingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    backgroundColor: "rgba(200,16,46,0.12)",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.accentRed,
+  },
+  blockingPillText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.accentRed,
+    flex: 1,
+    textAlign: "center",
+  },
   combatResultText: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
@@ -1258,5 +1533,64 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
     fontStyle: "italic",
+  },
+  clubRoyalStats: {
+    flexDirection: "column",
+    gap: 3,
+    justifyContent: "center",
+  },
+  clubStatPill: {
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  clubStatPillAtk: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: "#C89B3C",
+  },
+  clubStatPillHp: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: Colors.accentGreen,
+  },
+  attackSelectBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(200,16,46,0.12)",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "rgba(200,16,46,0.4)",
+    marginHorizontal: 12,
+  },
+  attackSelectBannerText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.accentRed,
+    flex: 1,
+  },
+  damageOrderBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(200,155,60,0.12)",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: Colors.brand,
+    marginHorizontal: 12,
+  },
+  damageOrderBannerText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.brand,
+    flex: 1,
   },
 });

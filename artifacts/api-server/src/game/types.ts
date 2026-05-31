@@ -55,7 +55,8 @@ export interface AttackDeclaration {
   attackerPlayerId: string;
   attackerCardId: CardId;
   targetPlayerId: string;
-  blockerCardId?: CardId;
+  blockerCardIds?: CardId[];
+  blockerDamageOrder?: CardId[];
   passed?: boolean;
 }
 
@@ -64,6 +65,8 @@ export interface PendingClubDebuff {
   clubCardId: CardId;
   targetPlayerId: string;
   targetRoyalId: CardId;
+  defenderDiamondUsed?: boolean;
+  returnPhase?: TurnPhase;
 }
 
 export interface DuelContext {
@@ -77,7 +80,7 @@ export interface DuelContext {
 
 export interface CombatPairOutcome {
   attackerCardId: CardId;
-  blockerCardId: CardId | null;
+  blockerCardIds: CardId[];
   attackerDestroyed: boolean;
   blockerDestroyed: boolean;
   directDamage: number;
@@ -95,6 +98,7 @@ export type TurnPhase =
   | "main"
   | "declare_attacks"
   | "declare_blocks"
+  | "assign_damage_order"
   | "duel_attacker_turn"
   | "duel_blocker_turn"
   | "resolve_combat"

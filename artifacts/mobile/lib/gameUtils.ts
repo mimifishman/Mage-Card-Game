@@ -183,16 +183,11 @@ export function getValidActionsForCard(
       return [];
     }
     if (card.suit === "D") {
-      const actions: ValidAction[] = [
-        { action: "discard_to_abyss", label: "Discard to Abyss", requiresTarget: false },
+      if (hasTakenDiamondAction) return [];
+      return [
+        { action: "discard_diamond_to_draw", label: "Discard to Draw a Card", requiresTarget: false },
+        { action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false },
       ];
-      if (!hasTakenDiamondAction) {
-        actions.unshift(
-          { action: "discard_diamond_to_draw", label: "Discard to Draw 2 Cards", requiresTarget: false },
-          { action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false },
-        );
-      }
-      return actions;
     }
     if (card.suit === "H") {
       const actions: ValidAction[] = [];
@@ -203,12 +198,26 @@ export function getValidActionsForCard(
           requiresTarget: true,
           targetType: "own_royal",
         });
+      } else if (myCourtSize > 0) {
+        actions.push({
+          action: "attach_heart",
+          label: `Need ${card.vaultCost} Vault to attach (have ${vault})`,
+          requiresTarget: false,
+          disabled: true,
+        });
       }
       if (vault >= card.vaultCost) {
         actions.push({
           action: "discard_heart_to_heal",
           label: `Discard — heal yourself (+${card.pipValue} Life) [−${card.vaultCost} Vault]`,
           requiresTarget: false,
+        });
+      } else {
+        actions.push({
+          action: "discard_heart_to_heal",
+          label: `Need ${card.vaultCost} Vault to discard (have ${vault})`,
+          requiresTarget: false,
+          disabled: true,
         });
       }
       return actions;
@@ -222,6 +231,13 @@ export function getValidActionsForCard(
           requiresTarget: true,
           targetType: "own_royal",
         });
+      } else if (myCourtSize > 0) {
+        actions.push({
+          action: "attach_spade",
+          label: `Need ${card.vaultCost} Vault to attach (have ${vault})`,
+          requiresTarget: false,
+          disabled: true,
+        });
       }
       if (vault >= card.vaultCost) {
         actions.push({
@@ -229,6 +245,13 @@ export function getValidActionsForCard(
           label: `Discard — return a card from Abyss (value ≤ ${card.pipValue}) [−${card.vaultCost} Vault]`,
           requiresTarget: true,
           targetType: "pick_abyss",
+        });
+      } else {
+        actions.push({
+          action: "discard_spade_to_return",
+          label: `Need ${card.vaultCost} Vault to discard (have ${vault})`,
+          requiresTarget: false,
+          disabled: true,
         });
       }
       return actions;
@@ -247,6 +270,13 @@ export function getValidActionsForCard(
           label: `Deal ${card.pipValue} damage to a player [−${card.vaultCost} Vault]`,
           requiresTarget: true,
           targetType: "any_player",
+        });
+      } else {
+        actions.push({
+          action: "apply_club",
+          label: `Need ${card.vaultCost} Vault (have ${vault})`,
+          requiresTarget: false,
+          disabled: true,
         });
       }
       return actions;
@@ -271,17 +301,20 @@ export function getValidActionsForCard(
 
   if (phase !== "main" && !inDeclareBlocks && !inClubResponse) return [];
 
-  if (inDeclareBlocks && (card.isRoyal || card.isJoker || card.suit === "D")) {
+  if (inDeclareBlocks && (card.isRoyal || card.suit === "D")) {
     return [];
   }
 
-  if (inClubResponse && (card.isRoyal || card.isJoker)) {
+  if (inClubResponse && card.isRoyal) {
     return [];
   }
 
   const actions: ValidAction[] = [];
 
   if (card.isJoker) {
+    if (inDeclareBlocks) {
+      return [];
+    }
     if (vault >= 10) {
       actions.push({
         action: "play_joker",

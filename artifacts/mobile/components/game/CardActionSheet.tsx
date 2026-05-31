@@ -191,12 +191,14 @@ export default function CardActionSheet({
             <ScrollView contentContainerStyle={styles.actionList}>
               {validActions.length === 0 ? (
                 <Text style={styles.noActions}>
-                  {!isMyTurn && !isDefender && !isClubResponder
+                  {!isMyTurn && !isDefender && !isClubResponder && !isMyDuelTurn
                     ? "Wait for your turn to play cards."
                     : phase === "declare_blocks" && isDefender
                     ? "This card cannot be played while blocking (Diamonds and Royals are not allowed)."
                     : phase === "respond_to_club" && isClubResponder
                     ? "This card cannot be played during the Club response window (Royals are not allowed)."
+                    : isMyDuelTurn
+                    ? "No valid actions — this card cannot be played in the duel."
                     : phase !== "main"
                     ? `Cannot play cards during ${phase} phase.`
                     : "No valid actions for this card."}

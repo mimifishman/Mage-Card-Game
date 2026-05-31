@@ -67,7 +67,8 @@ describe("endTurn", () => {
     expect(p1King).toBeDefined();
     expect(p1King!.damageTaken).toBe(0);
     expect(p1King!.hasteLocked).toBe(false);
-    expect(p1King!.hasAttackedThisTurn).toBe(false);
+    // Rule 5: attacker stays tapped until its controller's NEXT turn (not opponent's turn)
+    expect(p1King!.hasAttackedThisTurn).toBe(true);
     expect(result.value.activePlayerId).toBe(P2);
     expect(result.value.phase).toBe("main");
   });

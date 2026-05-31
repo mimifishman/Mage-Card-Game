@@ -25,6 +25,7 @@ export function declareAttack(
   state: GameState,
   attackerPlayerId: string,
   targetPlayerId: string,
+  royalCardIds: CardId[],
 ): Result<GameState> {
   if (state.activePlayerId !== attackerPlayerId) {
     return err("It is not your turn");
@@ -38,6 +39,12 @@ export function declareAttack(
   if (state.hasAttackedThisTurn) {
     return err("You have already attacked this turn");
   }
+  if (royalCardIds.length === 0) {
+    return err("Must select at least one Royal to attack with");
+  }
+  if (new Set(royalCardIds).size !== royalCardIds.length) {
+    return err("Duplicate Royal IDs in attack selection — each Royal can only attack once");
+  }
 
   const attacker = state.players[attackerPlayerId];
   if (!attacker) return err(`Player ${attackerPlayerId} not found`);
@@ -46,21 +53,30 @@ export function declareAttack(
   if (!target) return err(`Player ${targetPlayerId} not found`);
   if (target.isEliminated) return err(`Player ${targetPlayerId} is eliminated`);
 
-  const eligibleRoyals = attacker.court.filter((r) => !r.hasteLocked && !r.hasAttackedThisTurn);
-  if (eligibleRoyals.length === 0) {
-    return err("No eligible Royals to attack with (all are haste-locked or have already attacked)");
+  for (const royalId of royalCardIds) {
+    const royal = attacker.court.find((r) => r.cardId === royalId);
+    if (!royal) {
+      return err(`Royal ${royalId} is not in your Court`);
+    }
+    if (royal.hasteLocked) {
+      return err(`Royal ${royalId} is haste-locked and cannot attack`);
+    }
+    if (royal.hasAttackedThisTurn) {
+      return err(`Royal ${royalId} has already attacked this turn`);
+    }
   }
 
+  const selectedIds = new Set(royalCardIds);
   const updatedCourt = attacker.court.map((r) =>
-    !r.hasteLocked && !r.hasAttackedThisTurn
+    selectedIds.has(r.cardId)
       ? { ...r, hasAttackedThisTurn: true }
       : r,
   );
   const updatedAttacker: PlayerState = { ...attacker, court: updatedCourt };
 
-  const newAttacks: AttackDeclaration[] = eligibleRoyals.map((r) => ({
+  const newAttacks: AttackDeclaration[] = royalCardIds.map((royalId) => ({
     attackerPlayerId,
-    attackerCardId: r.cardId,
+    attackerCardId: royalId,
     targetPlayerId,
   }));
 
@@ -76,7 +92,7 @@ export function declareAttack(
 export function confirmDeclareBlocks(
   state: GameState,
   defenderPlayerId: string,
-  blocks: Record<CardId, CardId | "pass">,
+  blocks: Record<CardId, CardId[] | "pass">,
 ): Result<GameState> {
   if (state.phase !== "declare_blocks") {
     return err(`Can only confirm blocks during "declare_blocks" phase`);
@@ -105,19 +121,28 @@ export function confirmDeclareBlocks(
     if (assignment === "pass") {
       updatedAttacks[attackIdx] = { ...updatedAttacks[attackIdx]!, passed: true };
     } else {
-      const blockerExists = defender.court.some((r) => r.cardId === assignment);
-      if (!blockerExists) {
-        return err(`Blocker ${assignment} is not in your Court`);
+      for (const blockerId of assignment) {
+        const blockerRoyal = defender.court.find((r) => r.cardId === blockerId);
+        if (!blockerRoyal) {
+          return err(`Blocker ${blockerId} is not in your Court`);
+        }
+        if (blockerRoyal.hasAttackedThisTurn) {
+          return err(`Blocker ${blockerId} has already attacked this turn and cannot block`);
+        }
+        if (blockerUsed.has(blockerId)) {
+          return err(`Blocker ${blockerId} is already used for another attack`);
+        }
+        blockerUsed.add(blockerId);
       }
-      if (blockerUsed.has(assignment)) {
-        return err(`Blocker ${assignment} is already used for another attack`);
-      }
-      blockerUsed.add(assignment);
-      updatedAttacks[attackIdx] = { ...updatedAttacks[attackIdx]!, blockerCardId: assignment };
+      updatedAttacks[attackIdx] = { ...updatedAttacks[attackIdx]!, blockerCardIds: assignment };
     }
   }
 
   const attackerPlayerId = incomingAttacks[0]!.attackerPlayerId;
+
+  const hasMultiBlocker = updatedAttacks.some(
+    (a) => a.blockerCardIds && a.blockerCardIds.length > 1,
+  );
 
   const duelContext: DuelContext = {
     attackerPlayerId,
@@ -128,12 +153,78 @@ export function confirmDeclareBlocks(
     defenderDiamondUsed: false,
   };
 
+  if (hasMultiBlocker) {
+    return ok({
+      ...state,
+      phase: "assign_damage_order",
+      attacks: updatedAttacks,
+      duelContext,
+      lastCombatSummary: undefined,
+    });
+  }
+
   const stateWithDuel: GameState = {
     ...state,
-    phase: "duel_attacker_turn",
+    phase: "duel_blocker_turn",
     attacks: updatedAttacks,
     duelContext,
     lastCombatSummary: undefined,
+  };
+
+  return autoAdvanceDuelIfNeeded(stateWithDuel);
+}
+
+export function setDamageOrder(
+  state: GameState,
+  attackerPlayerId: string,
+  assignments: Record<CardId, CardId[]>,
+): Result<GameState> {
+  if (state.phase !== "assign_damage_order") {
+    return err(`Can only set damage order during "assign_damage_order" phase`);
+  }
+
+  const ctx = state.duelContext;
+  if (!ctx) return err("No duel context found");
+
+  if (attackerPlayerId !== ctx.attackerPlayerId) {
+    return err("Only the attacker can set the damage order");
+  }
+
+  const multiBlockerAttacks = state.attacks.filter(
+    (a) => a.blockerCardIds && a.blockerCardIds.length > 1,
+  );
+
+  for (const attack of multiBlockerAttacks) {
+    const order = assignments[attack.attackerCardId];
+    if (!order) {
+      return err(
+        `Missing damage order for attacker ${attack.attackerCardId}. Must provide an order for every multi-blocker attack.`,
+      );
+    }
+    const blockerSet = new Set(attack.blockerCardIds!);
+    const orderSet = new Set(order);
+    if (
+      order.length !== attack.blockerCardIds!.length ||
+      !order.every((id) => blockerSet.has(id)) ||
+      !attack.blockerCardIds!.every((id) => orderSet.has(id))
+    ) {
+      return err(
+        `Invalid damage order for attacker ${attack.attackerCardId}. The provided list must be an exact permutation of the blockers: [${attack.blockerCardIds!.join(", ")}].`,
+      );
+    }
+  }
+
+  const updatedAttacks: AttackDeclaration[] = state.attacks.map((attack) => {
+    if (!attack.blockerCardIds || attack.blockerCardIds.length <= 1) {
+      return attack;
+    }
+    return { ...attack, blockerDamageOrder: assignments[attack.attackerCardId]! };
+  });
+
+  const stateWithDuel: GameState = {
+    ...state,
+    phase: "duel_blocker_turn",
+    attacks: updatedAttacks,
   };
 
   return autoAdvanceDuelIfNeeded(stateWithDuel);
@@ -180,7 +271,7 @@ function buildCombatSummary(stateBefore: GameState): CombatSummary {
     if (!attacker || !target) {
       return {
         attackerCardId: attack.attackerCardId,
-        blockerCardId: attack.blockerCardId ?? null,
+        blockerCardIds: attack.blockerCardIds ?? [],
         attackerDestroyed: false,
         blockerDestroyed: false,
         directDamage: 0,
@@ -192,7 +283,7 @@ function buildCombatSummary(stateBefore: GameState): CombatSummary {
     if (!attackerRoyal) {
       return {
         attackerCardId: attack.attackerCardId,
-        blockerCardId: attack.blockerCardId ?? null,
+        blockerCardIds: attack.blockerCardIds ?? [],
         attackerDestroyed: true,
         blockerDestroyed: false,
         directDamage: 0,
@@ -201,27 +292,41 @@ function buildCombatSummary(stateBefore: GameState): CombatSummary {
     }
 
     const atkPower = effectiveAttack(attackerRoyal);
+    const blockerCardIds = attack.blockerCardIds ?? [];
 
-    if (attack.blockerCardId) {
-      const blockerRoyal = target.court.find((r) => r.cardId === attack.blockerCardId);
-      if (!blockerRoyal) {
-        return {
-          attackerCardId: attack.attackerCardId,
-          blockerCardId: attack.blockerCardId,
-          attackerDestroyed: false,
-          blockerDestroyed: true,
-          directDamage: 0,
-          targetPlayerId: attack.targetPlayerId,
-        };
+    if (blockerCardIds.length > 0) {
+      const damageOrder = attack.blockerDamageOrder?.length === blockerCardIds.length
+        ? attack.blockerDamageOrder
+        : blockerCardIds;
+
+      let totalBlockerDamage = 0;
+      let anyBlockerDestroyed = false;
+
+      for (const blockerId of blockerCardIds) {
+        const blockerRoyal = target.court.find((r) => r.cardId === blockerId);
+        if (blockerRoyal) {
+          totalBlockerDamage += effectiveAttack(blockerRoyal);
+        }
       }
-      const blkPower = effectiveAttack(blockerRoyal);
-      const atkHpAfter = effectiveHealth(attackerRoyal) - blkPower;
-      const blkHpAfter = effectiveHealth(blockerRoyal) - atkPower;
+
+      const atkHpAfter = effectiveHealth(attackerRoyal) - totalBlockerDamage;
+
+      let atkRemainingDamage = atkPower;
+      for (const blockerId of damageOrder) {
+        if (atkRemainingDamage <= 0) break;
+        const blockerRoyal = target.court.find((r) => r.cardId === blockerId);
+        if (!blockerRoyal) continue;
+        const blkHp = effectiveHealth(blockerRoyal);
+        const damageToApply = Math.min(atkRemainingDamage, blkHp);
+        if (blkHp - damageToApply <= 0) anyBlockerDestroyed = true;
+        atkRemainingDamage = Math.max(0, atkRemainingDamage - blkHp);
+      }
+
       return {
         attackerCardId: attack.attackerCardId,
-        blockerCardId: attack.blockerCardId,
+        blockerCardIds,
         attackerDestroyed: atkHpAfter <= 0,
-        blockerDestroyed: blkHpAfter <= 0,
+        blockerDestroyed: anyBlockerDestroyed,
         directDamage: 0,
         targetPlayerId: attack.targetPlayerId,
       };
@@ -229,7 +334,7 @@ function buildCombatSummary(stateBefore: GameState): CombatSummary {
 
     return {
       attackerCardId: attack.attackerCardId,
-      blockerCardId: null,
+      blockerCardIds: [],
       attackerDestroyed: false,
       blockerDestroyed: false,
       directDamage: atkPower,
@@ -255,23 +360,43 @@ function executeResolveCombat(state: GameState): Result<GameState> {
     if (!attackerRoyal) continue;
 
     const atkPower = effectiveAttack(attackerRoyal);
+    const blockerCardIds = attack.blockerCardIds ?? [];
 
-    if (attack.blockerCardId) {
-      const blockerRoyal = target.court.find((r) => r.cardId === attack.blockerCardId);
-      if (!blockerRoyal) continue;
-      const blkPower = effectiveAttack(blockerRoyal);
+    if (blockerCardIds.length > 0 && !attack.passed) {
+      const damageOrder = attack.blockerDamageOrder?.length === blockerCardIds.length
+        ? attack.blockerDamageOrder
+        : blockerCardIds;
+
+      let totalBlockerDamage = 0;
+      for (const blockerId of blockerCardIds) {
+        const blockerRoyal = players[attack.targetPlayerId]!.court.find((r) => r.cardId === blockerId);
+        if (blockerRoyal) {
+          totalBlockerDamage += effectiveAttack(blockerRoyal);
+        }
+      }
 
       players[attack.attackerPlayerId] = applyDamageToRoyal(
         players[attack.attackerPlayerId]!,
         attack.attackerCardId,
-        blkPower,
+        totalBlockerDamage,
       );
-      players[attack.targetPlayerId] = applyDamageToRoyal(
-        players[attack.targetPlayerId]!,
-        attack.blockerCardId,
-        atkPower,
-      );
-    } else {
+
+      let atkRemainingDamage = atkPower;
+      for (const blockerId of damageOrder) {
+        if (atkRemainingDamage <= 0) break;
+        const currentTarget = players[attack.targetPlayerId]!;
+        const blockerRoyal = currentTarget.court.find((r) => r.cardId === blockerId);
+        if (!blockerRoyal) continue;
+        const blkCurrentHp = effectiveHealth(blockerRoyal);
+        const damageToApply = Math.min(atkRemainingDamage, blkCurrentHp);
+        players[attack.targetPlayerId] = applyDamageToRoyal(
+          players[attack.targetPlayerId]!,
+          blockerId,
+          damageToApply,
+        );
+        atkRemainingDamage = Math.max(0, atkRemainingDamage - blkCurrentHp);
+      }
+    } else if (!attack.blockerCardIds?.length) {
       players[attack.targetPlayerId] = {
         ...players[attack.targetPlayerId]!,
         life: players[attack.targetPlayerId]!.life - atkPower,
@@ -305,7 +430,7 @@ export function resolveCombat(state: GameState, callerPlayerId: string): Result<
     return err("Only the active player can resolve combat");
   }
 
-  const undecided = state.attacks.filter((a) => !a.blockerCardId && !a.passed);
+  const undecided = state.attacks.filter((a) => !a.blockerCardIds?.length && !a.passed);
   if (undecided.length > 0) {
     return err("All defenders must block or pass before combat can be resolved");
   }
@@ -370,7 +495,7 @@ export function advanceDuelTurn(state: GameState, actingPlayerId: string): Resul
   return autoAdvanceDuelIfNeeded(nextState);
 }
 
-function autoAdvanceDuelIfNeeded(state: GameState): Result<GameState> {
+export function autoAdvanceDuelIfNeeded(state: GameState): Result<GameState> {
   const isDuelPhase = state.phase === "duel_attacker_turn" || state.phase === "duel_blocker_turn";
   if (!isDuelPhase || !state.duelContext) return ok(state);
 

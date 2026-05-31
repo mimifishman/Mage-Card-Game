@@ -1,0 +1,1 @@
+- [Combat overhaul rules](combat-rules.md) — six mechanics rules implemented; key signatures changed in declareAttack, confirmDeclareBlocks, AttackDeclaration type.

@@ -22,7 +22,8 @@ interface BlockingModalProps {
   attackerCourt: RoyalInCourt[];
   displayNames: Record<string, string>;
   isSubmitting: boolean;
-  onConfirm: (blocks: Record<string, string>) => void;
+  onConfirm: (blocks: Record<string, string[]>) => void;
+  onMinimize?: () => void;
 }
 
 export default function BlockingModal({
@@ -34,27 +35,44 @@ export default function BlockingModal({
   displayNames,
   isSubmitting,
   onConfirm,
+  onMinimize,
 }: BlockingModalProps) {
   const incomingAttacks = useMemo(
     () => attacks.filter((a) => a.targetPlayerId === myId),
     [attacks, myId],
   );
 
-  const [blocks, setBlocks] = useState<Record<string, string>>({});
+  const eligibleCourt = useMemo(
+    () => myCourt.filter((r) => !r.hasAttackedThisTurn),
+    [myCourt],
+  );
 
-  const assignBlock = useCallback((attackerCardId: string, blockerCardId: string) => {
+  const [blocks, setBlocks] = useState<Record<string, string[]>>({});
+
+  const toggleBlock = useCallback((attackerCardId: string, blockerCardId: string) => {
     setBlocks((prev) => {
       const updated = { ...prev };
-      for (const [atkId, blkId] of Object.entries(updated)) {
-        if (blkId === blockerCardId && atkId !== attackerCardId) {
-          delete updated[atkId];
+      const existing = updated[attackerCardId] ?? [];
+
+      if (existing.includes(blockerCardId)) {
+        const next = existing.filter((id) => id !== blockerCardId);
+        if (next.length === 0) {
+          delete updated[attackerCardId];
+        } else {
+          updated[attackerCardId] = next;
         }
-      }
-      if (updated[attackerCardId] === blockerCardId) {
-        delete updated[attackerCardId];
       } else {
-        updated[attackerCardId] = blockerCardId;
+        for (const [atkId, blkIds] of Object.entries(updated)) {
+          if (atkId !== attackerCardId && blkIds.includes(blockerCardId)) {
+            updated[atkId] = blkIds.filter((id) => id !== blockerCardId);
+            if (updated[atkId]!.length === 0) {
+              delete updated[atkId];
+            }
+          }
+        }
+        updated[attackerCardId] = [...existing, blockerCardId];
       }
+
       return updated;
     });
   }, []);
@@ -62,35 +80,57 @@ export default function BlockingModal({
   const passAttack = useCallback((attackerCardId: string) => {
     setBlocks((prev) => {
       const updated = { ...prev };
-      if (updated[attackerCardId] === "pass") {
+      if (updated[attackerCardId]?.length === 0 && !(attackerCardId in updated)) {
+        return prev;
+      }
+      if (attackerCardId in updated && updated[attackerCardId]!.length === 0) {
+        delete updated[attackerCardId];
+        return updated;
+      }
+      if (attackerCardId in updated) {
         delete updated[attackerCardId];
       } else {
-        for (const [atkId, blkId] of Object.entries(updated)) {
-          if (blkId !== "pass" && atkId === attackerCardId) {
-            delete updated[atkId];
-          }
-        }
-        updated[attackerCardId] = "pass";
+        updated[attackerCardId] = [];
       }
       return updated;
     });
   }, []);
 
-  const allAssigned = incomingAttacks.length > 0 &&
-    incomingAttacks.every((a) => !!blocks[a.attackerCardId]);
+  const isPassed = useCallback((attackerCardId: string): boolean => {
+    return attackerCardId in blocks && blocks[attackerCardId]!.length === 0;
+  }, [blocks]);
 
-  const blockerUsedFor = useCallback((blockerCardId: string): string | null => {
-    for (const [atkId, blkId] of Object.entries(blocks)) {
-      if (blkId === blockerCardId) return atkId;
+  const allAssigned = incomingAttacks.length > 0 &&
+    incomingAttacks.every((a) => {
+      if (isPassed(a.attackerCardId)) return true;
+      const assigned = blocks[a.attackerCardId];
+      return assigned && assigned.length > 0;
+    });
+
+  const isBlockerUsedFor = useCallback((blockerCardId: string, attackerCardId: string): boolean => {
+    return (blocks[attackerCardId] ?? []).includes(blockerCardId);
+  }, [blocks]);
+
+  const isBlockerUsedElsewhere = useCallback((blockerCardId: string, attackerCardId: string): boolean => {
+    for (const [atkId, blkIds] of Object.entries(blocks)) {
+      if (atkId !== attackerCardId && blkIds.includes(blockerCardId)) return true;
     }
-    return null;
+    return false;
   }, [blocks]);
 
   const handleConfirm = useCallback(() => {
     if (!allAssigned) return;
-    onConfirm(blocks);
+    const result: Record<string, string[]> = {};
+    for (const atk of incomingAttacks) {
+      if (isPassed(atk.attackerCardId)) {
+        result[atk.attackerCardId] = [];
+      } else {
+        result[atk.attackerCardId] = blocks[atk.attackerCardId] ?? [];
+      }
+    }
+    onConfirm(result);
     setBlocks({});
-  }, [allAssigned, blocks, onConfirm]);
+  }, [allAssigned, blocks, incomingAttacks, isPassed, onConfirm]);
 
   if (!visible || incomingAttacks.length === 0) return null;
 
@@ -105,12 +145,27 @@ export default function BlockingModal({
             <View style={styles.titleRow}>
               <Ionicons name="flash" size={18} color={Colors.accentRed} />
               <Text style={styles.title}>Incoming Attack!</Text>
+              {onMinimize && (
+                <Pressable onPress={onMinimize} style={styles.minimizeBtn} hitSlop={10}>
+                  <Ionicons name="chevron-down" size={20} color={Colors.textMuted} />
+                </Pressable>
+              )}
             </View>
             <Text style={styles.attackDesc}>
               <Text style={styles.attackerName}>{attackerName}</Text>
               {" sends "}<Text style={styles.attackCount}>{incomingAttacks.length}</Text>
               {" Royal"}{incomingAttacks.length !== 1 ? "s" : ""}{" — assign blocks"}
             </Text>
+            {onMinimize && (
+              <Text style={styles.playCardsHint}>
+                Tap ↓ to minimize and play cards on your Royals first
+              </Text>
+            )}
+            {eligibleCourt.length < myCourt.length && (
+              <Text style={styles.tappedNote}>
+                Tapped Royals (those that attacked this turn) cannot block.
+              </Text>
+            )}
           </View>
 
           <ScrollView
@@ -120,9 +175,9 @@ export default function BlockingModal({
           >
             {incomingAttacks.map((atk) => {
               const atkCard = parseCardId(atk.attackerCardId);
-              const assigned = blocks[atk.attackerCardId];
-              const isPassed = assigned === "pass";
-              const isBlocked = !!assigned && !isPassed;
+              const assignedBlockers = blocks[atk.attackerCardId] ?? [];
+              const isPass = isPassed(atk.attackerCardId);
+              const isBlocked = assignedBlockers.length > 0;
               const atkRoyal = attackerCourt.find((r) => r.cardId === atk.attackerCardId);
               const atkAtk = atkRoyal ? effectiveAttack(atk.attackerCardId, atkRoyal.buffAttack) : null;
               const atkHp = atkRoyal ? effectiveHealth(atk.attackerCardId, atkRoyal.buffHealth, atkRoyal.damageTaken) : null;
@@ -130,7 +185,7 @@ export default function BlockingModal({
               return (
                 <View key={atk.attackerCardId} style={[
                   styles.attackRow,
-                  isPassed && styles.attackRowPassed,
+                  isPass && styles.attackRowPassed,
                   isBlocked && styles.attackRowBlocked,
                 ]}>
                   <View style={styles.attackerSide}>
@@ -151,58 +206,66 @@ export default function BlockingModal({
                           </View>
                         </View>
                       )}
-                      {isPassed && <Text style={styles.passedTag}>PASSING</Text>}
+                      {isPass && <Text style={styles.passedTag}>PASSING</Text>}
                       {isBlocked && (
                         <Text style={styles.blockedTag}>
-                          ← {parseCardId(assigned).displayRank}{parseCardId(assigned).suitSymbol}
+                          ← {assignedBlockers.map((id) => {
+                            const c = parseCardId(id);
+                            return `${c.displayRank}${c.suitSymbol}`;
+                          }).join(", ")}
                         </Text>
                       )}
                     </View>
                   </View>
 
                   <View style={styles.attackControls}>
-                    {myCourt.length > 0 && (
+                    {eligibleCourt.length > 0 && (
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.blockerRow}>
-                        {myCourt.map((royal) => {
+                        {eligibleCourt.map((royal) => {
                           const card = parseCardId(royal.cardId);
-                          const usedFor = blockerUsedFor(royal.cardId);
-                          const isAssignedHere = usedFor === atk.attackerCardId;
-                          const isUsedElsewhere = !!usedFor && usedFor !== atk.attackerCardId;
+                          const assignedHere = isBlockerUsedFor(royal.cardId, atk.attackerCardId);
+                          const usedElsewhere = isBlockerUsedElsewhere(royal.cardId, atk.attackerCardId);
                           const atk2 = effectiveAttack(royal.cardId, royal.buffAttack);
                           const hp = effectiveHealth(royal.cardId, royal.buffHealth, royal.damageTaken);
 
                           return (
                             <Pressable
                               key={royal.cardId}
-                              onPress={() => !isUsedElsewhere && assignBlock(atk.attackerCardId, royal.cardId)}
-                              disabled={isUsedElsewhere}
+                              onPress={() => !isPass && toggleBlock(atk.attackerCardId, royal.cardId)}
+                              disabled={isPass}
                               style={({ pressed }) => [
                                 styles.blockerChip,
-                                isAssignedHere && styles.blockerChipSelected,
-                                isUsedElsewhere && styles.blockerChipUsed,
-                                pressed && !isUsedElsewhere && { opacity: 0.75 },
+                                assignedHere && styles.blockerChipSelected,
+                                usedElsewhere && styles.blockerChipUsedElsewhere,
+                                pressed && !isPass && { opacity: 0.75 },
                               ]}
                             >
-                              <Text style={[styles.blockerChipText, { color: isAssignedHere ? Colors.bgDeep : card.suitColor }]}>
+                              <Text style={[styles.blockerChipText, { color: assignedHere ? Colors.bgDeep : card.suitColor }]}>
                                 {card.displayRank}{card.suitSymbol}
                               </Text>
-                              <Text style={[styles.blockerChipStats, { color: isAssignedHere ? Colors.bgDeep : Colors.textMuted }]}>
+                              <Text style={[styles.blockerChipStats, { color: assignedHere ? Colors.bgDeep : Colors.textMuted }]}>
                                 {atk2}/{hp}
                               </Text>
+                              {usedElsewhere && (
+                                <Text style={styles.multiBlockLabel}>+1</Text>
+                              )}
                             </Pressable>
                           );
                         })}
                       </ScrollView>
                     )}
+                    {myCourt.length > eligibleCourt.length && eligibleCourt.length === 0 && (
+                      <Text style={styles.noEligibleText}>All your Royals are tapped</Text>
+                    )}
                     <Pressable
                       onPress={() => passAttack(atk.attackerCardId)}
                       style={({ pressed }) => [
                         styles.passChip,
-                        isPassed && styles.passChipSelected,
+                        isPass && styles.passChipSelected,
                         pressed && { opacity: 0.8 },
                       ]}
                     >
-                      <Text style={[styles.passChipText, isPassed && styles.passChipTextSelected]}>
+                      <Text style={[styles.passChipText, isPass && styles.passChipTextSelected]}>
                         Pass
                       </Text>
                     </Pressable>
@@ -215,14 +278,15 @@ export default function BlockingModal({
           <View style={styles.footer}>
             <View style={styles.progressRow}>
               {incomingAttacks.map((a) => {
+                const isP = isPassed(a.attackerCardId);
                 const assigned = blocks[a.attackerCardId];
                 return (
                   <View
                     key={a.attackerCardId}
                     style={[
                       styles.progressDot,
-                      assigned === "pass" ? styles.dotPassed :
-                      assigned ? styles.dotBlocked :
+                      isP ? styles.dotPassed :
+                      assigned && assigned.length > 0 ? styles.dotBlocked :
                       styles.dotPending,
                     ]}
                   />
@@ -272,7 +336,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 32,
     gap: 14,
-    maxHeight: "80%",
+    maxHeight: "85%",
   },
   header: {
     gap: 6,
@@ -282,11 +346,27 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    width: "100%",
   },
   title: {
     fontSize: 20,
     fontFamily: "Inter_700Bold",
     color: Colors.textPrimary,
+    flex: 1,
+  },
+  minimizeBtn: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: Colors.bgSurface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  playCardsHint: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    textAlign: "center",
+    fontStyle: "italic",
   },
   attackDesc: {
     fontSize: 13,
@@ -302,8 +382,15 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.accentRed,
   },
+  tappedNote: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    textAlign: "center",
+    fontStyle: "italic",
+  },
   attackList: {
-    maxHeight: 340,
+    maxHeight: 380,
   },
   attackListContent: {
     gap: 10,
@@ -402,8 +489,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.accentGreen,
     borderColor: Colors.accentGreen,
   },
-  blockerChipUsed: {
-    opacity: 0.35,
+  blockerChipUsedElsewhere: {
+    borderColor: Colors.brand,
+    backgroundColor: "rgba(200,155,60,0.15)",
   },
   blockerChipText: {
     fontSize: 13,
@@ -412,6 +500,17 @@ const styles = StyleSheet.create({
   blockerChipStats: {
     fontSize: 9,
     fontFamily: "Inter_400Regular",
+  },
+  multiBlockLabel: {
+    fontSize: 8,
+    fontFamily: "Inter_700Bold",
+    color: Colors.brand,
+  },
+  noEligibleText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    fontStyle: "italic",
   },
   passChip: {
     paddingVertical: 8,

@@ -84,18 +84,11 @@ export default function DuelPhaseModal({
       >
         {attacks.map((atk) => {
           const atkCard = parseCardId(atk.attackerCardId);
-          const blkCard = atk.blockerCardId ? parseCardId(atk.blockerCardId) : null;
+          const blockerIds = atk.blockerCardIds ?? [];
           const atkRoyal = attackerCourt.find((r) => r.cardId === atk.attackerCardId);
-          const blkRoyal = atk.blockerCardId
-            ? defenderCourt.find((r) => r.cardId === atk.blockerCardId)
-            : null;
           const atkAtk = atkRoyal ? effectiveAttack(atkRoyal.cardId, atkRoyal.buffAttack) : null;
           const atkHp = atkRoyal
             ? effectiveHealth(atkRoyal.cardId, atkRoyal.buffHealth, atkRoyal.damageTaken)
-            : null;
-          const blkAtk = blkRoyal ? effectiveAttack(blkRoyal.cardId, blkRoyal.buffAttack) : null;
-          const blkHp = blkRoyal
-            ? effectiveHealth(blkRoyal.cardId, blkRoyal.buffHealth, blkRoyal.damageTaken)
             : null;
 
           return (
@@ -116,18 +109,30 @@ export default function DuelPhaseModal({
                 <Text style={styles.vsText}>VS</Text>
               </View>
               <View style={styles.pairSide}>
-                <Text style={styles.pairName}>{defenderName}</Text>
-                {blkCard ? (
+                {blockerIds.length > 0 ? (
                   <>
-                    <Text style={[styles.pairCard, { color: blkCard.suitColor }]}>
-                      {blkCard.displayRank}{blkCard.suitSymbol}
-                    </Text>
-                    {blkAtk !== null && blkHp !== null && (
-                      <View style={styles.statsRow}>
-                        <Text style={styles.statAtk}>⚔{blkAtk}</Text>
-                        <Text style={styles.statHp}>♥{blkHp}</Text>
-                      </View>
-                    )}
+                    <Text style={styles.pairName}>{defenderName}</Text>
+                    {blockerIds.map((blkId) => {
+                      const blkCard = parseCardId(blkId);
+                      const blkRoyal = defenderCourt.find((r) => r.cardId === blkId);
+                      const blkAtk = blkRoyal ? effectiveAttack(blkRoyal.cardId, blkRoyal.buffAttack) : null;
+                      const blkHp = blkRoyal
+                        ? effectiveHealth(blkRoyal.cardId, blkRoyal.buffHealth, blkRoyal.damageTaken)
+                        : null;
+                      return (
+                        <View key={blkId} style={styles.blockerEntry}>
+                          <Text style={[styles.pairCard, { color: blkCard.suitColor }]}>
+                            {blkCard.displayRank}{blkCard.suitSymbol}
+                          </Text>
+                          {blkAtk !== null && blkHp !== null && (
+                            <View style={styles.statsRow}>
+                              <Text style={styles.statAtk}>⚔{blkAtk}</Text>
+                              <Text style={styles.statHp}>♥{blkHp}</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
                   </>
                 ) : (
                   <Text style={styles.unblockedTag}>UNBLOCKED</Text>
@@ -276,6 +281,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: "Inter_600SemiBold",
     color: Colors.accentRed,
+  },
+  blockerEntry: {
+    alignItems: "center",
+    gap: 2,
   },
   unblockedTag: {
     fontSize: 9,

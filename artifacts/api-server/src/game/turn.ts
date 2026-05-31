@@ -45,8 +45,15 @@ export function advanceTurn(state: GameState): Result<GameState> {
 
   const nextPlayerBase = resetVaultForTurn(state.players[nextPlayerId]!);
   const isFirstTurn = !nextPlayerBase.hasHadFirstTurn;
+
+  const untappedCourt = nextPlayerBase.court.map((r) => ({
+    ...r,
+    hasAttackedThisTurn: false,
+  }));
+
   const nextPlayer: PlayerState = {
     ...nextPlayerBase,
+    court: untappedCourt,
     hasPlayedDiamondThisTurn: false,
     hasHadFirstTurn: true,
   };
@@ -78,7 +85,6 @@ function healAllRoyals(state: GameState): GameState {
       ...r,
       damageTaken: 0,
       hasteLocked: false,
-      hasAttackedThisTurn: false,
     }));
 
     updatedPlayers[playerId] = { ...player, court: healedCourt };

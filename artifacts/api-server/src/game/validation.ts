@@ -35,9 +35,6 @@ export function canPlayCard(
     if (card.isRoyal) {
       return err(`Cannot play Royals during a Club response window`);
     }
-    if (card.isJoker) {
-      return err(`Cannot play Jokers during a Club response window`);
-    }
 
     const vault = availableVault(state.mine, player);
     if (vault < card.vaultCost) {

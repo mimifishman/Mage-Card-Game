@@ -185,12 +185,11 @@ describe("canPlayCard", () => {
       expect(result.error).toMatch(/royal/i);
     });
 
-    it("rejects Jokers during respond_to_club", () => {
+    it("allows Jokers during respond_to_club (Rule 4)", () => {
       const state = makeClubResponseState(["JOKER1"]);
       const result = canPlayCard(state, P2, "JOKER1");
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.error).toMatch(/joker/i);
+      // Rule 4: Jokers are allowed during the respond_to_club window
+      expect(result.ok).toBe(true);
     });
 
     it("rejects the attacker from playing during respond_to_club", () => {

@@ -49,6 +49,7 @@ export type { JokerMode } from "./joker";
 export {
   declareAttack,
   confirmDeclareBlocks,
+  setDamageOrder,
   duelPass,
   advanceDuelTurn,
   resolveCombat,

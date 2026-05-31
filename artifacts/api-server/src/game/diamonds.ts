@@ -117,6 +117,21 @@ export function discardDiamondToDraw(
 
   const player = state.players[playerId]!;
 
+  if (state.phase === "respond_to_club") {
+    const pending = state.pendingClubDebuff!;
+    if (pending.defenderDiamondUsed) {
+      return err("You have already used your one Diamond action during this Club response");
+    }
+    const withoutCard = removeFromHand(player, cardId);
+    const afterDiscard: GameState = {
+      ...state,
+      players: { ...state.players, [playerId]: withoutCard },
+      abyss: [...state.abyss, cardId],
+      pendingClubDebuff: { ...pending, defenderDiamondUsed: true },
+    };
+    return drawCard(afterDiscard, playerId);
+  }
+
   if (isDuelPhase(state.phase) && state.duelContext) {
     const ctx = state.duelContext;
     const isAttacker = playerId === ctx.attackerPlayerId;
@@ -177,6 +192,21 @@ export function discardDiamondForBoost(
   }
 
   const player = state.players[playerId]!;
+
+  if (state.phase === "respond_to_club") {
+    const pending = state.pendingClubDebuff!;
+    if (pending.defenderDiamondUsed) {
+      return err("You have already used your one Diamond action during this Club response");
+    }
+    const withoutCard = removeFromHand(player, cardId);
+    const boosted = addTempBoost(withoutCard, card.pipValue);
+    return ok({
+      ...state,
+      players: { ...state.players, [playerId]: boosted },
+      abyss: [...state.abyss, cardId],
+      pendingClubDebuff: { ...pending, defenderDiamondUsed: true },
+    });
+  }
 
   if (isDuelPhase(state.phase) && state.duelContext) {
     const ctx = state.duelContext;
