@@ -2,7 +2,8 @@ import { getCard } from "./cards";
 import type { CardId, GameState, PlayerState, Result, RoyalInCourt } from "./types";
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
-import { canPlayCard, getUnblockedAttackerRoyalIds } from "./validation";
+import { canPlayCard, getUnblockedAttackerRoyalIds, isDuelPhase } from "./validation";
+import { isRoyalInActiveDuelPair, isRoyalInResolvedDuelPair } from "./combat";
 
 function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return { ...player, hand: player.hand.filter((c) => c !== cardId) };
@@ -93,6 +94,15 @@ export function attachHeart(
     return err("That Royal's attack is already unblocked — you cannot add more cards to it");
   }
 
+  if (isDuelPhase(state.phase) && state.attacks.some((a) => a.blockerCardIds?.length)) {
+    if (!isRoyalInActiveDuelPair(state, targetCardId)) {
+      if (isRoyalInResolvedDuelPair(state, targetCardId)) {
+        return err("Cannot target a Royal in a pair whose duel has already ended");
+      }
+      return err("Can only target a Royal that is part of an active duel pair");
+    }
+  }
+
   const target = player.court[targetIdx]!;
   const updatedTarget: RoyalInCourt = {
     ...target,
@@ -135,6 +145,15 @@ export function attachSpade(
   const unblockedAttackers = getUnblockedAttackerRoyalIds(state);
   if (unblockedAttackers.has(targetCardId)) {
     return err("That Royal's attack is already unblocked — you cannot add more cards to it");
+  }
+
+  if (isDuelPhase(state.phase) && state.attacks.some((a) => a.blockerCardIds?.length)) {
+    if (!isRoyalInActiveDuelPair(state, targetCardId)) {
+      if (isRoyalInResolvedDuelPair(state, targetCardId)) {
+        return err("Cannot target a Royal in a pair whose duel has already ended");
+      }
+      return err("Can only target a Royal that is part of an active duel pair");
+    }
   }
 
   const target = player.court[targetIdx]!;

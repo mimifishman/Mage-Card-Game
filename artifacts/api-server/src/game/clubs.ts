@@ -4,6 +4,12 @@ import { err, ok } from "./types";
 import { spendVault } from "./vault";
 import { canPlayCard, isDuelPhase } from "./validation";
 import { checkAndApplyCancellation } from "./attachments";
+import {
+  findPairAttackerIdForRoyal,
+  isRoyalInActiveDuelPair,
+  isRoyalInResolvedDuelPair,
+  markDuelPairResolved,
+} from "./combat";
 
 function destroyRoyalToAbyss(
   player: PlayerState,
@@ -135,7 +141,32 @@ export function applyClub(
       targetCardId,
     );
     if (!result.ok) return result;
-    return ok({ ...result.value, pendingClubDebuff: state.pendingClubDebuff });
+
+    let withPending = { ...result.value, pendingClubDebuff: state.pendingClubDebuff };
+
+    // If this respond_to_club window originated from a duel, the counter-Club
+    // debuff lands during the duel — mark that pair as resolved immediately
+    // (without triggering combat; confirmClubResponse handles final resolution).
+    if (isDuelPhase(state.pendingClubDebuff?.returnPhase)) {
+      const ctx = withPending.duelContext;
+      if (ctx) {
+        const pairId = findPairAttackerIdForRoyal(withPending.attacks, targetCardId);
+        if (pairId) {
+          const resolved = ctx.resolvedPairAttackerIds ?? [];
+          if (!resolved.includes(pairId)) {
+            withPending = {
+              ...withPending,
+              duelContext: {
+                ...ctx,
+                resolvedPairAttackerIds: [...resolved, pairId],
+              },
+            };
+          }
+        }
+      }
+    }
+
+    return ok(withPending);
   }
 
   if (state.phase === "declare_blocks") {
@@ -149,6 +180,15 @@ export function applyClub(
   }
 
   const returnPhase = isDuelPhase(state.phase) ? state.phase : undefined;
+
+  if (isDuelPhase(state.phase) && state.attacks.some((a) => a.blockerCardIds?.length)) {
+    if (!isRoyalInActiveDuelPair(state, targetCardId)) {
+      if (isRoyalInResolvedDuelPair(state, targetCardId)) {
+        return err("Cannot target a Royal in a pair whose duel has already ended");
+      }
+      return err("Can only target a Royal that is part of an active duel pair");
+    }
+  }
 
   return ok({
     ...state,
@@ -186,13 +226,20 @@ export function confirmClubResponse(
   }
 
   const returnPhase = pending.returnPhase ?? "main";
-  return applyDebuffToRoyal(
+  const result = applyDebuffToRoyal(
     { ...state, phase: returnPhase },
     pending.attackerPlayerId,
     pending.clubCardId,
     pending.targetPlayerId,
     pending.targetRoyalId,
   );
+  if (!result.ok) return result;
+
+  if (isDuelPhase(returnPhase)) {
+    return markDuelPairResolved(result.value, pending.targetRoyalId);
+  }
+
+  return result;
 }
 
 export const applyClubToRoyal = applyClub;

@@ -166,6 +166,7 @@ export function confirmDeclareBlocks(
     duelBlockerPassed: false,
     attackerDiamondUsed: false,
     defenderDiamondUsed: false,
+    resolvedPairAttackerIds: [],
   };
 
   if (hasMultiBlocker) {
@@ -434,6 +435,90 @@ function executeResolveCombat(state: GameState): Result<GameState> {
     duelContext: undefined,
     lastCombatSummary: summary,
   });
+}
+
+/**
+ * Returns true if the given Royal is part of a duel pair that has already
+ * been resolved (a Club debuff landed on it). Safe to call outside duel phases.
+ */
+export function isRoyalInResolvedDuelPair(state: GameState, royalId: CardId): boolean {
+  const ctx = state.duelContext;
+  if (!ctx) return false;
+  const resolved = ctx.resolvedPairAttackerIds ?? [];
+  if (resolved.length === 0) return false;
+  const pairId = findPairAttackerIdForRoyal(state.attacks, royalId);
+  return pairId !== undefined && resolved.includes(pairId);
+}
+
+/**
+ * Returns true if the given Royal is part of a blocked pair that is still
+ * active (not yet resolved). Use this to gate duel card plays to active pairs.
+ */
+export function isRoyalInActiveDuelPair(state: GameState, royalId: CardId): boolean {
+  const ctx = state.duelContext;
+  if (!ctx) return false;
+  const resolved = ctx.resolvedPairAttackerIds ?? [];
+  for (const attack of state.attacks) {
+    if (!attack.blockerCardIds?.length) continue;
+    if (resolved.includes(attack.attackerCardId)) continue;
+    if (attack.attackerCardId === royalId || attack.blockerCardIds.includes(royalId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Returns the attackerCardId of the duel pair that contains the given Royal
+ * (as either attacker or blocker). Only considers blocked pairs (duel pairs).
+ * Returns undefined if the Royal is not part of any blocked pair.
+ */
+export function findPairAttackerIdForRoyal(
+  attacks: AttackDeclaration[],
+  royalId: CardId,
+): CardId | undefined {
+  for (const attack of attacks) {
+    if (!attack.blockerCardIds?.length) continue;
+    if (attack.attackerCardId === royalId) return attack.attackerCardId;
+    if (attack.blockerCardIds.includes(royalId)) return attack.attackerCardId;
+  }
+  return undefined;
+}
+
+/**
+ * Marks the duel pair containing `royalId` as resolved (a Club debuff landed).
+ * If all blocked pairs are now resolved, executes combat resolution immediately.
+ * If the Royal is not part of any blocked pair, or if already resolved, returns the state unchanged.
+ */
+export function markDuelPairResolved(state: GameState, royalId: CardId): Result<GameState> {
+  const ctx = state.duelContext;
+  if (!ctx) return ok(state);
+
+  const pairAttackerId = findPairAttackerIdForRoyal(state.attacks, royalId);
+  const resolved = ctx.resolvedPairAttackerIds ?? [];
+
+  const updatedResolved =
+    pairAttackerId && !resolved.includes(pairAttackerId)
+      ? [...resolved, pairAttackerId]
+      : resolved;
+
+  const updatedCtx: DuelContext = {
+    ...ctx,
+    resolvedPairAttackerIds: updatedResolved,
+  };
+
+  const newState: GameState = { ...state, duelContext: updatedCtx };
+
+  const blockedPairs = state.attacks.filter((a) => a.blockerCardIds?.length);
+  const allResolved =
+    blockedPairs.length > 0 &&
+    blockedPairs.every((a) => updatedResolved.includes(a.attackerCardId));
+
+  if (allResolved) {
+    return executeResolveCombat(newState);
+  }
+
+  return ok(newState);
 }
 
 export function resolveCombat(state: GameState, callerPlayerId: string): Result<GameState> {

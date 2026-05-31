@@ -2,7 +2,8 @@ import { getCard } from "./cards";
 import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { availableVault, spendVault } from "./vault";
-import { canPlayCard } from "./validation";
+import { canPlayCard, isDuelPhase } from "./validation";
+import { isRoyalInActiveDuelPair, isRoyalInResolvedDuelPair } from "./combat";
 
 const JOKER_COST = 10;
 
@@ -47,6 +48,15 @@ export function playJokerDestroyRoyal(
   const targetRoyal = targetPlayer.court.find((r) => r.cardId === targetCardId);
   if (!targetRoyal) {
     return err(`Royal ${targetCardId} is not in ${targetPlayerId}'s Court`);
+  }
+
+  if (isDuelPhase(state.phase) && state.attacks.some((a) => a.blockerCardIds?.length)) {
+    if (!isRoyalInActiveDuelPair(state, targetCardId)) {
+      if (isRoyalInResolvedDuelPair(state, targetCardId)) {
+        return err("Cannot target a Royal in a pair whose duel has already ended");
+      }
+      return err("Can only target a Royal that is part of an active duel pair");
+    }
   }
 
   const withoutJoker = { ...player, hand: player.hand.filter((c) => c !== jokerCardId) };

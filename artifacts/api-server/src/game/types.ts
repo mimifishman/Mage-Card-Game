@@ -76,6 +76,7 @@ export interface DuelContext {
   duelBlockerPassed: boolean;
   attackerDiamondUsed: boolean;
   defenderDiamondUsed: boolean;
+  resolvedPairAttackerIds?: CardId[];
 }
 
 export interface CombatPairOutcome {
