@@ -7,7 +7,7 @@ import Colors from "@/constants/colors";
 interface CardViewProps {
   cardId: string;
   royal?: RoyalInCourt;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
   dimmed?: boolean;
   selected?: boolean;
   hasAttacked?: boolean;
@@ -68,6 +68,7 @@ export default function CardView({
 }
 
 const SIZE_MAP = {
+  xs: { w: 28, h: 40, rankFont: 11, symbolFont: 9, iconFont: 6 },
   sm: { w: 38, h: 52, rankFont: 14, symbolFont: 12, iconFont: 7 },
   md: { w: 52, h: 72, rankFont: 18, symbolFont: 15, iconFont: 8 },
   lg: { w: 68, h: 96, rankFont: 22, symbolFont: 19, iconFont: 9 },

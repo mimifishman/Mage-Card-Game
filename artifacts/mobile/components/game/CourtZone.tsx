@@ -25,11 +25,11 @@ interface CourtZoneProps {
   dimmedIds?: Set<string>;
 }
 
-const ATTACHED_SIZE: Record<"sm" | "md" | "lg" | "xl", "sm" | "md" | "lg" | "xl"> = {
-  sm: "sm",
-  md: "sm",
-  lg: "md",
-  xl: "lg",
+const ATTACHED_SIZE: Record<"sm" | "md" | "lg" | "xl", "xs" | "sm" | "md" | "lg" | "xl"> = {
+  sm: "xs",
+  md: "xs",
+  lg: "xs",
+  xl: "sm",
 };
 
 export default function CourtZone({
