@@ -11,14 +11,29 @@ import type {
   RoyalInCourt,
 } from "./types";
 import { err, ok } from "./types";
+import { availableVault } from "./vault";
 
 
 function activePlayers(state: GameState): string[] {
   return state.turnOrder.filter((id) => !state.players[id]?.isEliminated);
 }
 
-function hasDuelPlayableCard(player: PlayerState): boolean {
-  return player.hand.some((cardId) => !getCard(cardId).isRoyal);
+/**
+ * Returns true if the player has at least one non-Royal card they can
+ * legally act on during a duel turn.
+ *
+ * "Actionable" means the player has enough vault to satisfy the card's cost —
+ * every duel action (attachHeart, discardHeartToHeal, discardToAbyss, etc.)
+ * goes through canPlayCard which rejects cards whose vaultCost exceeds available
+ * vault. A card with sufficient vault always has at least one valid duel action
+ * (e.g. discard_to_abyss), even when the attacker's Royals are all unblocked.
+ */
+function hasDuelPlayableCard(player: PlayerState, state: GameState): boolean {
+  const vault = availableVault(state.mine, player);
+  return player.hand.some((cardId) => {
+    const card = getCard(cardId);
+    return !card.isRoyal && vault >= card.vaultCost;
+  });
 }
 
 export function declareAttack(
@@ -505,7 +520,7 @@ export function autoAdvanceDuelIfNeeded(state: GameState): Result<GameState> {
   const currentPlayer = state.players[currentPlayerId];
   if (!currentPlayer) return ok(state);
 
-  if (hasDuelPlayableCard(currentPlayer)) return ok(state);
+  if (hasDuelPlayableCard(currentPlayer, state)) return ok(state);
 
   const newCtx: DuelContext = {
     ...ctx,
@@ -520,10 +535,11 @@ export function autoAdvanceDuelIfNeeded(state: GameState): Result<GameState> {
   const nextPhase: "duel_blocker_turn" | "duel_attacker_turn" = isAttackerTurn ? "duel_blocker_turn" : "duel_attacker_turn";
   const nextPlayerId = nextPhase === "duel_attacker_turn" ? ctx.attackerPlayerId : ctx.defenderPlayerId;
   const nextPlayer = state.players[nextPlayerId];
-  if (!nextPlayer || !hasDuelPlayableCard(nextPlayer)) {
+  const nextState: GameState = { ...state, phase: nextPhase, duelContext: newCtx };
+  if (!nextPlayer || !hasDuelPlayableCard(nextPlayer, nextState)) {
     const bothPassedCtx: DuelContext = { ...newCtx, duelAttackerPassed: true, duelBlockerPassed: true };
     return executeResolveCombat({ ...state, duelContext: bothPassedCtx });
   }
 
-  return ok({ ...state, phase: nextPhase, duelContext: newCtx });
+  return ok(nextState);
 }

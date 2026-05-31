@@ -606,3 +606,114 @@ describe("spade/club pip cancellation", () => {
     expect(royal4!.buffHealth).toBe(0);
   });
 });
+
+function mkRoyalLocal(cardId: string, overrides: Partial<RoyalInCourt> = {}): RoyalInCourt {
+  return {
+    cardId,
+    hasAttackedThisTurn: false,
+    hasteLocked: false,
+    damageTaken: 0,
+    buffAttack: 0,
+    buffHealth: 0,
+    attachedCards: [],
+    ...overrides,
+  };
+}
+
+describe("duel attacker turn — unblocked Royal restriction", () => {
+  function makeDuelAttackerState() {
+    return makeState({
+      mine: ["10D"],
+      phase: "duel_attacker_turn",
+      activePlayerId: P1,
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+      },
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KS", targetPlayerId: P2, passed: true },
+        { attackerPlayerId: P1, attackerCardId: "QS", targetPlayerId: P2, blockerCardIds: ["KH"] },
+      ],
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["6H", "5S"],
+          court: [mkRoyalLocal("KS"), mkRoyalLocal("QS")],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+        [P2]: makePlayer(P2, {
+          court: [mkRoyalLocal("KH")],
+        }),
+      },
+    });
+  }
+
+  it("rejects attachHeart on an unblocked attacking Royal", () => {
+    const state = makeDuelAttackerState();
+    const result = attachHeart(state, P1, "6H", "KS");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/unblocked/i);
+  });
+
+  it("rejects attachSpade on an unblocked attacking Royal", () => {
+    const state = makeDuelAttackerState();
+    const result = attachSpade(state, P1, "5S", "KS");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/unblocked/i);
+  });
+
+  it("allows attachHeart on a blocked attacking Royal", () => {
+    const state = makeDuelAttackerState();
+    const result = attachHeart(state, P1, "6H", "QS");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const royal = result.value.players[P1]!.court.find(r => r.cardId === "QS")!;
+    expect(royal.buffHealth).toBe(6);
+    expect(royal.attachedCards).toContain("6H");
+  });
+
+  it("allows attachSpade on a blocked attacking Royal", () => {
+    const state = makeDuelAttackerState();
+    const result = attachSpade(state, P1, "5S", "QS");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const royal = result.value.players[P1]!.court.find(r => r.cardId === "QS")!;
+    expect(royal.buffAttack).toBe(5);
+  });
+
+  it("does NOT restrict attachHeart during duel_blocker_turn (defender is unaffected)", () => {
+    const state = makeState({
+      mine: ["10D"],
+      phase: "duel_blocker_turn",
+      activePlayerId: P2,
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+      },
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KS", targetPlayerId: P2, passed: true },
+      ],
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [mkRoyalLocal("KS")],
+        }),
+        [P2]: makePlayer(P2, {
+          hand: ["6H"],
+          court: [mkRoyalLocal("KH")],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+      },
+    });
+    const result = attachHeart(state, P2, "6H", "KH");
+    expect(result.ok).toBe(true);
+  });
+});

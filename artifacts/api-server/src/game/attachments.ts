@@ -2,7 +2,7 @@ import { getCard } from "./cards";
 import type { CardId, GameState, PlayerState, Result, RoyalInCourt } from "./types";
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
-import { canPlayCard } from "./validation";
+import { canPlayCard, getUnblockedAttackerRoyalIds } from "./validation";
 
 function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return { ...player, hand: player.hand.filter((c) => c !== cardId) };
@@ -88,6 +88,11 @@ export function attachHeart(
     return err(`Target Royal ${targetCardId} is not in your Court`);
   }
 
+  const unblockedAttackers = getUnblockedAttackerRoyalIds(state);
+  if (unblockedAttackers.has(targetCardId)) {
+    return err("That Royal's attack is already unblocked — you cannot add more cards to it");
+  }
+
   const target = player.court[targetIdx]!;
   const updatedTarget: RoyalInCourt = {
     ...target,
@@ -125,6 +130,11 @@ export function attachSpade(
   const targetIdx = player.court.findIndex((r) => r.cardId === targetCardId);
   if (targetIdx === -1) {
     return err(`Target Royal ${targetCardId} is not in your Court`);
+  }
+
+  const unblockedAttackers = getUnblockedAttackerRoyalIds(state);
+  if (unblockedAttackers.has(targetCardId)) {
+    return err("That Royal's attack is already unblocked — you cannot add more cards to it");
   }
 
   const target = player.court[targetIdx]!;

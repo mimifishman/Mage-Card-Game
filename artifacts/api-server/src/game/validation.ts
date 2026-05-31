@@ -3,6 +3,26 @@ import type { CardId, GameState, Result, TurnPhase } from "./types";
 import { err, ok } from "./types";
 import { availableVault } from "./vault";
 
+/**
+ * During `duel_attacker_turn`, returns the set of attacking Royal IDs that
+ * were NOT blocked by the defender (i.e. the defender passed on them).
+ * Returns an empty set in all other phases.
+ */
+export function getUnblockedAttackerRoyalIds(state: GameState): Set<CardId> {
+  if (state.phase !== "duel_attacker_turn") return new Set();
+  const ctx = state.duelContext;
+  if (!ctx) return new Set();
+  return new Set(
+    state.attacks
+      .filter(
+        (a) =>
+          a.attackerPlayerId === ctx.attackerPlayerId &&
+          a.passed === true,
+      )
+      .map((a) => a.attackerCardId),
+  );
+}
+
 const PLAY_PHASES: TurnPhase[] = ["main", "declare_attacks"];
 const DUEL_PHASES: TurnPhase[] = ["duel_attacker_turn", "duel_blocker_turn"];
 

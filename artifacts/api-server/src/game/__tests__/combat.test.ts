@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { declareAttack, confirmDeclareBlocks, setDamageOrder, duelPass, resolveCombat } from "../combat";
+import { declareAttack, confirmDeclareBlocks, setDamageOrder, duelPass, resolveCombat, autoAdvanceDuelIfNeeded } from "../combat";
 import { discardToAbyss, discardDiamondToDraw, discardDiamondForBoost } from "../diamonds";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
@@ -625,13 +625,53 @@ describe("Diamond rule enforcement during duel", () => {
     expect(result.value.players[P2]!.life).toBe(17);
     expect(result.value.duelContext).toBeUndefined();
   });
+
+  it("auto-resolves attacker turn when attacker has non-Royal cards but insufficient vault to play any of them", () => {
+    // Attacker has a 6H but vault=0: every duel action (attach, heal, discard_to_abyss)
+    // goes through canPlayCard which requires vault >= vaultCost(6). With no vault the
+    // attacker is genuinely stuck → autoAdvanceDuelIfNeeded should auto-pass and resolve.
+    const state = makeState({
+      phase: "duel_attacker_turn",
+      mine: [],
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardIds: ["QS"] },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: false,
+        duelBlockerPassed: true,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+      },
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["6H"],
+          court: [mkRoyal("KH")],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+        [P2]: makePlayer(P2, {
+          court: [mkRoyal("QS")],
+          life: 20,
+        }),
+      },
+    });
+
+    const result = autoAdvanceDuelIfNeeded(state);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("main");
+    expect(result.value.duelContext).toBeUndefined();
+  });
 });
 
 describe("setDamageOrder (Rule 2 validation)", () => {
   function multiBlockerState() {
-    // Give both players non-Royal cards so autoAdvanceDuelIfNeeded doesn't auto-resolve
+    // Give both players non-Royal cards AND sufficient vault so
+    // autoAdvanceDuelIfNeeded doesn't auto-resolve (mine provides vault=5).
     return makeState({
       phase: "assign_damage_order",
+      mine: ["5D"],
       attacks: [
         {
           attackerPlayerId: P1,
