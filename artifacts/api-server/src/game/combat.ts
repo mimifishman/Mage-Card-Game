@@ -367,7 +367,11 @@ function executeResolveCombat(state: GameState): Result<GameState> {
   let players = { ...state.players };
   let abyss = [...state.abyss];
 
+  const resolvedPairs = state.duelContext?.resolvedPairAttackerIds ?? [];
+
   for (const attack of state.attacks) {
+    if (resolvedPairs.includes(attack.attackerCardId)) continue;
+
     const attacker = players[attack.attackerPlayerId];
     const target = players[attack.targetPlayerId];
     if (!attacker || !target) continue;

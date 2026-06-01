@@ -961,4 +961,60 @@ describe("per-pair duel resolution (Task: end duel pair when Royal is debuffed)"
     if (result.ok) return;
     expect(result.error).toMatch(/active duel pair/i);
   });
+
+  it("regression: debuffed Royal that survives the Club is NOT killed by subsequent combat damage", () => {
+    // KH (P1, very high attack) is blocked by JD (P2, moderate health).
+    // A 3C Club debuff reduces JD's buffHealth from 5 → 2 (effectiveHealth 1+2=3, alive).
+    // Without the fix, executeResolveCombat would then apply KH's massive attack to JD and
+    // kill it even though the pair was already resolved. With the fix JD must survive.
+    const state = makeState({
+      phase: "respond_to_club",
+      mine: ["10D"],
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardIds: ["JD"] },
+      ],
+      pendingClubDebuff: {
+        attackerPlayerId: P1,
+        clubCardId: "3C",
+        targetPlayerId: P2,
+        targetRoyalId: "JD",
+        defenderDiamondUsed: false,
+        returnPhase: "duel_attacker_turn" as const,
+      },
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+        resolvedPairAttackerIds: [],
+      },
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [mkRoyal("KH", { buffAttack: 50 })], // extremely high attack to guarantee kill without fix
+          vault: { tempBoost: 0, spent: 3 },
+        }),
+        [P2]: makePlayer(P2, {
+          court: [mkRoyal("JD", { buffHealth: 5 })], // effectiveHealth = 1+5 = 6; survives 3C (pip 3 → buffHealth 2)
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+      },
+    });
+
+    const result = confirmClubResponse(state, P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // All pairs resolved → combat goes to main
+    expect(result.value.phase).toBe("main");
+
+    // JD survived the debuff (effectiveHealth = 1 + (5-3) = 3 > 0)
+    const jd = result.value.players[P2]!.court.find((r) => r.cardId === "JD");
+    expect(jd).toBeDefined(); // must NOT be in abyss
+
+    // No combat damage applied to JD (pair was resolved — KH's attack skipped)
+    expect(jd!.damageTaken).toBe(0);
+    expect(jd!.buffHealth).toBe(2); // 5 - 3 from the 3C pip
+  });
 });
