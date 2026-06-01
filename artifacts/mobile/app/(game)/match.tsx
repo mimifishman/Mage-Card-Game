@@ -471,12 +471,7 @@ export default function MatchScreen() {
   const handleDismissAutoPass = useCallback(() => {
     setAutoPassMessage(null);
     lastDuelCtxRef.current = null;
-    const parts = pendingCombatDamageRef.current;
     pendingCombatDamageRef.current = [];
-    if (parts.length > 0) {
-      setCombatResultText(parts.join(" · "));
-      setTimeout(() => setCombatResultText(null), 4000);
-    }
   }, []);
 
   const handleDuelPlayCard = useCallback((cardId: string) => {
