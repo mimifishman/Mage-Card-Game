@@ -159,6 +159,7 @@ export interface DuelContext {
   duelBlockerPassed: boolean;
   attackerDiamondUsed: boolean;
   defenderDiamondUsed: boolean;
+  autoPassedPlayerIds?: string[];
 }
 
 export interface CombatPairOutcome {
@@ -172,6 +173,7 @@ export interface CombatPairOutcome {
 
 export interface CombatSummary {
   pairs: CombatPairOutcome[];
+  autoPassedPlayerIds?: string[];
 }
 
 export type PlayerGameViewPhase =

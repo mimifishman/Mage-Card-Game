@@ -280,6 +280,10 @@ function removeDeadRoyals(
 }
 
 function buildCombatSummary(stateBefore: GameState): CombatSummary {
+  const autoPassedPlayerIds = stateBefore.duelContext?.autoPassedPlayerIds?.length
+    ? stateBefore.duelContext.autoPassedPlayerIds
+    : undefined;
+
   const pairs: CombatPairOutcome[] = stateBefore.attacks.map((attack) => {
     const attacker = stateBefore.players[attack.attackerPlayerId];
     const target = stateBefore.players[attack.targetPlayerId];
@@ -358,7 +362,7 @@ function buildCombatSummary(stateBefore: GameState): CombatSummary {
     };
   });
 
-  return { pairs };
+  return { pairs, autoPassedPlayerIds };
 }
 
 function executeResolveCombat(state: GameState): Result<GameState> {
@@ -611,10 +615,16 @@ export function autoAdvanceDuelIfNeeded(state: GameState): Result<GameState> {
 
   if (hasDuelPlayableCard(currentPlayer, state)) return ok(state);
 
+  const existingAutoPassedIds = ctx.autoPassedPlayerIds ?? [];
+  const updatedAutoPassedIds = existingAutoPassedIds.includes(currentPlayerId)
+    ? existingAutoPassedIds
+    : [...existingAutoPassedIds, currentPlayerId];
+
   const newCtx: DuelContext = {
     ...ctx,
     duelAttackerPassed: currentPlayerId === ctx.attackerPlayerId ? true : ctx.duelAttackerPassed,
     duelBlockerPassed: currentPlayerId === ctx.defenderPlayerId ? true : ctx.duelBlockerPassed,
+    autoPassedPlayerIds: updatedAutoPassedIds,
   };
 
   if (newCtx.duelAttackerPassed && newCtx.duelBlockerPassed) {
@@ -626,7 +636,15 @@ export function autoAdvanceDuelIfNeeded(state: GameState): Result<GameState> {
   const nextPlayer = state.players[nextPlayerId];
   const nextState: GameState = { ...state, phase: nextPhase, duelContext: newCtx };
   if (!nextPlayer || !hasDuelPlayableCard(nextPlayer, nextState)) {
-    const bothPassedCtx: DuelContext = { ...newCtx, duelAttackerPassed: true, duelBlockerPassed: true };
+    const nextAutoPassedIds = updatedAutoPassedIds.includes(nextPlayerId)
+      ? updatedAutoPassedIds
+      : [...updatedAutoPassedIds, nextPlayerId];
+    const bothPassedCtx: DuelContext = {
+      ...newCtx,
+      duelAttackerPassed: true,
+      duelBlockerPassed: true,
+      autoPassedPlayerIds: nextAutoPassedIds,
+    };
     return executeResolveCombat({ ...state, duelContext: bothPassedCtx });
   }
 

@@ -23,6 +23,7 @@ interface DuelPhaseModalProps {
   defenderCourt: RoyalInCourt[];
   displayNames: Record<string, string>;
   isSubmitting: boolean;
+  autoPassMessage?: string | null;
   onPass: () => void;
 }
 
@@ -36,6 +37,7 @@ export default function DuelPhaseModal({
   defenderCourt,
   displayNames,
   isSubmitting,
+  autoPassMessage,
   onPass,
 }: DuelPhaseModalProps) {
   const isMyDuelTurn =
@@ -63,7 +65,12 @@ export default function DuelPhaseModal({
           )}
         </View>
 
-        {isMyDuelTurn ? (
+        {autoPassMessage ? (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.autoPassBanner}>
+            <Ionicons name="alert-circle" size={14} color="#C89B3C" />
+            <Text style={styles.autoPassText}>{autoPassMessage}</Text>
+          </Animated.View>
+        ) : isMyDuelTurn ? (
           <Animated.View entering={FadeIn.duration(300)} style={styles.myTurnBadge}>
             <Ionicons name="flash" size={12} color={Colors.bgDeep} />
             <Text style={styles.myTurnText}>YOUR TURN — tap a card below or pass</Text>
@@ -143,7 +150,7 @@ export default function DuelPhaseModal({
         })}
       </ScrollView>
 
-      {isMyDuelTurn && (
+      {isMyDuelTurn && !autoPassMessage && (
         <View style={styles.footer}>
           <Pressable
             onPress={onPass}
@@ -326,5 +333,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     color: Colors.textMuted,
+  },
+  autoPassBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: Colors.bgSurface,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#C89B3C",
+  },
+  autoPassText: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    color: "#C89B3C",
+    flex: 1,
   },
 });

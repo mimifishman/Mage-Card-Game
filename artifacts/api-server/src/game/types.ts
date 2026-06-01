@@ -77,6 +77,7 @@ export interface DuelContext {
   attackerDiamondUsed: boolean;
   defenderDiamondUsed: boolean;
   resolvedPairAttackerIds?: CardId[];
+  autoPassedPlayerIds?: string[];
 }
 
 export interface CombatPairOutcome {
@@ -90,6 +91,7 @@ export interface CombatPairOutcome {
 
 export interface CombatSummary {
   pairs: CombatPairOutcome[];
+  autoPassedPlayerIds?: string[];
 }
 
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";

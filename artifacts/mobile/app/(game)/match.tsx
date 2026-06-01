@@ -64,6 +64,7 @@ export default function MatchScreen() {
   const [pendingAttackTargetId, setPendingAttackTargetId] = useState<string | null>(null);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [combatResultText, setCombatResultText] = useState<string | null>(null);
+  const [autoPassMessage, setAutoPassMessage] = useState<string | null>(null);
 
   const [attackSelectMode, setAttackSelectMode] = useState(false);
   const [selectedAttackRoyalIds, setSelectedAttackRoyalIds] = useState<Set<string>>(new Set());
@@ -71,6 +72,8 @@ export default function MatchScreen() {
 
   const prevPhaseRef = useRef<string | null>(null);
   const prevPlayersRef = useRef<Record<string, { life: number; courtSize: number }>>({});
+  const lastDuelCtxRef = useRef<import("@workspace/api-client-react").DuelContext | null>(null);
+  const lastDuelAttacksRef = useRef<import("@workspace/api-client-react").AttackDeclaration[]>([]);
 
   const pulseOpacity = useSharedValue(1);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
@@ -127,37 +130,83 @@ export default function MatchScreen() {
     }
   }, [matchData?.match?.status, matchData?.match?.winnerUserId, matchId]);
 
+  // Track the most recent duel context and attacks so we can keep the modal
+  // alive briefly after the phase returns to main (for auto-resolve messaging).
+  useEffect(() => {
+    if (!gameState) return;
+    if (isDuelTurnPhase(gameState.phase) && gameState.duelContext) {
+      lastDuelCtxRef.current = gameState.duelContext as import("@workspace/api-client-react").DuelContext;
+      lastDuelAttacksRef.current = gameState.attacks as import("@workspace/api-client-react").AttackDeclaration[];
+    }
+  }, [gameState]);
+
   // Detect combat resolution: duel phase → main
   useEffect(() => {
     if (!gameState) return;
     const prev = prevPhaseRef.current;
     const prevPlayers = prevPlayersRef.current;
 
-    const wasCombat =
+    const wasDuel =
       prev === "duel_attacker_turn" ||
-      prev === "duel_blocker_turn" ||
+      prev === "duel_blocker_turn";
+    const wasCombat =
+      wasDuel ||
       prev === "declare_blocks" ||
       prev === "assign_damage_order";
     const nowResolved = gameState.phase === "main" || gameState.phase === "draw";
 
     if (wasCombat && nowResolved) {
-      const parts: string[] = [];
+      const autoPassedIds = gameState.lastCombatSummary?.autoPassedPlayerIds ?? [];
+
+      const damageParts: string[] = [];
       for (const [id, p] of Object.entries(gameState.players)) {
         const before = prevPlayers[id];
         if (!before) continue;
         const lifeDelta = p.life - before.life;
         if (lifeDelta < 0) {
           const name = displayNames[id] ?? id.slice(0, 8);
-          parts.push(`${name} took ${-lifeDelta} damage`);
+          damageParts.push(`${name} took ${-lifeDelta} damage`);
         }
         const courtLost = before.courtSize - p.court.length;
         if (courtLost > 0) {
           const name = displayNames[id] ?? id.slice(0, 8);
-          parts.push(`${name} lost ${courtLost} Royal${courtLost > 1 ? "s" : ""}`);
+          damageParts.push(`${name} lost ${courtLost} Royal${courtLost > 1 ? "s" : ""}`);
         }
       }
-      if (parts.length > 0) {
-        setCombatResultText(parts.join(" · "));
+
+      if (autoPassedIds.length > 0) {
+        const bothPlayers = autoPassedIds.length >= 2;
+        let message: string;
+        if (bothPlayers) {
+          message = "No cards left to play — resolving combat";
+        } else {
+          const passedId = autoPassedIds[0]!;
+          const localMyId = user?.id ?? "";
+          message = passedId === localMyId
+            ? "You had no cards to play"
+            : `${displayNames[passedId] ?? passedId.slice(0, 8)} had no cards to play`;
+        }
+
+        if (lastDuelCtxRef.current) {
+          // Modal hold path: duel phase was observed — keep the duel panel open
+          // with the message for ~2s before dismissing normally.
+          setAutoPassMessage(message);
+          setTimeout(() => {
+            setAutoPassMessage(null);
+            if (damageParts.length > 0) {
+              setCombatResultText(damageParts.join(" · "));
+              setTimeout(() => setCombatResultText(null), 4000);
+            }
+          }, 2000);
+        } else {
+          // Fallback banner path: combat resolved immediately from declare_blocks
+          // without entering a duel turn — show message in combat result banner.
+          const allParts = [message, ...damageParts];
+          setCombatResultText(allParts.join(" · "));
+          setTimeout(() => setCombatResultText(null), 5000);
+        }
+      } else if (damageParts.length > 0) {
+        setCombatResultText(damageParts.join(" · "));
         setTimeout(() => setCombatResultText(null), 4000);
       }
     }
@@ -499,7 +548,9 @@ export default function MatchScreen() {
 
   const showBlockingModal = inDeclareBlocks && attacksTargetingMe.length > 0;
   const showDamageOrderModal = inAssignDamageOrder && duelCtx && myId === duelCtx.attackerPlayerId;
-  const showDuelModal = inDuel && !!duelCtx;
+  const showDuelModal = (inDuel && !!duelCtx) || !!autoPassMessage;
+  const effectiveDuelCtx = duelCtx ?? lastDuelCtxRef.current;
+  const effectiveDuelAttacks = inDuel ? gameState.attacks : lastDuelAttacksRef.current;
 
   const activePlayerName = displayNames[gameState.activePlayerId]
     ?? (gameState.activePlayerId === myId ? (user?.displayName ?? "You") : gameState.activePlayerId.slice(0, 8));
@@ -1014,17 +1065,18 @@ export default function MatchScreen() {
         />
       )}
 
-      {showDuelModal && duelCtx && (
+      {showDuelModal && effectiveDuelCtx && (
         <DuelPhaseModal
           visible={showDuelModal}
           phase={phase}
-          attacks={gameState.attacks}
-          duelContext={duelCtx}
+          attacks={effectiveDuelAttacks}
+          duelContext={effectiveDuelCtx}
           myId={myId}
-          attackerCourt={gameState.players[duelCtx.attackerPlayerId]?.court ?? []}
-          defenderCourt={gameState.players[duelCtx.defenderPlayerId]?.court ?? []}
+          attackerCourt={gameState.players[effectiveDuelCtx.attackerPlayerId]?.court ?? []}
+          defenderCourt={gameState.players[effectiveDuelCtx.defenderPlayerId]?.court ?? []}
           displayNames={displayNames}
           isSubmitting={isSubmitting}
+          autoPassMessage={autoPassMessage}
           onPass={handleDuelPass}
         />
       )}
