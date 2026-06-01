@@ -9,6 +9,66 @@ function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return { ...player, hand: player.hand.filter((c) => c !== cardId) };
 }
 
+function getSubsets(cards: { id: CardId; pip: number }[]): Array<{ indices: number[]; sum: number }> {
+  const result: Array<{ indices: number[]; sum: number }> = [];
+  const n = cards.length;
+  for (let mask = 1; mask < (1 << n); mask++) {
+    const indices: number[] = [];
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      if (mask & (1 << i)) {
+        indices.push(i);
+        sum += cards[i]!.pip;
+      }
+    }
+    result.push({ indices, sum });
+  }
+  return result;
+}
+
+function findMaxCancellation(
+  spades: { id: CardId; pip: number }[],
+  clubs: { id: CardId; pip: number }[],
+): { cancelledSpadeIndices: Set<number>; cancelledClubIndices: Set<number> } {
+  const spadeSubsets = getSubsets(spades);
+  const clubBySum = new Map<number, Array<number[]>>();
+  for (const cs of getSubsets(clubs)) {
+    if (!clubBySum.has(cs.sum)) clubBySum.set(cs.sum, []);
+    clubBySum.get(cs.sum)!.push(cs.indices);
+  }
+
+  const pairs: Array<{ si: number[]; ci: number[] }> = [];
+  for (const ss of spadeSubsets) {
+    for (const ci of clubBySum.get(ss.sum) ?? []) {
+      pairs.push({ si: ss.indices, ci });
+    }
+  }
+
+  let bestSpade = new Set<number>();
+  let bestClub = new Set<number>();
+
+  function backtrack(pairIdx: number, usedSpade: Set<number>, usedClub: Set<number>) {
+    const total = usedSpade.size + usedClub.size;
+    if (total > bestSpade.size + bestClub.size) {
+      bestSpade = new Set(usedSpade);
+      bestClub = new Set(usedClub);
+    }
+    for (let i = pairIdx; i < pairs.length; i++) {
+      const pair = pairs[i]!;
+      if (pair.si.some((idx) => usedSpade.has(idx))) continue;
+      if (pair.ci.some((idx) => usedClub.has(idx))) continue;
+      for (const idx of pair.si) usedSpade.add(idx);
+      for (const idx of pair.ci) usedClub.add(idx);
+      backtrack(i + 1, usedSpade, usedClub);
+      for (const idx of pair.si) usedSpade.delete(idx);
+      for (const idx of pair.ci) usedClub.delete(idx);
+    }
+  }
+
+  backtrack(0, new Set(), new Set());
+  return { cancelledSpadeIndices: bestSpade, cancelledClubIndices: bestClub };
+}
+
 export function checkAndApplyCancellation(
   state: GameState,
   playerId: string,
@@ -22,42 +82,55 @@ export function checkAndApplyCancellation(
 
   const royal = player.court[royalIdx]!;
 
-  let spadePipTotal = 0;
-  let clubPipTotal = 0;
-  const heartIds: CardId[] = [];
-  const spadeAndClubIds: CardId[] = [];
+  const spades: { id: CardId; pip: number }[] = [];
+  const clubs: { id: CardId; pip: number }[] = [];
 
   for (const attachedId of royal.attachedCards) {
     const card = getCard(attachedId);
     if (card.suit === "S") {
-      spadePipTotal += card.pipValue;
-      spadeAndClubIds.push(attachedId);
+      spades.push({ id: attachedId, pip: card.pipValue });
     } else if (card.suit === "C") {
-      clubPipTotal += card.pipValue;
-      spadeAndClubIds.push(attachedId);
-    } else if (card.suit === "H") {
-      heartIds.push(attachedId);
+      clubs.push({ id: attachedId, pip: card.pipValue });
     }
   }
 
-  if (spadePipTotal === 0 || clubPipTotal === 0 || spadePipTotal !== clubPipTotal) {
-    return state;
+  if (spades.length === 0 || clubs.length === 0) return state;
+
+  const { cancelledSpadeIndices, cancelledClubIndices } = findMaxCancellation(spades, clubs);
+
+  if (cancelledSpadeIndices.size === 0) return state;
+
+  const cancelledIds = new Set<CardId>([
+    ...[...cancelledSpadeIndices].map((i) => spades[i]!.id),
+    ...[...cancelledClubIndices].map((i) => clubs[i]!.id),
+  ]);
+
+  const remainingAttached = royal.attachedCards.filter((id) => !cancelledIds.has(id));
+
+  let buffAttack = 0;
+  let buffHealth = 0;
+  for (const id of remainingAttached) {
+    const card = getCard(id);
+    if (card.suit === "S") {
+      buffAttack += card.pipValue;
+      buffHealth += card.pipValue;
+    } else if (card.suit === "C") {
+      buffAttack -= card.pipValue;
+      buffHealth -= card.pipValue;
+    } else if (card.suit === "H") {
+      buffHealth += card.pipValue;
+    }
   }
 
-  const heartBuffHealth = heartIds.reduce((sum, id) => {
-    const c = getCard(id);
-    return sum + c.pipValue;
-  }, 0);
-
-  const cancelledRoyal: RoyalInCourt = {
+  const updatedRoyal: RoyalInCourt = {
     ...royal,
-    buffAttack: 0,
-    buffHealth: heartBuffHealth,
-    attachedCards: heartIds,
+    buffAttack,
+    buffHealth,
+    attachedCards: remainingAttached,
   };
 
   const updatedCourt = [...player.court];
-  updatedCourt[royalIdx] = cancelledRoyal;
+  updatedCourt[royalIdx] = updatedRoyal;
 
   return {
     ...state,
@@ -65,7 +138,7 @@ export function checkAndApplyCancellation(
       ...state.players,
       [playerId]: { ...player, court: updatedCourt },
     },
-    abyss: [...state.abyss, ...spadeAndClubIds],
+    abyss: [...state.abyss, ...cancelledIds],
   };
 }
 

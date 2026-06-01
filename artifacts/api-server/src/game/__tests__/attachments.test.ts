@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { attachHeart, attachSpade, discardHeartToHeal, discardSpadeToReturn } from "../attachments";
+import { attachHeart, attachSpade, checkAndApplyCancellation, discardHeartToHeal, discardSpadeToReturn } from "../attachments";
 import { applyClub, confirmClubResponse } from "../clubs";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
@@ -535,6 +535,136 @@ describe("spade/club pip cancellation", () => {
     expect(royal.attachedCards).toContain("3S");
     expect(result.value.abyss).not.toContain("3S");
     expect(royal.buffAttack).toBe(3);
+  });
+
+  it("subset cancellation: single matching pair within a larger spade set (one spade stays)", () => {
+    // Royal has 5S and 3S attached. 5C is also attached.
+    // 5S (5) cancels 5C (5) → both to Abyss. 3S has no matching club → stays.
+    const state = makeState({
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [
+            mkRoyal("KH", {
+              buffAttack: 8,
+              buffHealth: 8,
+              attachedCards: ["5S", "3S", "5C"],
+            }),
+          ],
+        }),
+        [P2]: makePlayer(P2),
+      },
+    });
+
+    const result = checkAndApplyCancellation(state, P1, "KH");
+    const royal = result.players[P1]!.court.find((r) => r.cardId === "KH")!;
+    expect(royal.attachedCards).toContain("3S");
+    expect(royal.attachedCards).not.toContain("5S");
+    expect(royal.attachedCards).not.toContain("5C");
+    expect(result.abyss).toContain("5S");
+    expect(result.abyss).toContain("5C");
+    expect(result.abyss).not.toContain("3S");
+    expect(royal.buffAttack).toBe(3);
+    expect(royal.buffHealth).toBe(3);
+  });
+
+  it("subset cancellation: task example — 9S+3S+8S+10S vs 7C+10C+5C (8S stays)", () => {
+    // KC (Royal) with 9S, 3S, 8S, 10S and 7C, 10C, 5C attached.
+    // 10S (10) cancels 10C (10). 9S+3S (12) cancels 7C+5C (12). 8S has no match → stays.
+    // buffAttack after: 8S pip = 8. buffHealth: 8.
+    const state = makeState({
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [
+            mkRoyal("KH", {
+              buffAttack: 8,
+              buffHealth: 8,
+              attachedCards: ["9S", "3S", "8S", "10S", "7C", "10C", "5C"],
+            }),
+          ],
+        }),
+        [P2]: makePlayer(P2),
+      },
+    });
+
+    const result = checkAndApplyCancellation(state, P1, "KH");
+    const royal = result.players[P1]!.court.find((r) => r.cardId === "KH")!;
+    expect(royal.attachedCards).toContain("8S");
+    expect(royal.attachedCards).not.toContain("9S");
+    expect(royal.attachedCards).not.toContain("3S");
+    expect(royal.attachedCards).not.toContain("10S");
+    expect(royal.attachedCards).not.toContain("7C");
+    expect(royal.attachedCards).not.toContain("10C");
+    expect(royal.attachedCards).not.toContain("5C");
+    expect(result.abyss).toContain("9S");
+    expect(result.abyss).toContain("3S");
+    expect(result.abyss).toContain("10S");
+    expect(result.abyss).toContain("7C");
+    expect(result.abyss).toContain("10C");
+    expect(result.abyss).toContain("5C");
+    expect(result.abyss).not.toContain("8S");
+    expect(royal.buffAttack).toBe(8);
+    expect(royal.buffHealth).toBe(8);
+  });
+
+  it("no cancellation when no subset sums match (7S vs 3C+2C)", () => {
+    // Spades: [7]. Clubs: [3, 2]. No subset of spades can equal 3, 2, or 5.
+    const state = makeState({
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [
+            mkRoyal("KH", {
+              buffAttack: 2,
+              buffHealth: 2,
+              attachedCards: ["7S", "3C", "2C"],
+            }),
+          ],
+        }),
+        [P2]: makePlayer(P2),
+      },
+    });
+
+    const result = checkAndApplyCancellation(state, P1, "KH");
+    const royal = result.players[P1]!.court.find((r) => r.cardId === "KH")!;
+    expect(royal.attachedCards).toContain("7S");
+    expect(royal.attachedCards).toContain("3C");
+    expect(royal.attachedCards).toContain("2C");
+    expect(result.abyss).not.toContain("7S");
+    expect(result.abyss).not.toContain("3C");
+    expect(result.abyss).not.toContain("2C");
+    expect(royal.buffAttack).toBe(2);
+    expect(royal.buffHealth).toBe(2);
+  });
+
+  it("subset cancellation with Heart: Heart buff survives, cancelled spade/club go to abyss", () => {
+    // Royal has 5S, 3S, 4H, 5C attached.
+    // 5S (5) cancels 5C (5). 3S stays (no matching club). Heart buff preserved.
+    const state = makeState({
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [
+            mkRoyal("KH", {
+              buffAttack: 3,
+              buffHealth: 11,
+              attachedCards: ["5S", "3S", "4H", "5C"],
+            }),
+          ],
+        }),
+        [P2]: makePlayer(P2),
+      },
+    });
+
+    const result = checkAndApplyCancellation(state, P1, "KH");
+    const royal = result.players[P1]!.court.find((r) => r.cardId === "KH")!;
+    expect(royal.attachedCards).toContain("3S");
+    expect(royal.attachedCards).toContain("4H");
+    expect(royal.attachedCards).not.toContain("5S");
+    expect(royal.attachedCards).not.toContain("5C");
+    expect(result.abyss).toContain("5S");
+    expect(result.abyss).toContain("5C");
+    expect(result.abyss).not.toContain("4H");
+    expect(result.abyss).not.toContain("3S");
+    expect(royal.buffAttack).toBe(3);
+    expect(royal.buffHealth).toBe(7);
   });
 
   it("cancellation via duel (clubs applied directly without respond_to_club window)", () => {
