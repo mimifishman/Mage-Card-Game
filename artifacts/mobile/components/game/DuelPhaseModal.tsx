@@ -167,7 +167,9 @@ export default function DuelPhaseModal({
             ) : (
               <>
                 <Ionicons name="arrow-forward-circle" size={16} color={Colors.textMuted} />
-                <Text style={styles.passBtnText}>Pass</Text>
+                <Text style={styles.passBtnText}>
+                  {autoPassMessage ? "No cards left to play — Pass to resolve combat" : "Pass"}
+                </Text>
               </>
             )}
           </Pressable>
