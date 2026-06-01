@@ -71,12 +71,6 @@ export default function DuelPhaseModal({
           <Animated.View entering={FadeIn.duration(200)} style={styles.autoPassBanner}>
             <Ionicons name="alert-circle" size={14} color="#C89B3C" />
             <Text style={styles.autoPassText}>{autoPassMessage}</Text>
-            <Pressable
-              onPress={onDismissAutoPass}
-              style={({ pressed }) => [styles.autoPassBtn, pressed && { opacity: 0.7 }]}
-            >
-              <Text style={styles.autoPassBtnText}>Pass</Text>
-            </Pressable>
           </Animated.View>
         ) : isMyDuelTurn ? (
           <Animated.View entering={FadeIn.duration(300)} style={styles.myTurnBadge}>
@@ -158,10 +152,10 @@ export default function DuelPhaseModal({
         })}
       </ScrollView>
 
-      {isMyDuelTurn && !autoPassMessage && (
+      {(isMyDuelTurn || autoPassMessage) && (
         <View style={styles.footer}>
           <Pressable
-            onPress={onPass}
+            onPress={autoPassMessage ? onDismissAutoPass : onPass}
             disabled={isSubmitting}
             style={({ pressed }) => [
               styles.passBtn,
@@ -173,7 +167,7 @@ export default function DuelPhaseModal({
             ) : (
               <>
                 <Ionicons name="arrow-forward-circle" size={16} color={Colors.textMuted} />
-                <Text style={styles.passBtnText}>Pass Turn</Text>
+                <Text style={styles.passBtnText}>Pass</Text>
               </>
             )}
           </Pressable>
