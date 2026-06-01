@@ -74,6 +74,7 @@ export default function MatchScreen() {
   const prevPlayersRef = useRef<Record<string, { life: number; courtSize: number }>>({});
   const lastDuelCtxRef = useRef<import("@workspace/api-client-react").DuelContext | null>(null);
   const lastDuelAttacksRef = useRef<import("@workspace/api-client-react").AttackDeclaration[]>([]);
+  const pendingCombatDamageRef = useRef<string[]>([]);
 
   const pulseOpacity = useSharedValue(1);
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulseOpacity.value }));
@@ -189,15 +190,9 @@ export default function MatchScreen() {
 
         if (lastDuelCtxRef.current) {
           // Modal hold path: duel phase was observed — keep the duel panel open
-          // with the message for ~2s before dismissing normally.
+          // showing the auto-pass message until the player taps "Pass".
+          pendingCombatDamageRef.current = damageParts;
           setAutoPassMessage(message);
-          setTimeout(() => {
-            setAutoPassMessage(null);
-            if (damageParts.length > 0) {
-              setCombatResultText(damageParts.join(" · "));
-              setTimeout(() => setCombatResultText(null), 4000);
-            }
-          }, 2000);
         } else {
           // Fallback banner path: combat resolved immediately from declare_blocks
           // without entering a duel turn — show message in combat result banner.
@@ -472,6 +467,17 @@ export default function MatchScreen() {
     if (!matchId) return;
     submitAction({ matchId, data: { type: "duel_pass" } });
   }, [matchId, submitAction]);
+
+  const handleDismissAutoPass = useCallback(() => {
+    setAutoPassMessage(null);
+    lastDuelCtxRef.current = null;
+    const parts = pendingCombatDamageRef.current;
+    pendingCombatDamageRef.current = [];
+    if (parts.length > 0) {
+      setCombatResultText(parts.join(" · "));
+      setTimeout(() => setCombatResultText(null), 4000);
+    }
+  }, []);
 
   const handleDuelPlayCard = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
@@ -1078,6 +1084,7 @@ export default function MatchScreen() {
           isSubmitting={isSubmitting}
           autoPassMessage={autoPassMessage}
           onPass={handleDuelPass}
+          onDismissAutoPass={handleDismissAutoPass}
         />
       )}
 

@@ -25,6 +25,7 @@ interface DuelPhaseModalProps {
   isSubmitting: boolean;
   autoPassMessage?: string | null;
   onPass: () => void;
+  onDismissAutoPass?: () => void;
 }
 
 export default function DuelPhaseModal({
@@ -39,6 +40,7 @@ export default function DuelPhaseModal({
   isSubmitting,
   autoPassMessage,
   onPass,
+  onDismissAutoPass,
 }: DuelPhaseModalProps) {
   const isMyDuelTurn =
     (phase === "duel_attacker_turn" && myId === duelContext.attackerPlayerId) ||
@@ -69,6 +71,12 @@ export default function DuelPhaseModal({
           <Animated.View entering={FadeIn.duration(200)} style={styles.autoPassBanner}>
             <Ionicons name="alert-circle" size={14} color="#C89B3C" />
             <Text style={styles.autoPassText}>{autoPassMessage}</Text>
+            <Pressable
+              onPress={onDismissAutoPass}
+              style={({ pressed }) => [styles.autoPassBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.autoPassBtnText}>Pass</Text>
+            </Pressable>
           </Animated.View>
         ) : isMyDuelTurn ? (
           <Animated.View entering={FadeIn.duration(300)} style={styles.myTurnBadge}>
@@ -350,5 +358,16 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: "#C89B3C",
     flex: 1,
+  },
+  autoPassBtn: {
+    backgroundColor: "#C89B3C",
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  autoPassBtnText: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    color: Colors.bgDeep,
   },
 });
