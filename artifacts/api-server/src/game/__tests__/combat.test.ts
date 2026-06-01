@@ -549,6 +549,172 @@ describe("full duel flow: attack → blocks → duel → resolve", () => {
   });
 });
 
+describe("mutual kill: both Royals die on equal duel damage", () => {
+  it("removes both attacker and blocker when they deal exactly equal damage (King vs King)", () => {
+    // KH (3 ATK, 3 HP) attacks; KS (3 ATK, 3 HP) blocks — each kills the other simultaneously.
+    const state = makeState({
+      phase: "duel_blocker_turn",
+      attacks: [
+        {
+          attackerPlayerId: P1,
+          attackerCardId: "KH",
+          targetPlayerId: P2,
+          blockerCardIds: ["KS"],
+        },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: true,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+        resolvedPairAttackerIds: [],
+      },
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { life: 20, court: [mkRoyal("KS")] }),
+      },
+    });
+
+    const result = duelPass(state, P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.phase).toBe("main");
+
+    // Both Royals must be gone from their respective courts.
+    expect(result.value.players[P1]!.court.find((r) => r.cardId === "KH")).toBeUndefined();
+    expect(result.value.players[P2]!.court.find((r) => r.cardId === "KS")).toBeUndefined();
+
+    // Both must be in the abyss.
+    expect(result.value.abyss).toContain("KH");
+    expect(result.value.abyss).toContain("KS");
+
+    // No direct player life loss — the attack was fully blocked.
+    expect(result.value.players[P2]!.life).toBe(20);
+  });
+
+  it("removes both attacker and blocker when they deal equal damage (Queen vs Queen)", () => {
+    // QH (2 ATK, 2 HP) attacks; QD (2 ATK, 2 HP) blocks — symmetrical kill.
+    const state = makeState({
+      phase: "duel_blocker_turn",
+      attacks: [
+        {
+          attackerPlayerId: P1,
+          attackerCardId: "QH",
+          targetPlayerId: P2,
+          blockerCardIds: ["QD"],
+        },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: true,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+        resolvedPairAttackerIds: [],
+      },
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("QH")] }),
+        [P2]: makePlayer(P2, { life: 20, court: [mkRoyal("QD")] }),
+      },
+    });
+
+    const result = duelPass(state, P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.players[P1]!.court.find((r) => r.cardId === "QH")).toBeUndefined();
+    expect(result.value.players[P2]!.court.find((r) => r.cardId === "QD")).toBeUndefined();
+    expect(result.value.abyss).toContain("QH");
+    expect(result.value.abyss).toContain("QD");
+    expect(result.value.players[P2]!.life).toBe(20);
+  });
+
+  it("combat summary reports both destroyed on equal damage", () => {
+    // Verify lastCombatSummary correctly flags both sides as destroyed.
+    const state = makeState({
+      phase: "duel_blocker_turn",
+      attacks: [
+        {
+          attackerPlayerId: P1,
+          attackerCardId: "KH",
+          targetPlayerId: P2,
+          blockerCardIds: ["KS"],
+        },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: true,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+        resolvedPairAttackerIds: [],
+      },
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { life: 20, court: [mkRoyal("KS")] }),
+      },
+    });
+
+    const result = duelPass(state, P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const summary = result.value.lastCombatSummary;
+    expect(summary).toBeDefined();
+    const pair = summary!.pairs.find((p) => p.attackerCardId === "KH");
+    expect(pair).toBeDefined();
+    expect(pair!.attackerDestroyed).toBe(true);
+    expect(pair!.blockerDestroyed).toBe(true);
+  });
+
+  it("unequal duel: stronger attacker survives, weaker blocker is destroyed", () => {
+    // KH (3 ATK, 3 HP) vs JD (1 ATK, 1 HP): KH takes 1 damage but survives; JD is destroyed.
+    const state = makeState({
+      phase: "duel_blocker_turn",
+      attacks: [
+        {
+          attackerPlayerId: P1,
+          attackerCardId: "KH",
+          targetPlayerId: P2,
+          blockerCardIds: ["JD"],
+        },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: true,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+        resolvedPairAttackerIds: [],
+      },
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { life: 20, court: [mkRoyal("JD")] }),
+      },
+    });
+
+    const result = duelPass(state, P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // KH survives with damage taken.
+    const kh = result.value.players[P1]!.court.find((r) => r.cardId === "KH");
+    expect(kh).toBeDefined();
+    expect(kh!.damageTaken).toBe(1);
+
+    // JD is destroyed.
+    expect(result.value.players[P2]!.court.find((r) => r.cardId === "JD")).toBeUndefined();
+    expect(result.value.abyss).toContain("JD");
+    expect(result.value.abyss).not.toContain("KH");
+  });
+});
+
 describe("Diamond rule enforcement during duel", () => {
   function duelStateForDiamondTests() {
     return makeState({
