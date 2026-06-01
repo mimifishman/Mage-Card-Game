@@ -70,7 +70,7 @@ export default function DuelPhaseModal({
         {autoPassMessage ? (
           <Animated.View entering={FadeIn.duration(200)} style={styles.autoPassBanner}>
             <Ionicons name="alert-circle" size={14} color="#C89B3C" />
-            <Text style={styles.autoPassText}>{autoPassMessage}</Text>
+            <Text style={styles.autoPassText}>No cards left to play — Pass to resolve combat</Text>
           </Animated.View>
         ) : isMyDuelTurn ? (
           <Animated.View entering={FadeIn.duration(300)} style={styles.myTurnBadge}>
@@ -167,9 +167,7 @@ export default function DuelPhaseModal({
             ) : (
               <>
                 <Ionicons name="arrow-forward-circle" size={16} color={Colors.textMuted} />
-                <Text style={styles.passBtnText}>
-                  {autoPassMessage ? "No cards left to play — Pass to resolve combat" : "Pass"}
-                </Text>
+                <Text style={styles.passBtnText}>Pass</Text>
               </>
             )}
           </Pressable>
