@@ -207,24 +207,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   atkPill: {
-    backgroundColor: "rgba(200,155,60,0.22)",
+    backgroundColor: "rgba(200,155,60,0.30)",
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "rgba(200,155,60,0.45)",
+    borderColor: "rgba(200,155,60,0.55)",
   },
   atkPillText: {
     fontFamily: "Inter_700Bold",
-    color: "#8B5E00",
+    color: "#C89B3C",
   },
   hpPill: {
-    backgroundColor: "rgba(27,94,32,0.18)",
+    backgroundColor: "rgba(27,94,32,0.28)",
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "rgba(27,94,32,0.4)",
+    borderColor: "rgba(46,125,50,0.55)",
   },
   hpPillDamaged: {
     backgroundColor: "rgba(200,16,46,0.14)",
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   },
   hpPillText: {
     fontFamily: "Inter_700Bold",
-    color: Colors.accentGreen,
+    color: "#66BB6A",
   },
   hpPillTextDamaged: {
     color: Colors.accentRed,

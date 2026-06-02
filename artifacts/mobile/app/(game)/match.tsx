@@ -689,7 +689,7 @@ export default function MatchScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.headerCenter}>
+        <View style={[styles.headerCenter, { paddingTop: topInset + 8, paddingBottom: 12 }]} pointerEvents="none">
           {attackSelectMode ? (
             <View style={styles.attackSelectBadge}>
               <Ionicons name="flash" size={13} color={Colors.bgDeep} />
@@ -1191,7 +1191,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   headerCenter: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
     alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
   },
   headerRight: {
     flex: 1,
@@ -1313,7 +1320,7 @@ const styles = StyleSheet.create({
   turnSub: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
   },
   vaultDisplay: {
     flexDirection: "row",

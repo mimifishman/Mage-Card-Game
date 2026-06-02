@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 10,
     fontFamily: "Inter_400Regular",
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
     marginLeft: 4,
   },
   scrollContent: {

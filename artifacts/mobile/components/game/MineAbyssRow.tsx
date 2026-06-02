@@ -114,10 +114,12 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   mineBadge: {
-    backgroundColor: "rgba(27,94,32,0.25)",
+    backgroundColor: "rgba(10,31,19,0.85)",
     borderRadius: 8,
     paddingHorizontal: 5,
     paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: "rgba(46,125,50,0.5)",
   },
   mineBadgeText: {
     fontSize: 11,
