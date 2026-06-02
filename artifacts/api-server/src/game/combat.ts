@@ -169,22 +169,33 @@ export function confirmDeclareBlocks(
     resolvedPairAttackerIds: [],
   };
 
+  const baseStateForDuel: GameState = {
+    ...state,
+    attacks: updatedAttacks,
+    duelContext,
+    lastCombatSummary: undefined,
+  };
+
+  const stateWithImmediateHits = applyUnblockedDamageAtDuelStart(baseStateForDuel);
+
+  const hasAnyBlockedPair = updatedAttacks.some(
+    (a) => a.blockerCardIds && a.blockerCardIds.length > 0,
+  );
+
+  if (!hasAnyBlockedPair) {
+    return executeResolveCombat(stateWithImmediateHits);
+  }
+
   if (hasMultiBlocker) {
     return ok({
-      ...state,
+      ...stateWithImmediateHits,
       phase: "assign_damage_order",
-      attacks: updatedAttacks,
-      duelContext,
-      lastCombatSummary: undefined,
     });
   }
 
   const stateWithDuel: GameState = {
-    ...state,
+    ...stateWithImmediateHits,
     phase: "duel_blocker_turn",
-    attacks: updatedAttacks,
-    duelContext,
-    lastCombatSummary: undefined,
   };
 
   return autoAdvanceDuelIfNeeded(stateWithDuel);
@@ -279,9 +290,60 @@ function removeDeadRoyals(
   };
 }
 
+/**
+ * Immediately applies direct damage for all unblocked attacks (passed: true)
+ * when transitioning into the duel phase. Records the pre-resolved IDs and
+ * hit outcomes so executeResolveCombat can skip them and the combat summary
+ * can surface the immediate hits to the UI.
+ *
+ * Must be called after duelContext is set on the state.
+ */
+function applyUnblockedDamageAtDuelStart(state: GameState): GameState {
+  const unblockedAttacks = state.attacks.filter((a) => a.passed && !a.blockerCardIds?.length);
+  if (unblockedAttacks.length === 0) return state;
+
+  let players = { ...state.players };
+  const immediateHits: CombatPairOutcome[] = [];
+  const preResolvedIds: CardId[] = [];
+
+  for (const attack of unblockedAttacks) {
+    const attacker = players[attack.attackerPlayerId];
+    if (!attacker) continue;
+    const attackerRoyal = attacker.court.find((r) => r.cardId === attack.attackerCardId);
+    if (!attackerRoyal) continue;
+
+    const atkPower = effectiveAttack(attackerRoyal);
+    players[attack.targetPlayerId] = {
+      ...players[attack.targetPlayerId]!,
+      life: players[attack.targetPlayerId]!.life - atkPower,
+    };
+
+    immediateHits.push({
+      attackerCardId: attack.attackerCardId,
+      blockerCardIds: [],
+      attackerDestroyed: false,
+      blockerDestroyed: false,
+      directDamage: atkPower,
+      targetPlayerId: attack.targetPlayerId,
+    });
+    preResolvedIds.push(attack.attackerCardId);
+  }
+
+  const updatedDuelContext: DuelContext = {
+    ...state.duelContext!,
+    preResolvedUnblockedAttackerIds: preResolvedIds,
+    immediateHits,
+  };
+
+  return { ...state, players, duelContext: updatedDuelContext };
+}
+
 function buildCombatSummary(stateBefore: GameState): CombatSummary {
   const autoPassedPlayerIds = stateBefore.duelContext?.autoPassedPlayerIds?.length
     ? stateBefore.duelContext.autoPassedPlayerIds
+    : undefined;
+  const immediateHits = stateBefore.duelContext?.immediateHits?.length
+    ? stateBefore.duelContext.immediateHits
     : undefined;
 
   const pairs: CombatPairOutcome[] = stateBefore.attacks.map((attack) => {
@@ -362,7 +424,7 @@ function buildCombatSummary(stateBefore: GameState): CombatSummary {
     };
   });
 
-  return { pairs, autoPassedPlayerIds };
+  return { pairs, autoPassedPlayerIds, immediateHits };
 }
 
 function executeResolveCombat(state: GameState): Result<GameState> {
@@ -372,9 +434,11 @@ function executeResolveCombat(state: GameState): Result<GameState> {
   let abyss = [...state.abyss];
 
   const resolvedPairs = state.duelContext?.resolvedPairAttackerIds ?? [];
+  const preResolvedUnblocked = state.duelContext?.preResolvedUnblockedAttackerIds ?? [];
 
   for (const attack of state.attacks) {
     if (resolvedPairs.includes(attack.attackerCardId)) continue;
+    if (preResolvedUnblocked.includes(attack.attackerCardId)) continue;
 
     const attacker = players[attack.attackerPlayerId];
     const target = players[attack.targetPlayerId];

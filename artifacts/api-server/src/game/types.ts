@@ -78,6 +78,8 @@ export interface DuelContext {
   defenderDiamondUsed: boolean;
   resolvedPairAttackerIds?: CardId[];
   autoPassedPlayerIds?: string[];
+  preResolvedUnblockedAttackerIds?: CardId[];
+  immediateHits?: CombatPairOutcome[];
 }
 
 export interface CombatPairOutcome {
@@ -92,6 +94,7 @@ export interface CombatPairOutcome {
 export interface CombatSummary {
   pairs: CombatPairOutcome[];
   autoPassedPlayerIds?: string[];
+  immediateHits?: CombatPairOutcome[];
 }
 
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";

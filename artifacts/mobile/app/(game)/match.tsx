@@ -156,6 +156,30 @@ export default function MatchScreen() {
       prev === "assign_damage_order";
     const nowResolved = gameState.phase === "main" || gameState.phase === "draw";
 
+    // Detect declare_blocks → duel/assign_damage_order: show immediate unblocked damage
+    const enteredDuelFromBlocks =
+      prev === "declare_blocks" &&
+      (gameState.phase === "duel_blocker_turn" ||
+        gameState.phase === "duel_attacker_turn" ||
+        gameState.phase === "assign_damage_order");
+
+    if (enteredDuelFromBlocks) {
+      const immediateParts: string[] = [];
+      for (const [id, p] of Object.entries(gameState.players)) {
+        const before = prevPlayers[id];
+        if (!before) continue;
+        const lifeDelta = p.life - before.life;
+        if (lifeDelta < 0) {
+          const name = displayNames[id] ?? id.slice(0, 8);
+          immediateParts.push(`${name} took ${-lifeDelta} direct damage`);
+        }
+      }
+      if (immediateParts.length > 0) {
+        setCombatResultText(immediateParts.join(" · "));
+        setTimeout(() => setCombatResultText(null), 3500);
+      }
+    }
+
     if (wasCombat && nowResolved) {
       const autoPassedIds = gameState.lastCombatSummary?.autoPassedPlayerIds ?? [];
 
@@ -1070,7 +1094,9 @@ export default function MatchScreen() {
         <DuelPhaseModal
           visible={showDuelModal}
           phase={phase}
-          attacks={effectiveDuelAttacks}
+          attacks={effectiveDuelAttacks.filter(
+            (a) => a.blockerCardIds && a.blockerCardIds.length > 0,
+          )}
           duelContext={effectiveDuelCtx}
           myId={myId}
           attackerCourt={gameState.players[effectiveDuelCtx.attackerPlayerId]?.court ?? []}

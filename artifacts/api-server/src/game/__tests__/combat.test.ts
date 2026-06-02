@@ -831,6 +831,194 @@ describe("Diamond rule enforcement during duel", () => {
   });
 });
 
+describe("unblocked damage at duel start (mixed blocked/unblocked)", () => {
+  function mixedAttackState() {
+    return makeState({
+      phase: "declare_blocks",
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 },
+        { attackerPlayerId: P1, attackerCardId: "QS", targetPlayerId: P2 },
+      ],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["2D"], court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2, { hand: ["3D"], court: [mkRoyal("JD")], life: 20 }),
+      },
+    });
+  }
+
+  it("applies direct damage for unblocked (passed) attacks immediately when duel phase starts", () => {
+    const state = mixedAttackState();
+    const result = confirmDeclareBlocks(state, P2, {
+      KH: ["JD"],
+      QS: "pass",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // QS is Queen of Spades → attack = 2; P2 life should drop from 20 to 18 immediately
+    expect(result.value.players[P2]!.life).toBe(18);
+    // KH is still in a duel pair — no immediate damage applied for it
+    expect(result.value.phase).toBe("duel_blocker_turn");
+  });
+
+  it("records preResolvedUnblockedAttackerIds in duelContext for skipping at resolution", () => {
+    const state = mixedAttackState();
+    const result = confirmDeclareBlocks(state, P2, {
+      KH: ["JD"],
+      QS: "pass",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.duelContext!.preResolvedUnblockedAttackerIds).toContain("QS");
+    expect(result.value.duelContext!.preResolvedUnblockedAttackerIds).not.toContain("KH");
+  });
+
+  it("records immediateHits in duelContext for the combat log", () => {
+    const state = mixedAttackState();
+    const result = confirmDeclareBlocks(state, P2, {
+      KH: ["JD"],
+      QS: "pass",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const hits = result.value.duelContext!.immediateHits ?? [];
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.attackerCardId).toBe("QS");
+    expect(hits[0]!.directDamage).toBe(2);
+    expect(hits[0]!.targetPlayerId).toBe(P2);
+  });
+
+  it("does not double-count unblocked damage when duel resolves at end", () => {
+    const state = mixedAttackState();
+    // Confirm blocks: KH blocked by JD, QS unblocked
+    const afterBlocks = confirmDeclareBlocks(state, P2, {
+      KH: ["JD"],
+      QS: "pass",
+    });
+    expect(afterBlocks.ok).toBe(true);
+    if (!afterBlocks.ok) return;
+
+    // P2 already took 2 damage from QS immediately
+    expect(afterBlocks.value.players[P2]!.life).toBe(18);
+
+    // Both players pass the duel (no cards to play)
+    const afterP2Pass = duelPass(afterBlocks.value, P2);
+    expect(afterP2Pass.ok).toBe(true);
+    if (!afterP2Pass.ok) return;
+
+    const afterP1Pass = duelPass(afterP2Pass.value, P1);
+    expect(afterP1Pass.ok).toBe(true);
+    if (!afterP1Pass.ok) return;
+
+    // After resolution: KH (attack=3) vs JD (attack=1, health=1) — KH kills JD
+    // P2's life should only reflect the KH→JD duel result (no player life loss from a blocked pair)
+    // QS damage (2) was already applied; total P2 life = 18 (no further life loss since KH is blocked)
+    expect(afterP1Pass.value.phase).toBe("main");
+    expect(afterP1Pass.value.players[P2]!.life).toBe(18);
+  });
+
+  it("combat summary includes immediateHits from pre-resolved unblocked attacks", () => {
+    const state = mixedAttackState();
+    const afterBlocks = confirmDeclareBlocks(state, P2, {
+      KH: ["JD"],
+      QS: "pass",
+    });
+    expect(afterBlocks.ok).toBe(true);
+    if (!afterBlocks.ok) return;
+
+    const afterP2Pass = duelPass(afterBlocks.value, P2);
+    expect(afterP2Pass.ok).toBe(true);
+    if (!afterP2Pass.ok) return;
+
+    const afterP1Pass = duelPass(afterP2Pass.value, P1);
+    expect(afterP1Pass.ok).toBe(true);
+    if (!afterP1Pass.ok) return;
+
+    const summary = afterP1Pass.value.lastCombatSummary;
+    expect(summary).toBeDefined();
+    expect(summary!.immediateHits).toBeDefined();
+    expect(summary!.immediateHits).toHaveLength(1);
+    expect(summary!.immediateHits![0]!.attackerCardId).toBe("QS");
+    expect(summary!.immediateHits![0]!.directDamage).toBe(2);
+  });
+
+  it("all-unblocked attacks skip duel entirely — existing behavior unchanged", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 },
+      ],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [], life: 20 }),
+      },
+    });
+    const result = confirmDeclareBlocks(state, P2, { KH: "pass" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // When all attacks are unblocked, duel auto-advances and resolves immediately
+    // Life is already reduced by 3 (KH attack) at duel entry
+    expect(result.value.players[P2]!.life).toBe(17);
+    expect(result.value.phase).toBe("main");
+  });
+
+  it("applies immediate damage for multiple unblocked Royals in a mixed scenario", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 },
+        { attackerPlayerId: P1, attackerCardId: "QS", targetPlayerId: P2 },
+        { attackerPlayerId: P1, attackerCardId: "JD", targetPlayerId: P2 },
+      ],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["2D"], court: [mkRoyal("KH"), mkRoyal("QS"), mkRoyal("JD")] }),
+        [P2]: makePlayer(P2, { hand: ["3D"], court: [mkRoyal("JS")], life: 20 }),
+      },
+    });
+    // JS blocks KH, QS and JD are unblocked
+    const result = confirmDeclareBlocks(state, P2, {
+      KH: ["JS"],
+      QS: "pass",
+      JD: "pass",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // QS=2, JD=1 → 3 immediate damage, 20-3=17
+    expect(result.value.players[P2]!.life).toBe(17);
+    const preResolved = result.value.duelContext!.preResolvedUnblockedAttackerIds ?? [];
+    expect(preResolved).toContain("QS");
+    expect(preResolved).toContain("JD");
+    expect(preResolved).not.toContain("KH");
+    const hits = result.value.duelContext!.immediateHits ?? [];
+    expect(hits).toHaveLength(2);
+  });
+
+  it("unblocked damage applied at duel start even when assign_damage_order phase is triggered (multi-blocker)", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 },
+        { attackerPlayerId: P1, attackerCardId: "QH", targetPlayerId: P2 },
+      ],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("JD"), mkRoyal("JS")], life: 20 }),
+      },
+    });
+    // KH is multi-blocked (JD + JS), QH is unblocked
+    const result = confirmDeclareBlocks(state, P2, {
+      KH: ["JD", "JS"],
+      QH: "pass",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Should be in assign_damage_order phase (multi-blocker)
+    expect(result.value.phase).toBe("assign_damage_order");
+    // QH (attack=2) deals immediate damage → 20-2=18
+    expect(result.value.players[P2]!.life).toBe(18);
+    expect(result.value.duelContext!.preResolvedUnblockedAttackerIds).toContain("QH");
+  });
+});
+
 describe("setDamageOrder (Rule 2 validation)", () => {
   function multiBlockerState() {
     // Give both players non-Royal cards AND sufficient vault so
