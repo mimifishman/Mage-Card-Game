@@ -1,5 +1,6 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -35,6 +36,8 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  fetchFailed: boolean;
+  retryFetchUser: () => void;
   logout: () => Promise<void>;
 }
 
@@ -42,6 +45,8 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
+  fetchFailed: false,
+  retryFetchUser: () => {},
   logout: async () => {},
 });
 
@@ -52,7 +57,11 @@ function getApiBaseUrl(): string {
 function ClerkAuthBridge({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, signOut, getToken } = useClerkAuth();
   const [internalUser, setInternalUser] = useState<User | null>(null);
-  const [isFetchingUser, setIsFetchingUser] = useState(false);
+  const [fetchFailed, setFetchFailed] = useState(false);
+  // isResolved: true once we've definitively determined auth state (signed-out,
+  // or signed-in + internal user fetch finished — whether success or failure).
+  const [isResolved, setIsResolved] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Use a ref so the token getter always reads the latest getToken without
   // adding it to effect deps (Clerk does not memoize getToken, causing loops).
@@ -73,13 +82,18 @@ function ClerkAuthBridge({ children }: { children: ReactNode }) {
 
     if (!isSignedIn) {
       setInternalUser(null);
+      setFetchFailed(false);
+      setIsResolved(true);
       return;
     }
 
+    // Signed in — fetch the internal user profile. Mark unresolved while fetching
+    // so isLoading stays true and the app doesn't navigate prematurely.
+    setIsResolved(false);
+    setFetchFailed(false);
     let cancelled = false;
 
     async function fetchInternalUser() {
-      setIsFetchingUser(true);
       try {
         const token = await getTokenRef.current();
         const apiBase = getApiBaseUrl();
@@ -93,16 +107,28 @@ function ClerkAuthBridge({ children }: { children: ReactNode }) {
             Pragma: "no-cache",
           },
         });
-        if (!cancelled && res.ok) {
-          const data = (await res.json()) as { user?: { id: string; displayName: string } | null };
-          if (data.user) {
-            setInternalUser({ id: data.user.id, displayName: data.user.displayName });
+        if (!cancelled) {
+          if (res.ok) {
+            const data = (await res.json()) as { user?: { id: string; displayName: string } | null };
+            if (data.user) {
+              setInternalUser({ id: data.user.id, displayName: data.user.displayName });
+            } else {
+              setFetchFailed(true);
+            }
+          } else {
+            console.warn("Failed to fetch internal user: HTTP", res.status);
+            setFetchFailed(true);
           }
         }
       } catch (err) {
-        if (!cancelled) console.warn("Failed to fetch internal user:", err);
+        if (!cancelled) {
+          console.warn("Failed to fetch internal user:", err);
+          setFetchFailed(true);
+        }
       } finally {
-        if (!cancelled) setIsFetchingUser(false);
+        // Always resolve — even on failure — so isLoading becomes false and the
+        // login screen becomes interactive instead of stuck indefinitely.
+        if (!cancelled) setIsResolved(true);
       }
     }
 
@@ -110,21 +136,29 @@ function ClerkAuthBridge({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn, retryCount]);
+
+  const retryFetchUser = useCallback(() => {
+    setRetryCount((c) => c + 1);
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user: internalUser,
-      // Show loading while Clerk loads OR while we're resolving the internal
-      // user for an already-signed-in Clerk session.
-      isLoading: !isLoaded || Boolean(isSignedIn && !internalUser),
+      // Loading until Clerk has resolved AND the internal user fetch has finished
+      // (whether success or failure). This prevents the stuck-loading bug where
+      // a failed /api/auth/me left isLoading permanently true.
+      isLoading: !isResolved,
       isAuthenticated: !!isSignedIn && !!internalUser,
+      fetchFailed,
+      retryFetchUser,
       logout: async () => {
         setInternalUser(null);
+        setIsResolved(false);
         await signOut();
       },
     }),
-    [internalUser, isLoaded, isSignedIn, signOut],
+    [internalUser, isResolved, isSignedIn, fetchFailed, retryFetchUser, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

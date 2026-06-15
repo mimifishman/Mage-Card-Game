@@ -80,7 +80,7 @@ export default function LoginScreen() {
   const { startOAuthFlow: startAppleFlow } = useOAuth({ strategy: "oauth_apple" });
   const { signIn, setActive: setActiveSignIn, isLoaded: signInLoaded } = useSignIn();
   const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp();
-  const { isLoading: authIsLoading } = useAuth();
+  const { isLoading: authIsLoading, fetchFailed, retryFetchUser } = useAuth();
 
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -137,6 +137,8 @@ export default function LoginScreen() {
       const result = await signIn.create({ identifier: email.trim(), password });
       if (result.status === "complete") {
         await setActiveSignIn({ session: result.createdSessionId });
+      } else {
+        setErrorMsg("Sign-in could not be completed. Please try again or use Google/Apple to sign in.");
       }
     } catch (err: unknown) {
       const clerkErr = err as { errors?: Array<{ code: string; message: string }> };
@@ -240,6 +242,21 @@ export default function LoginScreen() {
               {!isLoaded ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color={Colors.brand} />
+                </View>
+              ) : fetchFailed ? (
+                <View style={styles.fetchFailedContainer}>
+                  <Ionicons name="cloud-offline-outline" size={36} color={Colors.textMuted} />
+                  <Text style={styles.fetchFailedTitle}>Couldn't reach the server</Text>
+                  <Text style={styles.fetchFailedSubtitle}>
+                    You're signed in but we couldn't load your profile. Check your connection and try again.
+                  </Text>
+                  <Pressable
+                    onPress={retryFetchUser}
+                    style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.8 }]}
+                  >
+                    <Ionicons name="refresh-outline" size={16} color="#0A0A0F" />
+                    <Text style={styles.retryBtnText}>Try Again</Text>
+                  </Pressable>
                 </View>
               ) : !showEmailForm ? (
                 <View style={styles.authButtons}>
@@ -534,6 +551,40 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     paddingVertical: 20,
+  },
+  fetchFailedContainer: {
+    width: "100%",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  fetchFailedTitle: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+    textAlign: "center",
+  },
+  fetchFailedSubtitle: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  retryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    backgroundColor: Colors.brand,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+  },
+  retryBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: "#0A0A0F",
   },
   authButtons: {
     width: "100%",
