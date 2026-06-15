@@ -134,7 +134,10 @@ export default function LoginScreen() {
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
-      const result = await signIn.create({ identifier: email.trim(), password });
+      let result = await signIn.create({ identifier: email.trim(), password });
+      if (result.status === "needs_first_factor") {
+        result = await signIn.attemptFirstFactor({ strategy: "password", password });
+      }
       if (result.status === "complete") {
         await setActiveSignIn({ session: result.createdSessionId });
       } else {
