@@ -8,6 +8,8 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -95,7 +97,10 @@ export default function LobbyScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <LinearGradient
         colors={["#0A0A0F", "#0E0B18", "#0A0A0F"]}
         style={StyleSheet.absoluteFill}
@@ -115,7 +120,12 @@ export default function LobbyScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.body}>
+      <ScrollView
+        style={styles.scrollBody}
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View entering={FadeInDown.delay(100).duration(600)} style={styles.heroSection}>
           <MaterialCommunityIcons name="cards" size={48} color={Colors.brand} />
           <Text style={styles.heroTitle}>Arena</Text>
@@ -187,6 +197,7 @@ export default function LobbyScreen() {
                 maxLength={8}
                 returnKeyType="go"
                 onSubmitEditing={handleJoinMatch}
+                autoFocus
                 testID="invite-code-input"
               />
             </View>
@@ -221,13 +232,13 @@ export default function LobbyScreen() {
             </View>
           ))}
         </Animated.View>
-      </View>
 
-      <View style={[styles.footer, { paddingBottom: bottomInset + 16 }]}>
-        <View style={styles.footerDivider} />
-        <Text style={styles.footerText}>Command the arcane · Claim the throne</Text>
-      </View>
-    </View>
+        <View style={[styles.footer, { paddingBottom: bottomInset + 16 }]}>
+          <View style={styles.footerDivider} />
+          <Text style={styles.footerText}>Command the arcane · Claim the throne</Text>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -259,11 +270,15 @@ const styles = StyleSheet.create({
   logoutBtn: {
     padding: 8,
   },
-  body: {
+  scrollBody: {
     flex: 1,
+  },
+  body: {
+    flexGrow: 1,
     paddingHorizontal: 24,
     justifyContent: "center",
     gap: 32,
+    paddingVertical: 24,
   },
   heroSection: {
     alignItems: "center",
