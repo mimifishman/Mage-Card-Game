@@ -1,20 +1,7 @@
-import type { AuthService } from "./types";
-import { ReplitAuthService } from "./providers/replit";
+import { createClerkClient } from "@clerk/express";
 
-export type { AuthSession, AuthService } from "./types";
+export type { AuthSession } from "./types";
 
-function createAuthService(): AuthService {
-  const provider = process.env.AUTH_PROVIDER ?? "replit";
-
-  switch (provider) {
-    case "replit":
-      return new ReplitAuthService();
-    default:
-      throw new Error(
-        `Unknown AUTH_PROVIDER "${provider}". Supported values: "replit". ` +
-          `To add a new provider, implement AuthService and register it here.`,
-      );
-  }
-}
-
-export const authService: AuthService = createAuthService();
+export const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+});

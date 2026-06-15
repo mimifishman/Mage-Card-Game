@@ -1,8 +1,10 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "http";
 import type { Server } from "http";
-import { authService } from "../auth";
+import { verifyToken } from "@clerk/backend";
 import type { AuthSession } from "../auth";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { loadEngineState, isMatchPlayer, getActiveMatchForUser } from "../repositories/matchRepository";
 import { buildPlayerView } from "../game/serializer";
 import { logger } from "../lib/logger";
@@ -73,38 +75,61 @@ async function handleConnection(ws: WebSocket, req: IncomingMessage): Promise<vo
 }
 
 async function resolveSession(req: IncomingMessage): Promise<AuthSession | null> {
-  let authHeader = req.headers["authorization"];
-  const cookieHeader = req.headers["cookie"];
+  let token: string | undefined;
 
-  if (!authHeader) {
+  const authHeader = req.headers["authorization"];
+  if (authHeader?.startsWith("Bearer ")) {
+    token = authHeader.slice(7);
+  } else {
     const protocols = (req.headers["sec-websocket-protocol"] ?? "") as string;
     for (const proto of protocols.split(",").map((s) => s.trim())) {
       if (proto.startsWith("bearer-")) {
-        authHeader = `Bearer ${proto.slice("bearer-".length)}`;
+        token = proto.slice("bearer-".length);
         break;
       }
     }
   }
 
-  const fakeReq = {
-    headers: { authorization: authHeader, cookie: cookieHeader },
-    cookies: parseCookies(cookieHeader ?? ""),
-  };
+  if (!token) return null;
 
   try {
-    return await authService.getSession(fakeReq as Parameters<typeof authService.getSession>[0]);
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY!,
+    });
+    const clerkUserId = payload.sub;
+
+    const [existing] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.providerUserId, clerkUserId))
+      .limit(1);
+
+    if (existing) {
+      return {
+        providerUserId: existing.providerUserId,
+        displayName: existing.displayName,
+        internalUserId: existing.id,
+      };
+    }
+
+    const displayName =
+      (payload["username"] as string | undefined) ||
+      (payload["email"] as string | undefined)?.split("@")[0] ||
+      clerkUserId;
+
+    const [user] = await db
+      .insert(usersTable)
+      .values({ providerUserId: clerkUserId, displayName })
+      .returning();
+
+    return {
+      providerUserId: user.providerUserId,
+      displayName: user.displayName,
+      internalUserId: user.id,
+    };
   } catch {
     return null;
   }
-}
-
-function parseCookies(cookieStr: string): Record<string, string> {
-  const cookies: Record<string, string> = {};
-  for (const part of cookieStr.split(";")) {
-    const [k, ...rest] = part.trim().split("=");
-    if (k) cookies[k.trim()] = decodeURIComponent(rest.join("=").trim());
-  }
-  return cookies;
 }
 
 function joinRoom(ws: WebSocket, client: WsClient, matchId: string): void {

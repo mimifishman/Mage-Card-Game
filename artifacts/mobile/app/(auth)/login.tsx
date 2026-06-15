@@ -1,11 +1,14 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
+  TextInput,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
+  ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,8 +24,14 @@ import Animated, {
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useAuth } from "@/lib/auth";
+import * as WebBrowser from "expo-web-browser";
+import { useOAuth, useSignIn, useSignUp } from "@clerk/clerk-expo";
 import Colors from "@/constants/colors";
+import { useAuth } from "@/lib/auth";
+
+WebBrowser.maybeCompleteAuthSession();
+
+type EmailScreen = "form" | "verify";
 
 function PulsingOrb({ delay = 0, size = 80 }: { delay?: number; size?: number }) {
   const scale = useSharedValue(1);
@@ -67,112 +76,400 @@ function PulsingOrb({ delay = 0, size = 80 }: { delay?: number; size?: number })
 }
 
 export default function LoginScreen() {
-  const { login, isLoading } = useAuth();
+  const { startOAuthFlow: startGoogleFlow } = useOAuth({ strategy: "oauth_google" });
+  const { startOAuthFlow: startAppleFlow } = useOAuth({ strategy: "oauth_apple" });
+  const { signIn, setActive: setActiveSignIn, isLoaded: signInLoaded } = useSignIn();
+  const { signUp, setActive: setActiveSignUp, isLoaded: signUpLoaded } = useSignUp();
+  const { isLoading: authIsLoading } = useAuth();
+
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailScreen, setEmailScreen] = useState<EmailScreen>("form");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState<"google" | "apple" | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const insets = useSafeAreaInsets();
-
-  const buttonScale = useSharedValue(1);
-  const buttonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: buttonScale.value }],
-  }));
-
-  const handleLogin = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    buttonScale.value = withSequence(
-      withTiming(0.95, { duration: 100 }),
-      withTiming(1, { duration: 100 }),
-    );
-    await login();
-  };
-
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
 
+  // Also wait for the auth bridge to resolve any cached Clerk session.
+  // If authIsLoading is true, Clerk has a cached token but the internal user
+  // hasn't been fetched yet — signIn/signUp will be undefined in that state.
+  const isLoaded = signInLoaded && signUpLoaded && !authIsLoading;
+
+  async function handleOAuth(provider: "google" | "apple") {
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setOauthLoading(provider);
+    setErrorMsg(null);
+    try {
+      const startFlow = provider === "google" ? startGoogleFlow : startAppleFlow;
+      const { createdSessionId, setActive } = await startFlow();
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.toLowerCase().includes("already sign")) {
+        setErrorMsg(`${provider === "google" ? "Google" : "Apple"} sign-in failed. Try again.`);
+      }
+    } finally {
+      setOauthLoading(null);
+    }
+  }
+
+  async function handleEmailSubmit() {
+    if (!signIn || !signUp) {
+      setErrorMsg("Authentication not ready. Please reload the app and try again.");
+      return;
+    }
+    if (!email.trim() || !password.trim()) {
+      setErrorMsg("Please enter your email and password.");
+      return;
+    }
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const result = await signIn.create({ identifier: email.trim(), password });
+      if (result.status === "complete") {
+        await setActiveSignIn({ session: result.createdSessionId });
+      }
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: Array<{ code: string; message: string }> };
+      const code = clerkErr.errors?.[0]?.code;
+      if (code === "form_identifier_not_found" || code === "form_password_incorrect") {
+        if (code === "form_identifier_not_found") {
+          try {
+            await signUp.create({ emailAddress: email.trim(), password });
+            await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+            setEmailScreen("verify");
+          } catch (signUpErr: unknown) {
+            const e = signUpErr as { errors?: Array<{ message: string }> };
+            setErrorMsg(e.errors?.[0]?.message ?? "Failed to create account.");
+          }
+        } else {
+          setErrorMsg("Incorrect password. Try again.");
+        }
+      } else {
+        const e = err as { errors?: Array<{ message: string }> };
+        setErrorMsg(e.errors?.[0]?.message ?? "Sign-in failed. Try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleVerify() {
+    if (!signUp || !setActiveSignUp) return;
+    if (!code.trim()) {
+      setErrorMsg("Please enter the verification code.");
+      return;
+    }
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const result = await signUp.attemptEmailAddressVerification({ code: code.trim() });
+      if (result.status === "complete") {
+        await setActiveSignUp({ session: result.createdSessionId });
+      } else {
+        setErrorMsg("Verification incomplete. Please try again.");
+      }
+    } catch (err: unknown) {
+      const e = err as { errors?: Array<{ message: string }> };
+      setErrorMsg(e.errors?.[0]?.message ?? "Verification failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  function resetEmailFlow() {
+    setShowEmailForm(false);
+    setEmailScreen("form");
+    setEmail("");
+    setPassword("");
+    setCode("");
+    setErrorMsg(null);
+    setShowPassword(false);
+  }
+
   return (
-    <View style={styles.container}>
+    <View style={styles.outerContainer}>
+      {/* Background stays truly full-screen, outside any keyboard-avoiding layout */}
       <LinearGradient
         colors={["#0A0A0F", "#100C1C", "#0A0A0F"]}
         style={StyleSheet.absoluteFill}
         locations={[0, 0.5, 1]}
       />
-
-      <View style={[StyleSheet.absoluteFill, styles.orbContainer]}>
+      <View style={[StyleSheet.absoluteFill, styles.orbContainer]} pointerEvents="none">
         <PulsingOrb size={300} delay={0} />
         <PulsingOrb size={200} delay={500} />
         <PulsingOrb size={100} delay={1000} />
       </View>
 
-      <View
-        style={[
-          styles.content,
-          { paddingTop: topInset + 60, paddingBottom: bottomInset + 40 },
-        ]}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <Animated.View entering={FadeIn.duration(800)} style={styles.logoSection}>
-          <View style={styles.iconRing}>
-            <Ionicons name="flash" size={48} color={Colors.brand} />
-          </View>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(200).duration(700)} style={styles.titleSection}>
-          <Text style={styles.title}>MAGE</Text>
-          <Text style={styles.subtitle}>CARD GAME</Text>
-          <View style={styles.divider} />
-          <Text style={styles.tagline}>Command the arcane. Claim the throne.</Text>
-        </Animated.View>
-
-        <Animated.View entering={FadeInDown.delay(500).duration(700)} style={styles.bottomSection}>
-          <Text style={styles.hint}>2–4 Players · Multiplayer · Strategy</Text>
-
-          {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={Colors.brand} />
-              <Text style={styles.loadingText}>Authenticating...</Text>
-            </View>
-          ) : (
-            <Animated.View style={buttonStyle}>
-              <Pressable
-                onPress={handleLogin}
-                style={({ pressed }) => [
-                  styles.loginButton,
-                  pressed && styles.loginButtonPressed,
-                ]}
-                testID="login-button"
-              >
-                <LinearGradient
-                  colors={[Colors.brand, Colors.brandDim]}
-                  style={styles.loginButtonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <Ionicons name="enter-outline" size={22} color="#0A0A0F" />
-                  <Text style={styles.loginButtonText}>Enter the Arena</Text>
-                </LinearGradient>
-              </Pressable>
-            </Animated.View>
-          )}
-
-          <View style={styles.featureRow}>
-            {[
-              { icon: "shield-checkmark-outline" as const, label: "Secure" },
-              { icon: "people-outline" as const, label: "Multiplayer" },
-              { icon: "trophy-outline" as const, label: "Ranked" },
-            ].map(({ icon, label }) => (
-              <View key={label} style={styles.featureItem}>
-                <Ionicons name={icon} size={16} color={Colors.textSecondary} />
-                <Text style={styles.featureLabel}>{label}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.content, { paddingTop: topInset + 60, paddingBottom: bottomInset + 40 }]}>
+            <Animated.View entering={FadeIn.duration(800)} style={styles.logoSection}>
+              <View style={styles.iconRing}>
+                <Ionicons name="flash" size={48} color={Colors.brand} />
               </View>
-            ))}
+            </Animated.View>
+
+            <Animated.View entering={FadeInDown.delay(200).duration(700)} style={styles.titleSection}>
+              <Text style={styles.title}>MAGE</Text>
+              <Text style={styles.subtitle}>CARD GAME</Text>
+              <View style={styles.divider} />
+              <Text style={styles.tagline}>Command the arcane. Claim the throne.</Text>
+            </Animated.View>
+
+            <Animated.View entering={FadeInDown.delay(500).duration(700)} style={styles.bottomSection}>
+              <Text style={styles.hint}>2–4 Players · Multiplayer · Strategy</Text>
+
+              {!isLoaded ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={Colors.brand} />
+                </View>
+              ) : !showEmailForm ? (
+                <View style={styles.authButtons}>
+                  <SocialButton
+                    label="Continue with Google"
+                    iconName="logo-google"
+                    onPress={() => handleOAuth("google")}
+                    loading={oauthLoading === "google"}
+                    disabled={oauthLoading !== null}
+                  />
+                  <SocialButton
+                    label="Continue with Apple"
+                    iconName="logo-apple"
+                    onPress={() => handleOAuth("apple")}
+                    loading={oauthLoading === "apple"}
+                    disabled={oauthLoading !== null}
+                  />
+                  <View style={styles.orRow}>
+                    <View style={styles.orLine} />
+                    <Text style={styles.orText}>or</Text>
+                    <View style={styles.orLine} />
+                  </View>
+                  <Pressable
+                    onPress={() => {
+                      if (Platform.OS !== "web") Haptics.selectionAsync();
+                      setShowEmailForm(true);
+                      setErrorMsg(null);
+                    }}
+                    style={({ pressed }) => [styles.emailButton, pressed && { opacity: 0.7 }]}
+                    testID="email-signin-button"
+                  >
+                    <Ionicons name="mail-outline" size={18} color={Colors.textSecondary} />
+                    <Text style={styles.emailButtonText}>Continue with Email</Text>
+                  </Pressable>
+
+                  {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+                </View>
+              ) : emailScreen === "form" ? (
+                <View style={styles.emailForm}>
+                  <Pressable
+                    onPress={resetEmailFlow}
+                    style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+                  >
+                    <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
+                    <Text style={styles.backBtnText}>Back</Text>
+                  </Pressable>
+
+                  <TextInput
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Email address"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
+                    editable={!isSubmitting}
+                    testID="email-input"
+                  />
+                  <View style={styles.passwordRow}>
+                    <TextInput
+                      style={[styles.input, styles.passwordInput]}
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder="Password"
+                      placeholderTextColor={Colors.textMuted}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      editable={!isSubmitting}
+                      onSubmitEditing={handleEmailSubmit}
+                      returnKeyType="go"
+                      testID="password-input"
+                    />
+                    <Pressable
+                      onPress={() => setShowPassword((v) => !v)}
+                      style={styles.eyeBtn}
+                      hitSlop={12}
+                    >
+                      <Ionicons
+                        name={showPassword ? "eye-off-outline" : "eye-outline"}
+                        size={20}
+                        color={Colors.textMuted}
+                      />
+                    </Pressable>
+                  </View>
+
+                  {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+                  <Pressable
+                    onPress={handleEmailSubmit}
+                    disabled={isSubmitting}
+                    style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }]}
+                    testID="submit-email-button"
+                  >
+                    <LinearGradient
+                      colors={[Colors.brand, Colors.brandDim]}
+                      style={styles.submitBtnGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator size="small" color="#0A0A0F" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>Enter the Arena</Text>
+                      )}
+                    </LinearGradient>
+                  </Pressable>
+
+                  <Text style={styles.emailHint}>
+                    New here? Enter your details and we'll create your account.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.emailForm}>
+                  <Pressable
+                    onPress={() => { setEmailScreen("form"); setCode(""); setErrorMsg(null); }}
+                    style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+                  >
+                    <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
+                    <Text style={styles.backBtnText}>Back</Text>
+                  </Pressable>
+
+                  <Text style={styles.verifyTitle}>Check your inbox</Text>
+                  <Text style={styles.verifySubtitle}>
+                    We sent a 6-digit code to{"\n"}{email}
+                  </Text>
+
+                  <TextInput
+                    style={[styles.input, styles.codeInput]}
+                    value={code}
+                    onChangeText={setCode}
+                    placeholder="000000"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                    editable={!isSubmitting}
+                    onSubmitEditing={handleVerify}
+                    returnKeyType="go"
+                    testID="verify-code-input"
+                  />
+
+                  {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+                  <Pressable
+                    onPress={handleVerify}
+                    disabled={isSubmitting}
+                    style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }]}
+                    testID="submit-verify-button"
+                  >
+                    <LinearGradient
+                      colors={[Colors.brand, Colors.brandDim]}
+                      style={styles.submitBtnGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator size="small" color="#0A0A0F" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>Verify & Enter</Text>
+                      )}
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+              )}
+
+              <View style={styles.featureRow}>
+                {[
+                  { icon: "shield-checkmark-outline" as const, label: "Secure" },
+                  { icon: "people-outline" as const, label: "Multiplayer" },
+                  { icon: "trophy-outline" as const, label: "Ranked" },
+                ].map(({ icon, label }) => (
+                  <View key={label} style={styles.featureItem}>
+                    <Ionicons name={icon} size={16} color={Colors.textSecondary} />
+                    <Text style={styles.featureLabel}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+            </Animated.View>
           </View>
-        </Animated.View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
+function SocialButton({
+  label,
+  iconName,
+  onPress,
+  loading,
+  disabled,
+}: {
+  label: string;
+  iconName: "logo-google" | "logo-apple";
+  onPress: () => void;
+  loading: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.socialButton,
+        pressed && !disabled && { opacity: 0.8 },
+        disabled && !loading && { opacity: 0.5 },
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={Colors.textPrimary} />
+      ) : (
+        <Ionicons name={iconName} size={20} color={Colors.textPrimary} />
+      )}
+      <Text style={styles.socialButtonText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  outerContainer: {
     flex: 1,
     backgroundColor: Colors.bgDeep,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  container: {
+    flex: 1,
   },
   orbContainer: {
     alignItems: "center",
@@ -225,7 +522,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   bottomSection: {
-    gap: 20,
+    gap: 16,
     alignItems: "center",
   },
   hint: {
@@ -236,41 +533,159 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   loadingContainer: {
-    alignItems: "center",
-    gap: 12,
     paddingVertical: 20,
   },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    color: Colors.textSecondary,
-  },
-  loginButton: {
+  authButtons: {
     width: "100%",
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: Colors.brand,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 8,
+    gap: 12,
   },
-  loginButtonPressed: {
-    opacity: 0.85,
-  },
-  loginButtonGradient: {
+  socialButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    paddingVertical: 18,
+    paddingVertical: 15,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  socialButtonText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+  },
+  orRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginVertical: 2,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  orText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  emailButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+  },
+  emailButtonText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textSecondary,
+  },
+  emailForm: {
+    width: "100%",
+    gap: 12,
+  },
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  backBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textPrimary,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 0,
+    borderRadius: 12,
+    backgroundColor: "transparent",
+    paddingRight: 44,
+  },
+  eyeBtn: {
+    position: "absolute",
+    right: 14,
+    padding: 4,
+  },
+  codeInput: {
+    textAlign: "center",
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 12,
+  },
+  submitBtn: {
+    borderRadius: 14,
+    overflow: "hidden",
+    marginTop: 4,
+    shadowColor: Colors.brand,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  submitBtnGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
     paddingHorizontal: 32,
   },
-  loginButtonText: {
-    fontSize: 18,
+  submitBtnText: {
+    fontSize: 16,
     fontFamily: "Inter_700Bold",
     color: "#0A0A0F",
     letterSpacing: 0.5,
+  },
+  emailHint: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  verifyTitle: {
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textPrimary,
+    textAlign: "center",
+  },
+  verifySubtitle: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  errorText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: "#E53935",
+    textAlign: "center",
   },
   featureRow: {
     flexDirection: "row",

@@ -1,1 +1,2 @@
 - [Combat overhaul rules](combat-rules.md) — six mechanics rules implemented; key signatures changed in declareAttack, confirmDeclareBlocks, AttackDeclaration type.
+- [Clerk auth migration](clerk-auth.md) — Replit OIDC removed; API uses @clerk/express + populateUser middleware; mobile uses @clerk/clerk-expo with useOAuth.

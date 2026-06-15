@@ -1,17 +1,30 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { Platform } from "react-native";
-import * as AuthSession from "expo-auth-session";
-import * as WebBrowser from "expo-web-browser";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { ClerkProvider, useAuth as useClerkAuth } from "@clerk/clerk-expo";
+import * as SecureStore from "expo-secure-store";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
-import { AUTH_TOKEN_KEY, getStoredToken, setStoredToken, deleteStoredToken } from "./token-storage";
-
-WebBrowser.maybeCompleteAuthSession();
-
-const ISSUER_URL = "https://replit.com/oidc";
 
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 if (domain) setBaseUrl(`https://${domain}`);
-setAuthTokenGetter(getStoredToken);
+
+const tokenCache = {
+  async getToken(key: string) {
+    return SecureStore.getItemAsync(key);
+  },
+  async saveToken(key: string, value: string) {
+    return SecureStore.setItemAsync(key, value);
+  },
+  async clearToken(key: string) {
+    return SecureStore.deleteItemAsync(key);
+  },
+};
 
 interface User {
   id: string;
@@ -22,7 +35,6 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -30,171 +42,103 @@ const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
   isAuthenticated: false,
-  login: async () => {},
   logout: async () => {},
 });
 
 function getApiBaseUrl(): string {
-  if (process.env.EXPO_PUBLIC_DOMAIN) {
-    return `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
-  }
-  return "";
+  return domain ? `https://${domain}` : "";
 }
 
-function getClientId(): string {
-  return process.env.EXPO_PUBLIC_REPL_ID ?? "";
-}
+function ClerkAuthBridge({ children }: { children: ReactNode }) {
+  const { isLoaded, isSignedIn, signOut, getToken } = useClerkAuth();
+  const [internalUser, setInternalUser] = useState<User | null>(null);
+  const [isFetchingUser, setIsFetchingUser] = useState(false);
 
-function getRedirectUri(): string {
-  const expoDomain = process.env.EXPO_PUBLIC_EXPO_DOMAIN;
-  if (expoDomain && Platform.OS === "web") {
-    return `https://${expoDomain}/`;
-  }
-  return AuthSession.makeRedirectUri();
-}
+  // Use a ref so the token getter always reads the latest getToken without
+  // adding it to effect deps (Clerk does not memoize getToken, causing loops).
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  });
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
-  const redirectUri = getRedirectUri();
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: getClientId(),
-      scopes: ["openid", "email", "profile", "offline_access"],
-      redirectUri,
-      prompt: AuthSession.Prompt.Login,
-    },
-    discovery,
-  );
-
-  const fetchUser = useCallback(async () => {
-    try {
-      const token = await getStoredToken();
-      if (!token && Platform.OS !== "web") {
-        setUser(null);
-        setIsLoading(false);
-        return;
-      }
-
-      const apiBase = getApiBaseUrl();
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-      const res = await fetch(`${apiBase}/api/auth/me`, {
-        headers,
-        credentials: "include",
-      });
-      const data = await res.json();
-
-      if (data.user) {
-        setUser(data.user);
-      } else {
-        if (token) {
-          await deleteStoredToken();
-        }
-        setUser(null);
-      }
-    } catch (err) {
-      console.warn("fetchUser error:", err);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+  useEffect(() => {
+    setAuthTokenGetter(() => getTokenRef.current());
+    return () => {
+      setAuthTokenGetter(null);
+    };
   }, []);
 
   useEffect(() => {
-    const init = async () => {
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const sessionToken = params.get("session_token");
-        if (sessionToken) {
-          await setStoredToken(sessionToken);
-          window.history.replaceState({}, "", window.location.pathname);
-        }
-      }
-      await fetchUser();
-    };
-    init();
-  }, [fetchUser]);
+    if (!isLoaded) return;
 
-  useEffect(() => {
-    if (response?.type !== "success" || !request?.codeVerifier) return;
+    if (!isSignedIn) {
+      setInternalUser(null);
+      return;
+    }
 
-    const { code, state } = response.params;
+    let cancelled = false;
 
-    (async () => {
+    async function fetchInternalUser() {
+      setIsFetchingUser(true);
       try {
+        const token = await getTokenRef.current();
         const apiBase = getApiBaseUrl();
-        if (!apiBase) return;
-
-        const exchangeRes = await fetch(`${apiBase}/api/mobile-auth/token-exchange`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code,
-            code_verifier: request.codeVerifier,
-            redirect_uri: redirectUri,
-            state,
-            nonce: (request as unknown as { nonce?: string }).nonce,
-          }),
+        const res = await fetch(`${apiBase}/api/auth/me`, {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            // Prevent 304 responses — React Native fetch does not transparently
+            // return the cached body for 304s the way browsers do, so res.ok
+            // would be false and internalUser would never be set.
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
         });
-
-        if (!exchangeRes.ok) return;
-
-        const data = await exchangeRes.json();
-        if (data.token) {
-          await setStoredToken(data.token);
-          setIsLoading(true);
-          await fetchUser();
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { user?: { id: string; displayName: string } | null };
+          if (data.user) {
+            setInternalUser({ id: data.user.id, displayName: data.user.displayName });
+          }
         }
       } catch (err) {
-        console.error("Token exchange error:", err);
-        setIsLoading(false);
+        if (!cancelled) console.warn("Failed to fetch internal user:", err);
+      } finally {
+        if (!cancelled) setIsFetchingUser(false);
       }
-    })();
-  }, [response, request, redirectUri, fetchUser]);
-
-  const login = useCallback(async () => {
-    try {
-      if (Platform.OS === "web") {
-        const apiBase = getApiBaseUrl();
-        window.location.href = `${apiBase}/api/login?web_mobile=1`;
-        return;
-      }
-      await promptAsync();
-    } catch (err) {
-      console.error("Login error:", err);
     }
-  }, [promptAsync]);
 
-  const logout = useCallback(async () => {
-    try {
-      const token = await getStoredToken();
-      if (token) {
-        const apiBase = getApiBaseUrl();
-        await fetch(`${apiBase}/api/mobile-auth/logout`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      }
-    } catch (err) {
-      console.warn("Logout API call failed:", err);
-    } finally {
-      await deleteStoredToken();
-      setUser(null);
-    }
-  }, []);
+    fetchInternalUser();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn]);
 
-  const value = useMemo(
-    () => ({ user, isLoading, isAuthenticated: !!user, login, logout }),
-    [user, isLoading, login, logout],
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user: internalUser,
+      // Show loading while Clerk loads OR while we're resolving the internal
+      // user for an already-signed-in Clerk session.
+      isLoading: !isLoaded || Boolean(isSignedIn && !internalUser),
+      isAuthenticated: !!isSignedIn && !!internalUser,
+      logout: async () => {
+        setInternalUser(null);
+        await signOut();
+      },
+    }),
+    [internalUser, isLoaded, isSignedIn, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  return (
+    <ClerkProvider
+      publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!}
+      tokenCache={tokenCache}
+    >
+      <ClerkAuthBridge>{children}</ClerkAuthBridge>
+    </ClerkProvider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

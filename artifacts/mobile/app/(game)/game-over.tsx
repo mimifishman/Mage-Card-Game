@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { getStoredToken } from "@/lib/token-storage";
+import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useAuth } from "@/lib/auth";
 import { useGetMatch, getGetMatchQueryKey, useRematchMatch } from "@workspace/api-client-react";
 import Colors from "@/constants/colors";
@@ -16,6 +16,7 @@ export default function GameOverScreen() {
     winnerUserId: string;
   }>();
   const { user } = useAuth();
+  const { getToken } = useClerkAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
@@ -48,7 +49,7 @@ export default function GameOverScreen() {
     async function connect() {
       const domain = process.env.EXPO_PUBLIC_DOMAIN ?? "";
       if (!domain) return;
-      const token = await getStoredToken();
+      const token = await getToken();
       const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
       const protocols = token ? [`bearer-${token}`] : undefined;
       const ws = new WebSocket(wsUrl, protocols);
