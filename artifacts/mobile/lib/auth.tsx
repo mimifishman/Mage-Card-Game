@@ -15,6 +15,8 @@ import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 if (domain) setBaseUrl(`https://${domain}`);
 
+const proxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
+
 const tokenCache = {
   async getToken(key: string) {
     return SecureStore.getItemAsync(key);
@@ -169,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <ClerkProvider
       publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!}
       tokenCache={tokenCache}
+      proxyUrl={proxyUrl}
     >
       <ClerkAuthBridge>{children}</ClerkAuthBridge>
     </ClerkProvider>

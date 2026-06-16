@@ -23,6 +23,15 @@ this up automatically for every API call.
 `bearer-<token>` WebSocket subprotocol. On first connection, the Clerk userId is upserted
 into `usersTable` to get an internal UUID.
 
+## Clerk management status: Replit-managed (migrated)
+Previously external Clerk (user's own account with a dead prod instance on replit.app domain).
+Migrated to Replit-managed via `setupClerkWhitelabelAuth()`. Now:
+- API server has `clerkProxyMiddleware` at `/api/__clerk` (before cors/body parsers) + `clerkMiddleware` using `publishableKeyFromHost` from `@clerk/shared/keys`.
+- Mobile `lib/auth.tsx` passes `proxyUrl={proxyUrl}` (from `EXPO_PUBLIC_CLERK_PROXY_URL`) to `ClerkProvider`.
+- `build.js` constructs `EXPO_PUBLIC_CLERK_PROXY_URL` from `CLERK_PROXY_URL` + deploy domain.
+- On publish, Replit auto-swaps test keys → live keys and sets `CLERK_PROXY_URL=/api/__clerk`.
+- `CLERK_PROXY_URL` is NEVER set in dev (proxy is prod-only). Do not add it to workspace secrets.
+
 ## Env var forwarding
 The mobile dev script in `artifacts/mobile/package.json` forwards
 `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=$CLERK_PUBLISHABLE_KEY` at startup so Metro inlines it.
