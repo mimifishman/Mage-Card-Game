@@ -26,3 +26,11 @@ The Clerk publishable key is **baked into the published Expo bundle at build tim
 **Diagnose:** fetch the live bundle and compare its baked Clerk host to the workspace key host. Get the manifest with `curl -H "expo-platform: ios" https://<deploy-domain>/<basePath>/` → read `launchAsset.url` → `curl` that bundle → `grep -oE 'pk_(test|live)_[A-Za-z0-9]+'` → decode (`cut -d_ -f3- | base64 -d | tr -d '$'`) to get the frontend host. Then `curl https://<that-host>/v1/environment` — HTTP 000/timeout means the baked instance is dead.
 
 **Fix:** re-publish so the current healthy key bakes into the app. A checkpoint **rollback does NOT fix this** — secrets aren't in checkpoints and the live deployment isn't rebuilt by a rollback; only re-publishing rebuilds the bundle.
+
+### Why re-publishing alone may NOT change the baked key: deployment-secret override
+
+Deployment (production) secrets are a **separate store** from workspace secrets. By default each deployment secret **auto-syncs** from the matching workspace secret, but it can be **"unsynced" (overridden)** to a pinned value. If `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` were unsynced and pinned to `pk_live`/`sk_live` (a dead/external production instance), every publish keeps baking the pinned live key even though the workspace holds healthy `pk_test`/`sk_test`. This presents to the user as "the keys revert to a linked live key on publish."
+
+**Fix path (external Clerk, want it working on test keys):** Publishing tool → **Overview** tab → **Edit Commands and Secrets** → for both Clerk secrets, **re-sync** them to the workspace values (remove the override), or set the override to the `pk_test`/`sk_test` values → **Republish**. Both the mobile publishable key (baked into the bundle) and the api-server `CLERK_SECRET_KEY` must be the **same** test instance pair, or tokens fail to verify (401).
+
+**Note on external Clerk production instances:** a Clerk *production* instance on a `*.replit.app` domain (e.g. `clerk.<app>.replit.app`) can't be DNS-verified (you can't add CNAME records to a replit.app domain), so its Frontend API never resolves. Real production needs a custom domain the user owns. Dev/test instances (`*.clerk.accounts.dev`) work on any domain with no DNS.
