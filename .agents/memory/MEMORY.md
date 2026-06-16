@@ -1,3 +1,3 @@
 - [Combat overhaul rules](combat-rules.md) — six mechanics rules implemented; key signatures changed in declareAttack, confirmDeclareBlocks, AttackDeclaration type.
 - [Clerk auth migration](clerk-auth.md) — Replit OIDC removed; API uses @clerk/express + populateUser middleware; mobile uses @clerk/clerk-expo with useOAuth.
-- [Clerk sign-in diagnostics](clerk-signin-diagnostics.md) — needs_client_trust = first-factor email code (not second); fresh Expo installs always untrusted; prepareFirstFactor/attemptFirstFactor required.
+- [Clerk sign-in diagnostics](clerk-signin-diagnostics.md) — needs_client_trust=first-factor email code; published Expo bakes Clerk key at build time, so a dead baked instance = slow load + all logins fail (fix: re-publish, not rollback).
