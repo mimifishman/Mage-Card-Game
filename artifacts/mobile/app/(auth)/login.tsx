@@ -141,7 +141,7 @@ export default function LoginScreen() {
       if (result.status === "complete") {
         await setActiveSignIn({ session: result.createdSessionId });
       } else {
-        setErrorMsg("Sign-in could not be completed. Please try again or use Google/Apple to sign in.");
+        setErrorMsg(`Sign-in status: "${result.status}" — please screenshot this and report it.`);
       }
     } catch (err: unknown) {
       const clerkErr = err as { errors?: Array<{ code: string; message: string }> };
