@@ -329,6 +329,8 @@ export default function LoginScreen() {
                     autoCorrect={false}
                     autoFocus
                     editable={!isSubmitting}
+                    textContentType="emailAddress"
+                    autoComplete="email"
                     testID="email-input"
                   />
                   <View style={styles.passwordRow}>
@@ -343,6 +345,8 @@ export default function LoginScreen() {
                       editable={!isSubmitting}
                       onSubmitEditing={handleEmailSubmit}
                       returnKeyType="go"
+                      textContentType="password"
+                      autoComplete="password"
                       testID="password-input"
                     />
                     <Pressable
