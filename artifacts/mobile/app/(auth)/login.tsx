@@ -85,6 +85,7 @@ export default function LoginScreen() {
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [emailScreen, setEmailScreen] = useState<EmailScreen>("form");
+  const [verifyMode, setVerifyMode] = useState<"signup" | "signin">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -140,6 +141,21 @@ export default function LoginScreen() {
       }
       if (result.status === "complete") {
         await setActiveSignIn({ session: result.createdSessionId });
+      } else if (
+        (result.status as string) === "needs_client_trust" ||
+        result.status === "needs_second_factor"
+      ) {
+        // Client Trust / MFA: a new device must be verified with an emailed code.
+        const emailFactor = result.supportedSecondFactors?.find(
+          (f) => f.strategy === "email_code",
+        );
+        if (emailFactor) {
+          await signIn.prepareSecondFactor({ strategy: "email_code" });
+          setVerifyMode("signin");
+          setEmailScreen("verify");
+        } else {
+          setErrorMsg("Your account requires an authenticator app to sign in.");
+        }
       } else {
         setErrorMsg("Sign-in could not be completed. Please try again or use Google/Apple to sign in.");
       }
@@ -151,6 +167,7 @@ export default function LoginScreen() {
           try {
             await signUp.create({ emailAddress: email.trim(), password });
             await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+            setVerifyMode("signup");
             setEmailScreen("verify");
           } catch (signUpErr: unknown) {
             const e = signUpErr as { errors?: Array<{ message: string }> };
@@ -169,7 +186,6 @@ export default function LoginScreen() {
   }
 
   async function handleVerify() {
-    if (!signUp || !setActiveSignUp) return;
     if (!code.trim()) {
       setErrorMsg("Please enter the verification code.");
       return;
@@ -178,11 +194,25 @@ export default function LoginScreen() {
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
-      const result = await signUp.attemptEmailAddressVerification({ code: code.trim() });
-      if (result.status === "complete") {
-        await setActiveSignUp({ session: result.createdSessionId });
+      if (verifyMode === "signin") {
+        if (!signIn || !setActiveSignIn) return;
+        const result = await signIn.attemptSecondFactor({
+          strategy: "email_code",
+          code: code.trim(),
+        });
+        if (result.status === "complete") {
+          await setActiveSignIn({ session: result.createdSessionId });
+        } else {
+          setErrorMsg("Verification incomplete. Please try again.");
+        }
       } else {
-        setErrorMsg("Verification incomplete. Please try again.");
+        if (!signUp || !setActiveSignUp) return;
+        const result = await signUp.attemptEmailAddressVerification({ code: code.trim() });
+        if (result.status === "complete") {
+          await setActiveSignUp({ session: result.createdSessionId });
+        } else {
+          setErrorMsg("Verification incomplete. Please try again.");
+        }
       }
     } catch (err: unknown) {
       const e = err as { errors?: Array<{ message: string }> };
@@ -200,6 +230,7 @@ export default function LoginScreen() {
     setCode("");
     setErrorMsg(null);
     setShowPassword(false);
+    setVerifyMode("signup");
   }
 
   return (
