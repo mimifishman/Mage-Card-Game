@@ -32,6 +32,22 @@ Migrated to Replit-managed via `setupClerkWhitelabelAuth()`. Now:
 - On publish, Replit auto-swaps test keys → live keys and sets `CLERK_PROXY_URL=/api/__clerk`.
 - `CLERK_PROXY_URL` is NEVER set in dev (proxy is prod-only). Do not add it to workspace secrets.
 
+## Critical: proxyUrl is silently ignored in @clerk/clerk-expo v2 native builds
+`@clerk/clerk-expo` v2.19.31 `ClerkProvider` does NOT forward `proxyUrl` to `getClerkInstance()`
+for native builds. `BuildClerkOptions` type confirms: only `publishableKey`, `tokenCache`, and two
+experimental flags are accepted. `proxyUrl` lands in `...rest` spread to clerk-react's Provider but
+can't affect the pre-initialized Clerk instance. The FAPI domain (`clerk.<deploy-domain>`) is thus
+dead on Replit (HTTP 000).
+
+**Fix:** A global `fetch` interceptor is installed at module level in `lib/auth.tsx` (runs before
+ClerkProvider renders). It derives the dead FAPI domain from the proxy URL (`clerk.${proxyHost}`)
+and redirects all matching fetch calls through the working `/api/__clerk` proxy. Only active when
+`EXPO_PUBLIC_CLERK_PROXY_URL` is set (production). Dev mode unaffected (var not set in dev script,
+and dev pk_test uses a different FAPI domain anyway).
+
+**Why:** `clerk.mage-card-game.replit.app` resolves via Replit wildcard DNS but returns HTTP 000 —
+Replit's infra layer doesn't route that subdomain to any service. Cannot be fixed server-side.
+
 ## Env var forwarding
 The mobile dev script in `artifacts/mobile/package.json` forwards
 `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=$CLERK_PUBLISHABLE_KEY` at startup so Metro inlines it.
