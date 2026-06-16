@@ -270,13 +270,15 @@ export default function LoginScreen() {
                     loading={oauthLoading === "google"}
                     disabled={oauthLoading !== null}
                   />
-                  <SocialButton
-                    label="Continue with Apple"
-                    iconName="logo-apple"
-                    onPress={() => handleOAuth("apple")}
-                    loading={oauthLoading === "apple"}
-                    disabled={oauthLoading !== null}
-                  />
+                  {Platform.OS !== "android" && (
+                    <SocialButton
+                      label="Continue with Apple"
+                      iconName="logo-apple"
+                      onPress={() => handleOAuth("apple")}
+                      loading={oauthLoading === "apple"}
+                      disabled={oauthLoading !== null}
+                    />
+                  )}
                   <View style={styles.orRow}>
                     <View style={styles.orLine} />
                     <Text style={styles.orText}>or</Text>
