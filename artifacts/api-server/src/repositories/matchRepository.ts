@@ -6,7 +6,7 @@ import {
   gameActionsLogTable,
   usersTable,
 } from "@workspace/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, inArray, sql } from "drizzle-orm";
 import type { GameState as EngineGameState } from "../game/types";
 import type { GameAction } from "../game/actions";
 
@@ -223,6 +223,46 @@ export async function getActiveMatchForUser(userId: string): Promise<string | nu
     )
     .limit(1);
   return rows[0]?.matchId ?? null;
+}
+
+export async function getOpenMatchesForUser(
+  userId: string,
+): Promise<{ matchId: string; inviteCode: string; status: string; playerCount: number }[]> {
+  const rows = await db
+    .select({
+      matchId: matchesTable.id,
+      inviteCode: matchesTable.inviteCode,
+      status: matchesTable.status,
+    })
+    .from(matchPlayersTable)
+    .innerJoin(matchesTable, eq(matchPlayersTable.matchId, matchesTable.id))
+    .where(
+      and(
+        eq(matchPlayersTable.userId, userId),
+        or(eq(matchesTable.status, "waiting"), eq(matchesTable.status, "in_progress")),
+      ),
+    );
+
+  if (rows.length === 0) return [];
+
+  const matchIds = rows.map((r) => r.matchId);
+  const countRows = await db
+    .select({
+      matchId: matchPlayersTable.matchId,
+      playerCount: sql<number>`count(*)::int`,
+    })
+    .from(matchPlayersTable)
+    .where(inArray(matchPlayersTable.matchId, matchIds))
+    .groupBy(matchPlayersTable.matchId);
+
+  const countMap = new Map(countRows.map((r) => [r.matchId, r.playerCount]));
+
+  return rows.map((r) => ({
+    matchId: r.matchId,
+    inviteCode: r.inviteCode,
+    status: r.status,
+    playerCount: countMap.get(r.matchId) ?? 1,
+  }));
 }
 
 export async function logAction(

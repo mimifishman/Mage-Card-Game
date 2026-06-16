@@ -32,6 +32,7 @@ import type {
   MatchStateResponse,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
+  MyMatchesResponse,
   RematchMatch200,
   StartMatchResponse,
 } from "./api.schemas";
@@ -644,6 +645,81 @@ export const useLogoutMobileSession = <
 > => {
   return useMutation(getLogoutMobileSessionMutationOptions(options));
 };
+
+/**
+ * Returns all matches (waiting or in_progress) where the authenticated user is a participant.
+ * @summary List the current user's open matches
+ */
+export const getGetMyMatchesUrl = () => {
+  return `/api/matches/mine`;
+};
+
+export const getMyMatches = async (
+  options?: RequestInit,
+): Promise<MyMatchesResponse> => {
+  return customFetch<MyMatchesResponse>(getGetMyMatchesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyMatchesQueryKey = () => {
+  return [`/api/matches/mine`] as const;
+};
+
+export const getGetMyMatchesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyMatches>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMatches>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyMatchesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyMatches>>> = ({
+    signal,
+  }) => getMyMatches({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMatches>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyMatchesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyMatches>>
+>;
+export type GetMyMatchesQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary List the current user's open matches
+ */
+export function useGetMyMatches<
+  TData = Awaited<ReturnType<typeof getMyMatches>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyMatches>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyMatchesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Create a new match

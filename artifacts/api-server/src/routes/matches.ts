@@ -13,6 +13,7 @@ import {
   finishMatch,
   resetMatchForRematch,
   logAction,
+  getOpenMatchesForUser,
 } from "../repositories/matchRepository";
 import { createInitialGameState, determineFirstPlayer, dealInitialHands } from "../game";
 import { dispatchAction } from "../game/dispatcher";
@@ -23,6 +24,17 @@ import { isGameOver, getWinner } from "../game";
 
 const router: IRouter = Router();
 router.use(requireAuth);
+
+router.get("/mine", async (req: Request, res: Response) => {
+  const userId = req.user!.internalUserId;
+  try {
+    const matches = await getOpenMatchesForUser(userId);
+    res.json({ matches });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch user matches");
+    res.status(500).json({ error: "Failed to fetch user matches" });
+  }
+});
 
 router.post("/", async (req: Request, res: Response) => {
   const userId = req.user!.internalUserId;
@@ -298,8 +310,8 @@ router.post("/:id/abandon", async (req: Request, res: Response) => {
       res.status(404).json({ error: "Match not found" });
       return;
     }
-    if (data.match.status !== "in_progress") {
-      res.status(409).json({ error: "Match is not in progress" });
+    if (data.match.status === "finished") {
+      res.status(409).json({ error: "Match is already finished" });
       return;
     }
 

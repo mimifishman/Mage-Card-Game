@@ -25,6 +25,7 @@ import * as Clipboard from "expo-clipboard";
 import {
   useGetMatch,
   useStartMatch,
+  useAbandonMatch,
   getGetMatchQueryKey,
 } from "@workspace/api-client-react";
 import Colors from "@/constants/colors";
@@ -71,8 +72,40 @@ export default function WaitingRoomScreen() {
   useEffect(() => {
     if (matchStatus === "in_progress") {
       router.replace({ pathname: "/(game)/match", params: { matchId } });
+    } else if (matchStatus === "finished") {
+      router.replace({ pathname: "/(game)/lobby" });
     }
   }, [matchStatus, matchId]);
+
+  const { mutate: abandonMatchMutate, isPending: isEnding } = useAbandonMatch({
+    mutation: {
+      onSuccess: () => {
+        router.replace({ pathname: "/(game)/lobby" });
+      },
+      onError: (err) => {
+        const message = (err as { data?: { error?: string } })?.data?.error ?? "Failed to end match";
+        Alert.alert("Error", message);
+      },
+    },
+  });
+
+  const handleEndMatch = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "End Match",
+      "This will end the match for all players. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "End Match",
+          style: "destructive",
+          onPress: () => {
+            if (matchId) abandonMatchMutate({ matchId });
+          },
+        },
+      ],
+    );
+  };
 
 
   const { mutate: startMatchMutate, isPending: isStarting } = useStartMatch({
@@ -271,6 +304,24 @@ export default function WaitingRoomScreen() {
             <ActivityIndicator size="small" color={Colors.brand} />
             <Text style={styles.waitingBannerText}>Waiting for host to start...</Text>
           </View>
+        )}
+
+        {isHost && (
+          <Pressable
+            onPress={handleEndMatch}
+            disabled={isEnding}
+            style={({ pressed }) => [styles.endBtn, pressed && { opacity: 0.6 }]}
+            testID="end-match-button"
+          >
+            {isEnding ? (
+              <ActivityIndicator size="small" color={Colors.accentRed} />
+            ) : (
+              <>
+                <Ionicons name="close-circle-outline" size={18} color={Colors.accentRed} />
+                <Text style={styles.endBtnText}>End Match</Text>
+              </>
+            )}
+          </Pressable>
         )}
       </View>
     </View>
@@ -501,6 +552,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: "Inter_700Bold",
     color: Colors.bgDeep,
+  },
+  endBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    marginTop: 12,
+  },
+  endBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.accentRed,
   },
   waitingBanner: {
     flexDirection: "row",

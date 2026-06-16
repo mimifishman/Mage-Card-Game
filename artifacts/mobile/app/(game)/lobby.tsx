@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -23,7 +24,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useCreateMatch, useJoinMatch } from "@workspace/api-client-react";
+import { useCreateMatch, useJoinMatch, useGetMyMatches, useAbandonMatch, getGetMyMatchesQueryKey } from "@workspace/api-client-react";
+import type { MyMatchItem } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
 
@@ -41,6 +43,20 @@ export default function LobbyScreen() {
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
+
+  const { data: myMatchesData, refetch: refetchMyMatches } = useGetMyMatches({
+    query: {
+      queryKey: getGetMyMatchesQueryKey(),
+      refetchInterval: 5000,
+    },
+  });
+  const myMatches = myMatchesData?.matches ?? [];
+
+  useFocusEffect(
+    useCallback(() => {
+      refetchMyMatches();
+    }, [refetchMyMatches]),
+  );
 
   const { mutate: createMatch, isPending: isCreating } = useCreateMatch({
     mutation: {
@@ -101,6 +117,49 @@ export default function LobbyScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     joinMatch({ data: { inviteCode: inviteCode.trim().toUpperCase() } });
+  };
+
+  const handleResume = (match: MyMatchItem) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (match.status === "in_progress") {
+      router.push({
+        pathname: "/(game)/match",
+        params: { matchId: match.matchId },
+      });
+    } else {
+      router.push({
+        pathname: "/(game)/waiting-room",
+        params: { matchId: match.matchId, inviteCode: match.inviteCode },
+      });
+    }
+  };
+
+  const { mutate: abandonMatch, isPending: isEnding, variables: endingVars } = useAbandonMatch({
+    mutation: {
+      onSuccess: () => {
+        refetchMyMatches();
+      },
+      onError: (err) => {
+        const message = (err as { data?: { error?: string } })?.data?.error ?? "Failed to end match";
+        Alert.alert("Error", message);
+      },
+    },
+  });
+
+  const handleEndMatch = (match: MyMatchItem) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "End Match",
+      "This will end the match for all players. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "End Match",
+          style: "destructive",
+          onPress: () => abandonMatch({ matchId: match.matchId }),
+        },
+      ],
+    );
   };
 
   return (
@@ -223,6 +282,53 @@ export default function LobbyScreen() {
                 </>
               )}
             </Pressable>
+          </Animated.View>
+        )}
+
+        {myMatches.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(300).duration(600)} style={styles.myMatchesSection}>
+            <Text style={styles.myMatchesTitle}>Your Matches</Text>
+            {myMatches.map((match) => (
+              <View key={match.matchId} style={styles.matchCard} testID={`my-match-card-${match.matchId}`}>
+                <View style={styles.matchCardLeft}>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      match.status === "in_progress" ? styles.statusInProgress : styles.statusWaiting,
+                    ]}
+                  >
+                    <Text style={styles.statusBadgeText}>
+                      {match.status === "in_progress" ? "In Progress" : "Waiting"}
+                    </Text>
+                  </View>
+                  <Text style={styles.matchPlayerCount}>
+                    {match.playerCount} {match.playerCount === 1 ? "player" : "players"}
+                  </Text>
+                </View>
+                <View style={styles.matchCardActions}>
+                  <Pressable
+                    onPress={() => handleEndMatch(match)}
+                    disabled={isEnding && endingVars?.matchId === match.matchId}
+                    style={({ pressed }) => [styles.endMatchBtn, pressed && { opacity: 0.7 }]}
+                    testID={`end-match-${match.matchId}`}
+                  >
+                    {isEnding && endingVars?.matchId === match.matchId ? (
+                      <ActivityIndicator size="small" color={Colors.accentRed} />
+                    ) : (
+                      <Ionicons name="close" size={16} color={Colors.accentRed} />
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleResume(match)}
+                    style={({ pressed }) => [styles.resumeBtn, pressed && { opacity: 0.8 }]}
+                    testID={`resume-match-${match.matchId}`}
+                  >
+                    <Ionicons name="play" size={14} color="#0A0A0F" />
+                    <Text style={styles.resumeBtnText}>Resume</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
           </Animated.View>
         )}
 
@@ -370,6 +476,84 @@ const styles = StyleSheet.create({
   },
   joinBtnText: {
     fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    color: "#0A0A0F",
+  },
+  myMatchesSection: {
+    gap: 10,
+  },
+  myMatchesTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+  matchCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.bgCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  matchCardLeft: {
+    gap: 4,
+  },
+  statusBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusWaiting: {
+    backgroundColor: "rgba(200,155,60,0.18)",
+  },
+  statusInProgress: {
+    backgroundColor: "rgba(41,185,128,0.18)",
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  matchPlayerCount: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  matchCardActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  endMatchBtn: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(229,72,77,0.4)",
+    backgroundColor: "rgba(229,72,77,0.12)",
+  },
+  resumeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.brand,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  resumeBtnText: {
+    fontSize: 14,
     fontFamily: "Inter_600SemiBold",
     color: "#0A0A0F",
   },

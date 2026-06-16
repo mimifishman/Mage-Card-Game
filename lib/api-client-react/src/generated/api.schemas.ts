@@ -306,3 +306,22 @@ export type RematchMatch200 = {
 export type AbandonMatch200 = {
   ok: true;
 };
+
+export type MyMatchItemStatus =
+  (typeof MyMatchItemStatus)[keyof typeof MyMatchItemStatus];
+
+export const MyMatchItemStatus = {
+  waiting: "waiting",
+  in_progress: "in_progress",
+} as const;
+
+export interface MyMatchItem {
+  matchId: string;
+  inviteCode: string;
+  status: MyMatchItemStatus;
+  playerCount: number;
+}
+
+export interface MyMatchesResponse {
+  matches: MyMatchItem[];
+}

@@ -144,6 +144,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LogoutSuccess"
+  /matches/mine:
+    get:
+      tags: [Matches]
+      operationId: getMyMatches
+      summary: List the current user's open matches
+      description: Returns all matches (waiting or in_progress) where the authenticated user is a participant.
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+      responses:
+        "200":
+          description: List of open matches for the current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyMatchesResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Internal error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /matches:
     post:
       tags: [Matches]
@@ -398,7 +426,7 @@ paths:
     post:
       tags: [Matches]
       operationId: abandonMatch
-      summary: Abandon a match (ends for all players, no winner)
+      summary: Abandon a match (ends a waiting or in-progress match for all players, no winner)
       parameters:
         - $ref: "#/components/parameters/AuthorizationSessionHeader"
         - $ref: "#/components/parameters/SessionCookie"
@@ -432,7 +460,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: Match is not in progress.
+          description: Match is already finished.
           content:
             application/json:
               schema:
@@ -556,6 +584,27 @@ components:
       properties:
         error:
           type: string
+    MyMatchItem:
+      type: object
+      required: [matchId, inviteCode, status, playerCount]
+      properties:
+        matchId:
+          type: string
+        inviteCode:
+          type: string
+        status:
+          type: string
+          enum: [waiting, in_progress]
+        playerCount:
+          type: integer
+    MyMatchesResponse:
+      type: object
+      required: [matches]
+      properties:
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyMatchItem"
     MatchSummary:
       type: object
       required: [id, inviteCode, status]
