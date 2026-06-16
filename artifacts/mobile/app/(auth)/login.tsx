@@ -25,6 +25,7 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
+import * as SecureStore from "expo-secure-store";
 import { useOAuth, useSignIn, useSignUp } from "@clerk/clerk-expo";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
@@ -141,7 +142,13 @@ export default function LoginScreen() {
       if (result.status === "complete") {
         await setActiveSignIn({ session: result.createdSessionId });
       } else if (result.status === "needs_client_trust") {
-        setErrorMsg("Sign-in blocked by bot protection. Please use Google sign-in, or contact support.");
+        await SecureStore.deleteItemAsync("__clerk_client_jwt");
+        const retryResult = await signIn.create({ identifier: email.trim(), password });
+        if (retryResult.status === "complete") {
+          await setActiveSignIn({ session: retryResult.createdSessionId });
+        } else {
+          setErrorMsg("Sign-in could not be completed. Please close and reopen the app, then try again.");
+        }
       } else {
         setErrorMsg("Sign-in could not be completed. Please try again or use Google/Apple to sign in.");
       }
