@@ -92,6 +92,7 @@ export default function LoginScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<"google" | "apple" | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [verifyIsFirstFactor, setVerifyIsFirstFactor] = useState(false);
 
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
@@ -141,16 +142,30 @@ export default function LoginScreen() {
       }
       if (result.status === "complete") {
         await setActiveSignIn({ session: result.createdSessionId });
-      } else if (
-        (result.status as string) === "needs_client_trust" ||
-        result.status === "needs_second_factor"
-      ) {
-        // Client Trust / MFA: a new device must be verified with an emailed code.
-        const emailFactor = result.supportedSecondFactors?.find(
+      } else if ((result.status as string) === "needs_client_trust") {
+        // Client Trust: new device must verify via first-factor email code.
+        const firstEmailFactor = result.supportedFirstFactors?.find(
+          (f) => f.strategy === "email_code",
+        ) as { strategy: string; emailAddressId: string } | undefined;
+        if (firstEmailFactor) {
+          await signIn.prepareFirstFactor({
+            strategy: "email_code",
+            emailAddressId: firstEmailFactor.emailAddressId,
+          });
+          setVerifyIsFirstFactor(true);
+          setVerifyMode("signin");
+          setEmailScreen("verify");
+        } else {
+          setErrorMsg("Could not send verification code. Please try again.");
+        }
+      } else if (result.status === "needs_second_factor") {
+        // MFA: standard second-factor (e.g. authenticator app or email code).
+        const secondEmailFactor = result.supportedSecondFactors?.find(
           (f) => f.strategy === "email_code",
         );
-        if (emailFactor) {
+        if (secondEmailFactor) {
           await signIn.prepareSecondFactor({ strategy: "email_code" });
+          setVerifyIsFirstFactor(false);
           setVerifyMode("signin");
           setEmailScreen("verify");
         } else {
@@ -196,10 +211,9 @@ export default function LoginScreen() {
     try {
       if (verifyMode === "signin") {
         if (!signIn || !setActiveSignIn) return;
-        const result = await signIn.attemptSecondFactor({
-          strategy: "email_code",
-          code: code.trim(),
-        });
+        const result = verifyIsFirstFactor
+          ? await signIn.attemptFirstFactor({ strategy: "email_code", code: code.trim() })
+          : await signIn.attemptSecondFactor({ strategy: "email_code", code: code.trim() });
         if (result.status === "complete") {
           await setActiveSignIn({ session: result.createdSessionId });
         } else {
@@ -231,6 +245,7 @@ export default function LoginScreen() {
     setErrorMsg(null);
     setShowPassword(false);
     setVerifyMode("signup");
+    setVerifyIsFirstFactor(false);
   }
 
   return (
