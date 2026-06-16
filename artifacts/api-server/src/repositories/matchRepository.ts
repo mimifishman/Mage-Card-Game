@@ -43,17 +43,24 @@ export async function joinMatchByCode(inviteCode: string, userId: string) {
     .where(eq(matchesTable.inviteCode, inviteCode.toUpperCase()));
 
   if (!match) return { ok: false as const, error: "Match not found" };
-  if (match.status !== "waiting") return { ok: false as const, error: "Match already started or finished" };
 
   const players = await db
     .select()
     .from(matchPlayersTable)
     .where(eq(matchPlayersTable.matchId, match.id));
 
-  if (players.length >= 4) return { ok: false as const, error: "Match is full" };
-
   const alreadyJoined = players.some((p) => p.userId === userId);
-  if (alreadyJoined) return { ok: false as const, error: "Already joined this match" };
+
+  if (match.status === "in_progress") {
+    if (alreadyJoined) return { ok: true as const, match, isRejoin: true };
+    return { ok: false as const, error: "Match already started or finished" };
+  }
+
+  if (match.status !== "waiting") return { ok: false as const, error: "Match already started or finished" };
+
+  if (alreadyJoined) return { ok: true as const, match, isRejoin: true };
+
+  if (players.length >= 4) return { ok: false as const, error: "Match is full" };
 
   await db.insert(matchPlayersTable).values({
     matchId: match.id,
@@ -61,7 +68,7 @@ export async function joinMatchByCode(inviteCode: string, userId: string) {
     turnOrder: players.length,
   });
 
-  return { ok: true as const, match };
+  return { ok: true as const, match, isRejoin: false };
 }
 
 export async function getMatchWithPlayers(matchId: string) {

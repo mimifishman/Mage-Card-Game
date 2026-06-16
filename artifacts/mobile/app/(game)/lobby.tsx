@@ -63,13 +63,20 @@ export default function LobbyScreen() {
   const { mutate: joinMatch, isPending: isJoining } = useJoinMatch({
     mutation: {
       onSuccess: (data) => {
-        router.push({
-          pathname: "/(game)/waiting-room",
-          params: {
-            matchId: data.match.id,
-            inviteCode: data.match.inviteCode,
-          },
-        });
+        if (data.match.status === "in_progress") {
+          router.push({
+            pathname: "/(game)/match",
+            params: { matchId: data.match.id },
+          });
+        } else {
+          router.push({
+            pathname: "/(game)/waiting-room",
+            params: {
+              matchId: data.match.id,
+              inviteCode: data.match.inviteCode,
+            },
+          });
+        }
       },
       onError: (err) => {
         const message = (err as { data?: { error?: string } })?.data?.error ?? "Failed to join match";

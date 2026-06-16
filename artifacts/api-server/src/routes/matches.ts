@@ -50,13 +50,15 @@ router.post("/join", async (req: Request, res: Response) => {
       return;
     }
 
-    const data = await getMatchWithPlayers(result.match.id);
-    broadcastToMatch(result.match.id, {
-      type: "player_joined",
-      matchId: result.match.id,
-      userId,
-      playerCount: data?.players.length ?? 0,
-    });
+    if (!result.isRejoin) {
+      const data = await getMatchWithPlayers(result.match.id);
+      broadcastToMatch(result.match.id, {
+        type: "player_joined",
+        matchId: result.match.id,
+        userId,
+        playerCount: data?.players.length ?? 0,
+      });
+    }
 
     res.json({ match: { id: result.match.id, inviteCode: result.match.inviteCode, status: result.match.status } });
   } catch (err) {
