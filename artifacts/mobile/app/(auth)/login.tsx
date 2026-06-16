@@ -140,8 +140,10 @@ export default function LoginScreen() {
       }
       if (result.status === "complete") {
         await setActiveSignIn({ session: result.createdSessionId });
+      } else if (result.status === "needs_client_trust") {
+        setErrorMsg("Sign-in blocked by bot protection. Please use Google sign-in, or contact support.");
       } else {
-        setErrorMsg(`Sign-in status: "${result.status}" — please screenshot this and report it.`);
+        setErrorMsg("Sign-in could not be completed. Please try again or use Google/Apple to sign in.");
       }
     } catch (err: unknown) {
       const clerkErr = err as { errors?: Array<{ code: string; message: string }> };
