@@ -186,7 +186,7 @@ export function getValidActionsForCard(
       if (hasTakenDiamondAction) return [];
       return [
         { action: "discard_diamond_to_draw", label: "Discard to Draw a Card", requiresTarget: false },
-        { action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false },
+        { action: "discard_diamond_for_boost", label: `Discard for a one-time +${card.pipValue} Vault Boost`, requiresTarget: false },
       ];
     }
     if (card.suit === "H") {
@@ -359,7 +359,7 @@ export function getValidActionsForCard(
         actions.push({ action: "play_diamond_to_mine", label: "Play to Mine", requiresTarget: false });
       }
       actions.push({ action: "discard_diamond_to_draw", label: "Discard to Draw a Card", requiresTarget: false });
-      actions.push({ action: "discard_diamond_for_boost", label: "Discard for +1 Vault Boost", requiresTarget: false });
+      actions.push({ action: "discard_diamond_for_boost", label: `Discard for a one-time +${card.pipValue} Vault Boost`, requiresTarget: false });
     }
     return actions;
   }
