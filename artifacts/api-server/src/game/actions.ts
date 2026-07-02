@@ -13,6 +13,7 @@ export const DiscardDiamondToDrawActionSchema = z.object({
 export const DiscardDiamondForBoostActionSchema = z.object({
   type: z.literal("discard_diamond_for_boost"),
   cardId: z.string(),
+  targetPlayerId: z.string().optional(),
 });
 
 export const PlayRoyalToCourtActionSchema = z.object({
@@ -30,12 +31,14 @@ export const AttachHeartActionSchema = z.object({
   type: z.literal("attach_heart"),
   heartCardId: z.string(),
   targetRoyalId: z.string(),
+  targetPlayerId: z.string().optional(),
 });
 
 export const AttachSpadeActionSchema = z.object({
   type: z.literal("attach_spade"),
   spadeCardId: z.string(),
   targetRoyalId: z.string(),
+  targetPlayerId: z.string().optional(),
 });
 
 export const DiscardToAbyssActionSchema = z.object({
@@ -53,6 +56,7 @@ export const ApplyClubActionSchema = z.object({
 export const DiscardHeartToHealActionSchema = z.object({
   type: z.literal("discard_heart_to_heal"),
   heartCardId: z.string(),
+  targetPlayerId: z.string().optional(),
 });
 
 export const DiscardSpadeToReturnActionSchema = z.object({

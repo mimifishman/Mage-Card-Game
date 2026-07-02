@@ -59,7 +59,10 @@ export function dispatchAction(
       return wrapDuelTurn(discardDiamondToDraw(state, playerId, action.cardId), action.type);
 
     case "discard_diamond_for_boost":
-      return wrapDuelTurn(discardDiamondForBoost(state, playerId, action.cardId), action.type);
+      return wrapDuelTurn(
+        discardDiamondForBoost(state, playerId, action.cardId, action.targetPlayerId ?? playerId),
+        action.type,
+      );
 
     case "discard_to_abyss":
       return wrapDuelTurn(discardToAbyss(state, playerId, action.cardId), action.type);
@@ -71,13 +74,22 @@ export function dispatchAction(
       return wrapDuelTurn(attachRoyalSupport(state, playerId, action.supportCardId, action.targetRoyalId), action.type);
 
     case "attach_heart":
-      return wrapDuelTurn(attachHeart(state, playerId, action.heartCardId, action.targetRoyalId), action.type);
+      return wrapDuelTurn(
+        attachHeart(state, playerId, action.heartCardId, action.targetRoyalId, action.targetPlayerId ?? playerId),
+        action.type,
+      );
 
     case "attach_spade":
-      return wrapDuelTurn(attachSpade(state, playerId, action.spadeCardId, action.targetRoyalId), action.type);
+      return wrapDuelTurn(
+        attachSpade(state, playerId, action.spadeCardId, action.targetRoyalId, action.targetPlayerId ?? playerId),
+        action.type,
+      );
 
     case "discard_heart_to_heal":
-      return wrapDuelTurn(discardHeartToHeal(state, playerId, action.heartCardId), action.type);
+      return wrapDuelTurn(
+        discardHeartToHeal(state, playerId, action.heartCardId, action.targetPlayerId),
+        action.type,
+      );
 
     case "discard_spade_to_return":
       return wrapDuelTurn(discardSpadeToReturn(state, playerId, action.spadeCardId, action.targetCardId), action.type);

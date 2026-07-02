@@ -147,6 +147,7 @@ export function attachHeart(
   playerId: string,
   cardId: CardId,
   targetCardId: CardId,
+  targetPlayerId: string = playerId,
 ): Result<GameState> {
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
@@ -156,10 +157,12 @@ export function attachHeart(
     return err(`Card ${cardId} is not a non-Royal Heart`);
   }
 
-  const player = state.players[playerId]!;
-  const targetIdx = player.court.findIndex((r) => r.cardId === targetCardId);
+  const targetPlayer = state.players[targetPlayerId];
+  if (!targetPlayer) return err(`Player ${targetPlayerId} not found`);
+
+  const targetIdx = targetPlayer.court.findIndex((r) => r.cardId === targetCardId);
   if (targetIdx === -1) {
-    return err(`Target Royal ${targetCardId} is not in your Court`);
+    return err(`Target Royal ${targetCardId} is not in ${targetPlayerId}'s Court`);
   }
 
   const unblockedAttackers = getUnblockedAttackerRoyalIds(state);
@@ -176,22 +179,36 @@ export function attachHeart(
     }
   }
 
-  const target = player.court[targetIdx]!;
+  const target = targetPlayer.court[targetIdx]!;
   const updatedTarget: RoyalInCourt = {
     ...target,
     buffHealth: target.buffHealth + card.pipValue,
     attachedCards: [...target.attachedCards, cardId],
   };
 
-  const updatedCourt = [...player.court];
+  const updatedCourt = [...targetPlayer.court];
   updatedCourt[targetIdx] = updatedTarget;
 
+  const player = state.players[playerId]!;
   const afterSpend = spendVault(removeFromHand(player, cardId), card.vaultCost);
-  const updated: PlayerState = { ...afterSpend, court: updatedCourt };
+
+  if (targetPlayerId === playerId) {
+    const updated: PlayerState = { ...afterSpend, court: updatedCourt };
+    return ok({
+      ...state,
+      players: { ...state.players, [playerId]: updated },
+    });
+  }
+
+  const updatedTargetPlayer: PlayerState = { ...targetPlayer, court: updatedCourt };
 
   return ok({
     ...state,
-    players: { ...state.players, [playerId]: updated },
+    players: {
+      ...state.players,
+      [playerId]: afterSpend,
+      [targetPlayerId]: updatedTargetPlayer,
+    },
   });
 }
 
@@ -200,6 +217,7 @@ export function attachSpade(
   playerId: string,
   cardId: CardId,
   targetCardId: CardId,
+  targetPlayerId: string = playerId,
 ): Result<GameState> {
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
@@ -209,10 +227,12 @@ export function attachSpade(
     return err(`Card ${cardId} is not a non-Royal Spade`);
   }
 
-  const player = state.players[playerId]!;
-  const targetIdx = player.court.findIndex((r) => r.cardId === targetCardId);
+  const targetPlayer = state.players[targetPlayerId];
+  if (!targetPlayer) return err(`Player ${targetPlayerId} not found`);
+
+  const targetIdx = targetPlayer.court.findIndex((r) => r.cardId === targetCardId);
   if (targetIdx === -1) {
-    return err(`Target Royal ${targetCardId} is not in your Court`);
+    return err(`Target Royal ${targetCardId} is not in ${targetPlayerId}'s Court`);
   }
 
   const unblockedAttackers = getUnblockedAttackerRoyalIds(state);
@@ -229,7 +249,7 @@ export function attachSpade(
     }
   }
 
-  const target = player.court[targetIdx]!;
+  const target = targetPlayer.court[targetIdx]!;
   const updatedTarget: RoyalInCourt = {
     ...target,
     buffAttack: target.buffAttack + card.pipValue,
@@ -237,24 +257,39 @@ export function attachSpade(
     attachedCards: [...target.attachedCards, cardId],
   };
 
-  const updatedCourt = [...player.court];
+  const updatedCourt = [...targetPlayer.court];
   updatedCourt[targetIdx] = updatedTarget;
 
+  const player = state.players[playerId]!;
   const afterSpend = spendVault(removeFromHand(player, cardId), card.vaultCost);
-  const updated: PlayerState = { ...afterSpend, court: updatedCourt };
 
-  const stateWithSpade: GameState = {
-    ...state,
-    players: { ...state.players, [playerId]: updated },
-  };
+  let stateWithSpade: GameState;
+  if (targetPlayerId === playerId) {
+    const updated: PlayerState = { ...afterSpend, court: updatedCourt };
+    stateWithSpade = {
+      ...state,
+      players: { ...state.players, [playerId]: updated },
+    };
+  } else {
+    const updatedTargetPlayer: PlayerState = { ...targetPlayer, court: updatedCourt };
+    stateWithSpade = {
+      ...state,
+      players: {
+        ...state.players,
+        [playerId]: afterSpend,
+        [targetPlayerId]: updatedTargetPlayer,
+      },
+    };
+  }
 
-  return ok(checkAndApplyCancellation(stateWithSpade, playerId, targetCardId));
+  return ok(checkAndApplyCancellation(stateWithSpade, targetPlayerId, targetCardId));
 }
 
 export function discardHeartToHeal(
   state: GameState,
   playerId: string,
   heartCardId: CardId,
+  targetPlayerId: string = playerId,
 ): Result<GameState> {
   const canPlay = canPlayCard(state, playerId, heartCardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
@@ -264,17 +299,41 @@ export function discardHeartToHeal(
     return err(`Card ${heartCardId} is not a non-Royal Heart`);
   }
 
+  const targetPlayer = state.players[targetPlayerId];
+  if (!targetPlayer) {
+    return err(`Target player ${targetPlayerId} not found`);
+  }
+
+  if (targetPlayerId === playerId) {
+    const player = state.players[playerId]!;
+    const afterSpend = spendVault(removeFromHand(player, heartCardId), card.vaultCost);
+    const healed: PlayerState = {
+      ...afterSpend,
+      life: player.life + card.pipValue,
+    };
+
+    return ok({
+      ...state,
+      abyss: [...state.abyss, heartCardId],
+      players: { ...state.players, [playerId]: healed },
+    });
+  }
+
   const player = state.players[playerId]!;
   const afterSpend = spendVault(removeFromHand(player, heartCardId), card.vaultCost);
   const healed: PlayerState = {
-    ...afterSpend,
-    life: player.life + card.pipValue,
+    ...targetPlayer,
+    life: targetPlayer.life + card.pipValue,
   };
 
   return ok({
     ...state,
     abyss: [...state.abyss, heartCardId],
-    players: { ...state.players, [playerId]: healed },
+    players: {
+      ...state.players,
+      [playerId]: afterSpend,
+      [targetPlayerId]: healed,
+    },
   });
 }
 

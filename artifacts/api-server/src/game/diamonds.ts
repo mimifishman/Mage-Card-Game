@@ -175,6 +175,7 @@ export function discardDiamondForBoost(
   state: GameState,
   playerId: string,
   cardId: CardId,
+  targetPlayerId: string = playerId,
 ): Result<GameState> {
   if (state.phase === "declare_blocks") {
     return err(`Cannot use a Diamond action during phase "declare_blocks"`);
@@ -192,6 +193,18 @@ export function discardDiamondForBoost(
   }
 
   const player = state.players[playerId]!;
+  const targetPlayer = state.players[targetPlayerId];
+  if (!targetPlayer) return err(`Player ${targetPlayerId} not found`);
+
+  const applyBoost = (updatedActingPlayer: PlayerState): Record<string, PlayerState> => {
+    if (targetPlayerId === playerId) {
+      return { [playerId]: addTempBoost(updatedActingPlayer, card.pipValue) };
+    }
+    return {
+      [playerId]: updatedActingPlayer,
+      [targetPlayerId]: addTempBoost(targetPlayer, card.pipValue),
+    };
+  };
 
   if (state.phase === "respond_to_club") {
     const pending = state.pendingClubDebuff!;
@@ -199,10 +212,9 @@ export function discardDiamondForBoost(
       return err("You have already used your one Diamond action during this Club response");
     }
     const withoutCard = removeFromHand(player, cardId);
-    const boosted = addTempBoost(withoutCard, card.pipValue);
     return ok({
       ...state,
-      players: { ...state.players, [playerId]: boosted },
+      players: { ...state.players, ...applyBoost(withoutCard) },
       abyss: [...state.abyss, cardId],
       pendingClubDebuff: { ...pending, defenderDiamondUsed: true },
     });
@@ -216,10 +228,9 @@ export function discardDiamondForBoost(
       return err("You have already used your Diamond action this duel");
     }
     const withoutCard = removeFromHand(player, cardId);
-    const boosted = addTempBoost(withoutCard, card.pipValue);
     const updatedState: GameState = {
       ...state,
-      players: { ...state.players, [playerId]: boosted },
+      players: { ...state.players, ...applyBoost(withoutCard) },
       abyss: [...state.abyss, cardId],
       duelContext: {
         ...ctx,
@@ -234,18 +245,14 @@ export function discardDiamondForBoost(
     return err("You can only take one Diamond action per turn");
   }
 
-  const withoutCard = removeFromHand(player, cardId);
-  const boosted = addTempBoost(
-    {
-      ...withoutCard,
-      hasPlayedDiamondThisTurn: true,
-    },
-    card.pipValue,
-  );
+  const withoutCard = {
+    ...removeFromHand(player, cardId),
+    hasPlayedDiamondThisTurn: true,
+  };
 
   return ok({
     ...state,
-    players: { ...state.players, [playerId]: boosted },
+    players: { ...state.players, ...applyBoost(withoutCard) },
     abyss: [...state.abyss, cardId],
   });
 }

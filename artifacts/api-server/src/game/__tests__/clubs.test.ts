@@ -70,20 +70,48 @@ describe("applyClubToRoyal (staging)", () => {
     expect(result.value.players[P2]!.life).toBe(17);
   });
 
-  it("rejects targeting your own Royal", () => {
+  it("allows targeting your own Royal", () => {
     const state = makeState({
       mine: ["10D"],
       players: {
         [P1]: makePlayer(P1, {
           hand: ["3C"],
-          court: [mkRoyal("KH")],
+          court: [mkRoyal("KH", { buffAttack: 5, buffHealth: 5 })],
           vault: { tempBoost: 0, spent: 0 },
         }),
         [P2]: makePlayer(P2),
       },
     });
     const result = applyClubToRoyal(state, P1, "3C", P1, "KH");
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("respond_to_club");
+    expect(result.value.pendingClubDebuff).toEqual({
+      attackerPlayerId: P1,
+      clubCardId: "3C",
+      targetPlayerId: P1,
+      targetRoyalId: "KH",
+      defenderDiamondUsed: false,
+    });
+  });
+
+  it("allows dealing direct Club damage to yourself", () => {
+    const state = makeState({
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["3C"],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = applyClubToRoyal(state, P1, "3C", P1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("main");
+    expect(result.value.pendingClubDebuff).toBeUndefined();
+    expect(result.value.players[P1]!.life).toBe(17);
   });
 
   it("rejects if target Royal not in opponent Court", () => {

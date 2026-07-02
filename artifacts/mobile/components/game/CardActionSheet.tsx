@@ -43,7 +43,7 @@ export interface ActionParams {
   mode?: string;
 }
 
-type SheetStep = "actions" | "pick_royal" | "pick_player" | "joker_mode" | "pick_abyss";
+type SheetStep = "actions" | "pick_player" | "joker_mode" | "pick_abyss";
 
 export default function CardActionSheet({
   cardId,
@@ -69,6 +69,8 @@ export default function CardActionSheet({
   if (!cardId) return null;
 
   const card = parseCardId(cardId);
+  const anyCourtHasRoyals =
+    myCourt.length > 0 || Object.values(allPlayers).some((p) => p.id !== myPlayerId && p.court.length > 0);
   const validActions = getValidActionsForCard(
     card,
     phase,
@@ -79,6 +81,7 @@ export default function CardActionSheet({
     isDefender,
     isClubResponder,
     isMyDuelTurn,
+    anyCourtHasRoyals,
   );
 
   const handleActionPick = (action: ValidAction) => {
@@ -86,9 +89,7 @@ export default function CardActionSheet({
     if (card.isJoker) {
       setStep("joker_mode");
     } else if (action.requiresTarget) {
-      if (action.targetType === "own_royal") {
-        setStep("pick_royal");
-      } else if (action.targetType === "pick_abyss") {
+      if (action.targetType === "pick_abyss") {
         setStep("pick_abyss");
       } else {
         setStep("pick_player");
@@ -101,11 +102,6 @@ export default function CardActionSheet({
   const handleJokerMode = (mode: "destroy_royal" | "damage_player") => {
     setJokerMode(mode);
     setStep("pick_player");
-  };
-
-  const handleRoyalTarget = (targetRoyalId: string) => {
-    if (!chosenAction) return;
-    onAction({ cardId, action: chosenAction.action, targetRoyalId });
   };
 
   const handlePlayerTarget = (targetPlayerId: string, targetRoyalId?: string) => {
@@ -126,6 +122,13 @@ export default function CardActionSheet({
       }
     } else if (chosenAction.action === "apply_club_damage") {
       onAction({ cardId, action: "apply_club_damage", targetPlayerId });
+    } else if (chosenAction.action === "attach_heart" || chosenAction.action === "attach_spade") {
+      if (!targetRoyalId) return;
+      onAction({ cardId, action: chosenAction.action, targetPlayerId, targetRoyalId });
+    } else if (chosenAction.action === "discard_diamond_for_boost") {
+      onAction({ cardId, action: "discard_diamond_for_boost", targetPlayerId });
+    } else if (chosenAction.action === "discard_heart_to_heal") {
+      onAction({ cardId, action: "discard_heart_to_heal", targetPlayerId });
     }
   };
 
@@ -135,6 +138,10 @@ export default function CardActionSheet({
   };
 
   const opponents = Object.values(allPlayers).filter((p) => p.id !== myPlayerId && !p.isEliminated);
+  const me = allPlayers[myPlayerId];
+  const showsRoyalPicker = chosenAction?.targetType === "any_royal";
+  const includeSelfAsTarget = !(card.isJoker && jokerMode === "damage_player");
+  const targetablePlayers = me && includeSelfAsTarget ? [me, ...opponents] : opponents;
 
   const eligibleAbyssCards = abyss.filter((c) => {
     const abyssCard = parseCardId(c);
@@ -243,15 +250,6 @@ export default function CardActionSheet({
                 <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
               </Pressable>
             </ScrollView>
-          ) : step === "pick_royal" ? (
-            <ScrollView contentContainerStyle={styles.targetList}>
-              <Text style={styles.stepTitle}>Pick a Royal in your Court</Text>
-              <CourtZone
-                court={myCourt}
-                size="md"
-                onRoyalPress={handleRoyalTarget}
-              />
-            </ScrollView>
           ) : step === "pick_abyss" ? (
             <ScrollView contentContainerStyle={styles.targetList}>
               <Text style={styles.stepTitle}>
@@ -278,28 +276,30 @@ export default function CardActionSheet({
           ) : step === "pick_player" ? (
             <ScrollView contentContainerStyle={styles.targetList}>
               <Text style={styles.stepTitle}>
-                {jokerMode === "destroy_royal" || chosenAction?.action === "apply_club"
-                  ? "Pick an opponent"
-                  : "Pick a target player"}
+                {showsRoyalPicker ? "Pick a player and Royal to target" : "Pick a target player"}
               </Text>
-              {opponents.map((p) => (
-                <View key={p.id} style={styles.oppSection}>
-                  {jokerMode === "damage_player" || chosenAction?.action === "apply_club_damage" ? (
-                    <Pressable
-                      onPress={() => handlePlayerTarget(p.id)}
-                      style={({ pressed }) => [styles.oppBtn, pressed && { opacity: 0.75 }]}
-                    >
-                      <Text style={styles.oppName}>🎯 {p.displayName || `Player ${p.id.slice(0, 6)}`}</Text>
-                      <Text style={styles.oppLife}>♥ {p.life}</Text>
-                    </Pressable>
-                  ) : (
-                    <View style={styles.oppBtn}>
-                      <Text style={styles.oppName}>🎯 {p.displayName || `Player ${p.id.slice(0, 6)}`}</Text>
-                      <Text style={styles.oppLife}>♥ {p.life}</Text>
-                    </View>
-                  )}
-                  {(jokerMode === "destroy_royal" || chosenAction?.action === "apply_club") &&
-                    p.court.length > 0 ? (
+              {targetablePlayers.map((p) => {
+                const isSelf = p.id === myPlayerId;
+                const displayLabel = isSelf
+                  ? `🙋 You${p.displayName ? ` (${p.displayName})` : ""}`
+                  : `🎯 ${p.displayName || `Player ${p.id.slice(0, 6)}`}`;
+                return (
+                  <View key={p.id} style={styles.oppSection}>
+                    {!showsRoyalPicker ? (
+                      <Pressable
+                        onPress={() => handlePlayerTarget(p.id)}
+                        style={({ pressed }) => [styles.oppBtn, pressed && { opacity: 0.75 }]}
+                      >
+                        <Text style={styles.oppName}>{displayLabel}</Text>
+                        <Text style={styles.oppLife}>♥ {p.life}</Text>
+                      </Pressable>
+                    ) : (
+                      <View style={styles.oppBtn}>
+                        <Text style={styles.oppName}>{displayLabel}</Text>
+                        <Text style={styles.oppLife}>♥ {p.life}</Text>
+                      </View>
+                    )}
+                    {showsRoyalPicker && p.court.length > 0 ? (
                       <View style={styles.oppCourt}>
                         <Text style={styles.courtHint}>→ pick a Royal to target:</Text>
                         <CourtZone
@@ -308,12 +308,12 @@ export default function CardActionSheet({
                           onRoyalPress={(royalId) => handlePlayerTarget(p.id, royalId)}
                         />
                       </View>
-                    ) : (jokerMode === "destroy_royal" || chosenAction?.action === "apply_club") &&
-                    p.court.length === 0 ? (
+                    ) : showsRoyalPicker && p.court.length === 0 ? (
                       <Text style={styles.courtHint}>  No royals in court — cannot target</Text>
                     ) : null}
-                </View>
-              ))}
+                  </View>
+                );
+              })}
             </ScrollView>
           ) : null}
         </View>

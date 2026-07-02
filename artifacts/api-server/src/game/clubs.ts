@@ -100,9 +100,6 @@ export function applyClub(
   if (card.suit !== "C" || card.isRoyal) {
     return err(`Card ${cardId} is not a non-Royal Club`);
   }
-  if (targetPlayerId === playerId) {
-    return err("Cannot use Club on yourself");
-  }
 
   const targetPlayer = state.players[targetPlayerId];
   if (!targetPlayer) return err(`Player ${targetPlayerId} not found`);
@@ -112,9 +109,10 @@ export function applyClub(
   const afterSpend = spendVault(withoutCard, card.vaultCost);
 
   if (!targetCardId) {
+    const baseTarget = targetPlayerId === playerId ? afterSpend : targetPlayer;
     const damagedTarget: PlayerState = {
-      ...targetPlayer,
-      life: Math.max(0, targetPlayer.life - card.pipValue),
+      ...baseTarget,
+      life: Math.max(0, baseTarget.life - card.pipValue),
     };
     return ok({
       ...state,
@@ -147,7 +145,7 @@ export function applyClub(
     // If this respond_to_club window originated from a duel, the counter-Club
     // debuff lands during the duel — mark that pair as resolved immediately
     // (without triggering combat; confirmClubResponse handles final resolution).
-    if (isDuelPhase(state.pendingClubDebuff?.returnPhase)) {
+    if (state.pendingClubDebuff?.returnPhase && isDuelPhase(state.pendingClubDebuff.returnPhase)) {
       const ctx = withPending.duelContext;
       if (ctx) {
         const pairId = findPairAttackerIdForRoyal(withPending.attacks, targetCardId);

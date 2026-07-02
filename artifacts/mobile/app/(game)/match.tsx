@@ -389,6 +389,7 @@ export default function MatchScreen() {
             type: "attach_heart",
             heartCardId: params.cardId,
             targetRoyalId: params.targetRoyalId!,
+            targetPlayerId: params.targetPlayerId,
           };
           break;
         case "attach_spade":
@@ -396,12 +397,14 @@ export default function MatchScreen() {
             type: "attach_spade",
             spadeCardId: params.cardId,
             targetRoyalId: params.targetRoyalId!,
+            targetPlayerId: params.targetPlayerId,
           };
           break;
         case "discard_heart_to_heal":
           body = {
             type: "discard_heart_to_heal",
             heartCardId: params.cardId,
+            targetPlayerId: params.targetPlayerId,
           };
           break;
         case "discard_spade_to_return":
@@ -436,6 +439,13 @@ export default function MatchScreen() {
             type: "apply_club",
             clubCardId: params.cardId,
             targetPlayerId: params.targetPlayerId!,
+          };
+          break;
+        case "discard_diamond_for_boost":
+          body = {
+            type: "discard_diamond_for_boost",
+            cardId: params.cardId,
+            targetPlayerId: params.targetPlayerId,
           };
           break;
         default:
@@ -654,6 +664,12 @@ export default function MatchScreen() {
 
     if (card.suit === "C") {
       handleAction({ cardId: selectedCardId, action: "apply_club", targetPlayerId, targetRoyalId: royalId });
+      setSelectedCardId(null);
+    } else if (card.suit === "H" && vault >= card.vaultCost) {
+      handleAction({ cardId: selectedCardId, action: "attach_heart", targetPlayerId, targetRoyalId: royalId });
+      setSelectedCardId(null);
+    } else if (card.suit === "S" && vault >= card.vaultCost) {
+      handleAction({ cardId: selectedCardId, action: "attach_spade", targetPlayerId, targetRoyalId: royalId });
       setSelectedCardId(null);
     } else if (card.isJoker && isMyTurn) {
       handleAction({ cardId: selectedCardId, action: "play_joker", mode: "destroy_royal", targetPlayerId, targetRoyalId: royalId });

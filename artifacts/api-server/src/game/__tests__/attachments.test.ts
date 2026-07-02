@@ -191,6 +191,36 @@ describe("discardHeartToHeal", () => {
     const result = discardHeartToHeal(state, P1, "5H");
     expect(result.ok).toBe(false);
   });
+
+  it("allows healing another player, spending the caster's vault and adding life to the target", () => {
+    const state = makeState({
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["7H"], life: 14, vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2, { life: 10 }),
+      },
+    });
+    const result = discardHeartToHeal(state, P1, "7H", P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.life).toBe(17);
+    expect(result.value.players[P1]!.life).toBe(14);
+    expect(result.value.players[P1]!.hand).not.toContain("7H");
+    expect(result.value.abyss).toContain("7H");
+    expect(result.value.players[P1]!.vault.spent).toBe(7);
+  });
+
+  it("rejects healing a nonexistent target player", () => {
+    const state = makeState({
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["7H"], vault: { tempBoost: 0, spent: 0 } }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = discardHeartToHeal(state, P1, "7H", "nonexistent");
+    expect(result.ok).toBe(false);
+  });
 });
 
 describe("discardSpadeToReturn", () => {
