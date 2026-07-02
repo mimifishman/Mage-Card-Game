@@ -42,6 +42,7 @@ export interface VaultState {
 
 export interface PlayerState {
   id: string;
+  displayName: string;
   life: number;
   isEliminated: boolean;
   hand: CardId[];

@@ -289,12 +289,12 @@ export default function CardActionSheet({
                       onPress={() => handlePlayerTarget(p.id)}
                       style={({ pressed }) => [styles.oppBtn, pressed && { opacity: 0.75 }]}
                     >
-                      <Text style={styles.oppName}>🎯 {p.id.slice(0, 8)}</Text>
+                      <Text style={styles.oppName}>🎯 {p.displayName || `Player ${p.id.slice(0, 6)}`}</Text>
                       <Text style={styles.oppLife}>♥ {p.life}</Text>
                     </Pressable>
                   ) : (
                     <View style={styles.oppBtn}>
-                      <Text style={styles.oppName}>🎯 {p.id.slice(0, 8)}</Text>
+                      <Text style={styles.oppName}>🎯 {p.displayName || `Player ${p.id.slice(0, 6)}`}</Text>
                       <Text style={styles.oppLife}>♥ {p.life}</Text>
                     </View>
                   )}

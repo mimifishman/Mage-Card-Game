@@ -97,6 +97,28 @@ export const LogoutMobileSessionResponse = zod.object({
 });
 
 /**
+ * Returns all matches (waiting or in_progress) where the authenticated user is a participant.
+ * @summary List the current user's open matches
+ */
+export const GetMyMatchesHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+export const GetMyMatchesResponse = zod.object({
+  matches: zod.array(
+    zod.object({
+      matchId: zod.string(),
+      inviteCode: zod.string(),
+      status: zod.enum(["waiting", "in_progress"]),
+      playerCount: zod.number(),
+    }),
+  ),
+});
+
+/**
  * @summary Create a new match
  */
 export const CreateMatchHeader = zod.object({
@@ -199,65 +221,6 @@ export const SubmitGameActionHeader = zod.object({
     .describe("Bearer session token for mobile clients."),
 });
 
-const pendingClubDebuffSchema = zod.object({
-  attackerPlayerId: zod.string(),
-  clubCardId: zod.string(),
-  targetPlayerId: zod.string(),
-  targetRoyalId: zod.string(),
-}).optional();
-
-const playerStateSchema = zod.record(
-  zod.string(),
-  zod.object({
-    id: zod.string(),
-    life: zod.number(),
-    isEliminated: zod.boolean(),
-    court: zod.array(
-      zod.object({
-        cardId: zod.string(),
-        hasAttackedThisTurn: zod.boolean(),
-        hasteLocked: zod.boolean(),
-        damageTaken: zod.number(),
-        buffAttack: zod.number(),
-        buffHealth: zod.number(),
-        attachedCards: zod.array(zod.string()),
-      }),
-    ),
-    handCount: zod.number(),
-    vault: zod.object({
-      available: zod.number(),
-      tempBoost: zod.number(),
-      spent: zod.number(),
-    }),
-  }),
-);
-
-const attacksSchema = zod.array(
-  zod.object({
-    attackerPlayerId: zod.string(),
-    attackerCardId: zod.string(),
-    targetPlayerId: zod.string(),
-    blockerCardId: zod.string().nullish(),
-    passed: zod
-      .boolean()
-      .optional()
-      .describe(
-        "True when the defending player chose to not block this attack",
-      ),
-  }),
-);
-
-const gamePhaseSchema = zod.enum([
-  "draw",
-  "main",
-  "declare_attacks",
-  "declare_blocks",
-  "resolve_combat",
-  "end_turn",
-  "discard",
-  "respond_to_club",
-]);
-
 export const SubmitGameActionBody = zod.object({
   type: zod.enum([
     "play_diamond_to_mine",
@@ -273,9 +236,9 @@ export const SubmitGameActionBody = zod.object({
     "apply_club",
     "play_joker",
     "declare_attack",
-    "begin_declare_blocks",
-    "declare_block",
-    "pass_block",
+    "confirm_declare_blocks",
+    "set_damage_order",
+    "duel_pass",
     "resolve_combat",
     "end_turn",
     "discard_to_end_turn",
@@ -288,6 +251,14 @@ export const SubmitGameActionBody = zod.object({
   clubCardId: zod.string().optional(),
   targetRoyalId: zod.string().optional(),
   targetPlayerId: zod.string().optional(),
+  royalCardIds: zod.array(zod.string()).optional(),
+  blocks: zod
+    .record(zod.string(), zod.unknown())
+    .optional()
+    .describe(
+      'Map of attacker cardId to either \"pass\" or an array of blocker cardIds',
+    ),
+  assignments: zod.record(zod.string(), zod.array(zod.string())).optional(),
   attackerRoyalId: zod.string().optional(),
   blockerRoyalId: zod.string().optional(),
   attackerCardId: zod.string().optional(),
@@ -300,11 +271,48 @@ export const SubmitGameActionResponse = zod.object({
   phase: zod.string(),
   state: zod.object({
     matchId: zod.string(),
-    phase: gamePhaseSchema,
+    phase: zod.enum([
+      "draw",
+      "main",
+      "declare_attacks",
+      "declare_blocks",
+      "assign_damage_order",
+      "duel_attacker_turn",
+      "duel_blocker_turn",
+      "resolve_combat",
+      "end_turn",
+      "discard",
+      "respond_to_club",
+    ]),
     turnNumber: zod.number(),
     activePlayerId: zod.string(),
     turnOrder: zod.array(zod.string()),
-    players: playerStateSchema,
+    players: zod.record(
+      zod.string(),
+      zod.object({
+        id: zod.string(),
+        displayName: zod.string(),
+        life: zod.number(),
+        isEliminated: zod.boolean(),
+        court: zod.array(
+          zod.object({
+            cardId: zod.string(),
+            hasAttackedThisTurn: zod.boolean(),
+            hasteLocked: zod.boolean(),
+            damageTaken: zod.number(),
+            buffAttack: zod.number(),
+            buffHealth: zod.number(),
+            attachedCards: zod.array(zod.string()),
+          }),
+        ),
+        handCount: zod.number(),
+        vault: zod.object({
+          available: zod.number(),
+          tempBoost: zod.number(),
+          spent: zod.number(),
+        }),
+      }),
+    ),
     myHand: zod.array(zod.string()),
     myDiamondPlayed: zod
       .boolean()
@@ -314,8 +322,98 @@ export const SubmitGameActionResponse = zod.object({
     deck: zod.number().describe("Number of cards remaining in the deck"),
     mine: zod.array(zod.string()),
     abyss: zod.array(zod.string()),
-    attacks: attacksSchema,
-    pendingClubDebuff: pendingClubDebuffSchema,
+    attacks: zod.array(
+      zod.object({
+        attackerPlayerId: zod.string(),
+        attackerCardId: zod.string(),
+        targetPlayerId: zod.string(),
+        blockerCardIds: zod.array(zod.string()).optional(),
+        blockerDamageOrder: zod.array(zod.string()).optional(),
+        passed: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when the defending player chose to not block this attack",
+          ),
+      }),
+    ),
+    hasAttackedThisTurn: zod.boolean(),
+    duelContext: zod
+      .object({
+        attackerPlayerId: zod.string(),
+        defenderPlayerId: zod.string(),
+        duelAttackerPassed: zod.boolean(),
+        duelBlockerPassed: zod.boolean(),
+        attackerDiamondUsed: zod.boolean(),
+        defenderDiamondUsed: zod.boolean(),
+        resolvedPairAttackerIds: zod.array(zod.string()).optional(),
+        autoPassedPlayerIds: zod.array(zod.string()).optional(),
+        preResolvedUnblockedAttackerIds: zod.array(zod.string()).optional(),
+        immediateHits: zod
+          .array(
+            zod.object({
+              attackerCardId: zod.string(),
+              blockerCardIds: zod.array(zod.string()),
+              attackerDestroyed: zod.boolean(),
+              blockerDestroyed: zod.boolean(),
+              directDamage: zod.number(),
+              targetPlayerId: zod.string(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
+    lastCombatSummary: zod
+      .object({
+        pairs: zod.array(
+          zod.object({
+            attackerCardId: zod.string(),
+            blockerCardIds: zod.array(zod.string()),
+            attackerDestroyed: zod.boolean(),
+            blockerDestroyed: zod.boolean(),
+            directDamage: zod.number(),
+            targetPlayerId: zod.string(),
+          }),
+        ),
+        autoPassedPlayerIds: zod.array(zod.string()).optional(),
+        immediateHits: zod
+          .array(
+            zod.object({
+              attackerCardId: zod.string(),
+              blockerCardIds: zod.array(zod.string()),
+              attackerDestroyed: zod.boolean(),
+              blockerDestroyed: zod.boolean(),
+              directDamage: zod.number(),
+              targetPlayerId: zod.string(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
+    pendingClubDebuff: zod
+      .object({
+        attackerPlayerId: zod.string(),
+        clubCardId: zod.string(),
+        targetPlayerId: zod.string(),
+        targetRoyalId: zod.string(),
+        defenderDiamondUsed: zod.boolean().optional(),
+        returnPhase: zod
+          .enum([
+            "draw",
+            "main",
+            "declare_attacks",
+            "declare_blocks",
+            "assign_damage_order",
+            "duel_attacker_turn",
+            "duel_blocker_turn",
+            "resolve_combat",
+            "end_turn",
+            "discard",
+            "respond_to_club",
+          ])
+          .optional(),
+      })
+      .optional(),
   }),
   winnerUserId: zod.string().nullish(),
 });
@@ -341,7 +439,7 @@ export const RematchMatchResponse = zod.object({
 });
 
 /**
- * @summary Abandon a match (ends for all players, no winner)
+ * @summary Abandon a match (ends a waiting or in-progress match for all players, no winner)
  */
 export const AbandonMatchParams = zod.object({
   matchId: zod.coerce.string(),
@@ -375,11 +473,48 @@ export const GetMatchStateHeader = zod.object({
 export const GetMatchStateResponse = zod.object({
   state: zod.object({
     matchId: zod.string(),
-    phase: gamePhaseSchema,
+    phase: zod.enum([
+      "draw",
+      "main",
+      "declare_attacks",
+      "declare_blocks",
+      "assign_damage_order",
+      "duel_attacker_turn",
+      "duel_blocker_turn",
+      "resolve_combat",
+      "end_turn",
+      "discard",
+      "respond_to_club",
+    ]),
     turnNumber: zod.number(),
     activePlayerId: zod.string(),
     turnOrder: zod.array(zod.string()),
-    players: playerStateSchema,
+    players: zod.record(
+      zod.string(),
+      zod.object({
+        id: zod.string(),
+        displayName: zod.string(),
+        life: zod.number(),
+        isEliminated: zod.boolean(),
+        court: zod.array(
+          zod.object({
+            cardId: zod.string(),
+            hasAttackedThisTurn: zod.boolean(),
+            hasteLocked: zod.boolean(),
+            damageTaken: zod.number(),
+            buffAttack: zod.number(),
+            buffHealth: zod.number(),
+            attachedCards: zod.array(zod.string()),
+          }),
+        ),
+        handCount: zod.number(),
+        vault: zod.object({
+          available: zod.number(),
+          tempBoost: zod.number(),
+          spent: zod.number(),
+        }),
+      }),
+    ),
     myHand: zod.array(zod.string()),
     myDiamondPlayed: zod
       .boolean()
@@ -389,7 +524,97 @@ export const GetMatchStateResponse = zod.object({
     deck: zod.number().describe("Number of cards remaining in the deck"),
     mine: zod.array(zod.string()),
     abyss: zod.array(zod.string()),
-    attacks: attacksSchema,
-    pendingClubDebuff: pendingClubDebuffSchema,
+    attacks: zod.array(
+      zod.object({
+        attackerPlayerId: zod.string(),
+        attackerCardId: zod.string(),
+        targetPlayerId: zod.string(),
+        blockerCardIds: zod.array(zod.string()).optional(),
+        blockerDamageOrder: zod.array(zod.string()).optional(),
+        passed: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when the defending player chose to not block this attack",
+          ),
+      }),
+    ),
+    hasAttackedThisTurn: zod.boolean(),
+    duelContext: zod
+      .object({
+        attackerPlayerId: zod.string(),
+        defenderPlayerId: zod.string(),
+        duelAttackerPassed: zod.boolean(),
+        duelBlockerPassed: zod.boolean(),
+        attackerDiamondUsed: zod.boolean(),
+        defenderDiamondUsed: zod.boolean(),
+        resolvedPairAttackerIds: zod.array(zod.string()).optional(),
+        autoPassedPlayerIds: zod.array(zod.string()).optional(),
+        preResolvedUnblockedAttackerIds: zod.array(zod.string()).optional(),
+        immediateHits: zod
+          .array(
+            zod.object({
+              attackerCardId: zod.string(),
+              blockerCardIds: zod.array(zod.string()),
+              attackerDestroyed: zod.boolean(),
+              blockerDestroyed: zod.boolean(),
+              directDamage: zod.number(),
+              targetPlayerId: zod.string(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
+    lastCombatSummary: zod
+      .object({
+        pairs: zod.array(
+          zod.object({
+            attackerCardId: zod.string(),
+            blockerCardIds: zod.array(zod.string()),
+            attackerDestroyed: zod.boolean(),
+            blockerDestroyed: zod.boolean(),
+            directDamage: zod.number(),
+            targetPlayerId: zod.string(),
+          }),
+        ),
+        autoPassedPlayerIds: zod.array(zod.string()).optional(),
+        immediateHits: zod
+          .array(
+            zod.object({
+              attackerCardId: zod.string(),
+              blockerCardIds: zod.array(zod.string()),
+              attackerDestroyed: zod.boolean(),
+              blockerDestroyed: zod.boolean(),
+              directDamage: zod.number(),
+              targetPlayerId: zod.string(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
+    pendingClubDebuff: zod
+      .object({
+        attackerPlayerId: zod.string(),
+        clubCardId: zod.string(),
+        targetPlayerId: zod.string(),
+        targetRoyalId: zod.string(),
+        defenderDiamondUsed: zod.boolean().optional(),
+        returnPhase: zod
+          .enum([
+            "draw",
+            "main",
+            "declare_attacks",
+            "declare_blocks",
+            "assign_damage_order",
+            "duel_attacker_turn",
+            "duel_blocker_turn",
+            "resolve_combat",
+            "end_turn",
+            "discard",
+            "respond_to_club",
+          ])
+          .optional(),
+      })
+      .optional(),
   }),
 });

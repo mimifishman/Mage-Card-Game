@@ -715,9 +715,11 @@ components:
             type: string
     PublicPlayerState:
       type: object
-      required: [id, life, isEliminated, court, handCount, vault]
+      required: [id, displayName, life, isEliminated, court, handCount, vault]
       properties:
         id:
+          type: string
+        displayName:
           type: string
         life:
           type: integer
@@ -749,21 +751,109 @@ components:
           type: string
         targetPlayerId:
           type: string
-        blockerCardId:
-          type: string
-          nullable: true
+        blockerCardIds:
+          type: array
+          items:
+            type: string
+        blockerDamageOrder:
+          type: array
+          items:
+            type: string
         passed:
           type: boolean
           description: True when the defending player chose to not block this attack
+    CombatPairOutcome:
+      type: object
+      required: [attackerCardId, blockerCardIds, attackerDestroyed, blockerDestroyed, directDamage, targetPlayerId]
+      properties:
+        attackerCardId:
+          type: string
+        blockerCardIds:
+          type: array
+          items:
+            type: string
+        attackerDestroyed:
+          type: boolean
+        blockerDestroyed:
+          type: boolean
+        directDamage:
+          type: integer
+        targetPlayerId:
+          type: string
+    CombatSummary:
+      type: object
+      required: [pairs]
+      properties:
+        pairs:
+          type: array
+          items:
+            $ref: "#/components/schemas/CombatPairOutcome"
+        autoPassedPlayerIds:
+          type: array
+          items:
+            type: string
+        immediateHits:
+          type: array
+          items:
+            $ref: "#/components/schemas/CombatPairOutcome"
+    DuelContext:
+      type: object
+      required: [attackerPlayerId, defenderPlayerId, duelAttackerPassed, duelBlockerPassed, attackerDiamondUsed, defenderDiamondUsed]
+      properties:
+        attackerPlayerId:
+          type: string
+        defenderPlayerId:
+          type: string
+        duelAttackerPassed:
+          type: boolean
+        duelBlockerPassed:
+          type: boolean
+        attackerDiamondUsed:
+          type: boolean
+        defenderDiamondUsed:
+          type: boolean
+        resolvedPairAttackerIds:
+          type: array
+          items:
+            type: string
+        autoPassedPlayerIds:
+          type: array
+          items:
+            type: string
+        preResolvedUnblockedAttackerIds:
+          type: array
+          items:
+            type: string
+        immediateHits:
+          type: array
+          items:
+            $ref: "#/components/schemas/CombatPairOutcome"
+    PendingClubDebuff:
+      type: object
+      required: [attackerPlayerId, clubCardId, targetPlayerId, targetRoyalId]
+      properties:
+        attackerPlayerId:
+          type: string
+        clubCardId:
+          type: string
+        targetPlayerId:
+          type: string
+        targetRoyalId:
+          type: string
+        defenderDiamondUsed:
+          type: boolean
+        returnPhase:
+          type: string
+          enum: [draw, main, declare_attacks, declare_blocks, assign_damage_order, duel_attacker_turn, duel_blocker_turn, resolve_combat, end_turn, discard, respond_to_club]
     PlayerGameView:
       type: object
-      required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, myDiamondPlayed, deck, mine, abyss, attacks]
+      required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, myDiamondPlayed, deck, mine, abyss, attacks, hasAttackedThisTurn]
       properties:
         matchId:
           type: string
         phase:
           type: string
-          enum: [draw, main, declare_attacks, declare_blocks, resolve_combat, end_turn, discard]
+          enum: [draw, main, declare_attacks, declare_blocks, assign_damage_order, duel_attacker_turn, duel_blocker_turn, resolve_combat, end_turn, discard, respond_to_club]
         turnNumber:
           type: integer
         activePlayerId:
@@ -798,6 +888,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AttackDeclaration"
+        hasAttackedThisTurn:
+          type: boolean
+        duelContext:
+          $ref: "#/components/schemas/DuelContext"
+        lastCombatSummary:
+          $ref: "#/components/schemas/CombatSummary"
+        pendingClubDebuff:
+          $ref: "#/components/schemas/PendingClubDebuff"
     MatchStateResponse:
       type: object
       required: [state]
@@ -824,12 +922,13 @@ components:
             - apply_club
             - play_joker
             - declare_attack
-            - begin_declare_blocks
-            - declare_block
-            - pass_block
+            - confirm_declare_blocks
+            - set_damage_order
+            - duel_pass
             - resolve_combat
             - end_turn
             - discard_to_end_turn
+            - confirm_club_response
         cardId:
           type: string
         supportCardId:
@@ -844,6 +943,20 @@ components:
           type: string
         targetPlayerId:
           type: string
+        royalCardIds:
+          type: array
+          items:
+            type: string
+        blocks:
+          type: object
+          additionalProperties: true
+          description: 'Map of attacker cardId to either "pass" or an array of blocker cardIds'
+        assignments:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
         attackerRoyalId:
           type: string
         blockerRoyalId:

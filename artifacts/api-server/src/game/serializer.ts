@@ -3,6 +3,7 @@ import { availableVault } from "./vault";
 
 export interface PublicPlayerState {
   id: string;
+  displayName: string;
   life: number;
   isEliminated: boolean;
   court: RoyalInCourt[];
@@ -36,6 +37,7 @@ export interface PlayerGameView {
 function serializePlayer(player: PlayerState, mine: CardId[]): PublicPlayerState {
   return {
     id: player.id,
+    displayName: player.displayName || `Player ${player.id.slice(0, 6)}`,
     life: player.life,
     isEliminated: player.isEliminated,
     court: player.court,

@@ -701,6 +701,7 @@ export type GetMyMatchesQueryError = ErrorType<ErrorEnvelope>;
 /**
  * @summary List the current user's open matches
  */
+
 export function useGetMyMatches<
   TData = Awaited<ReturnType<typeof getMyMatches>>,
   TError = ErrorType<ErrorEnvelope>,
@@ -1230,7 +1231,7 @@ export const useRematchMatch = <
 };
 
 /**
- * @summary Abandon a match (ends for all players, no winner)
+ * @summary Abandon a match (ends a waiting or in-progress match for all players, no winner)
  */
 export const getAbandonMatchUrl = (matchId: string) => {
   return `/api/matches/${matchId}/abandon`;
@@ -1291,7 +1292,7 @@ export type AbandonMatchMutationResult = NonNullable<
 export type AbandonMatchMutationError = ErrorType<ErrorEnvelope>;
 
 /**
- * @summary Abandon a match (ends for all players, no winner)
+ * @summary Abandon a match (ends a waiting or in-progress match for all players, no winner)
  */
 export const useAbandonMatch = <
   TError = ErrorType<ErrorEnvelope>,

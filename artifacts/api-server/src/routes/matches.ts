@@ -148,7 +148,11 @@ router.post("/:id/start", async (req: Request, res: Response) => {
     }
 
     const playerIds = await getMatchPlayerOrder(id);
-    const stateResult = createInitialGameState(id, playerIds);
+    const displayNames: Record<string, string> = {};
+    for (const p of data.players) {
+      displayNames[p.userId] = p.displayName;
+    }
+    const stateResult = createInitialGameState(id, playerIds, displayNames);
     if (!stateResult.ok) {
       res.status(400).json({ error: stateResult.error });
       return;

@@ -46,6 +46,25 @@ export interface ErrorEnvelope {
   error: string;
 }
 
+export type MyMatchItemStatus =
+  (typeof MyMatchItemStatus)[keyof typeof MyMatchItemStatus];
+
+export const MyMatchItemStatus = {
+  waiting: "waiting",
+  in_progress: "in_progress",
+} as const;
+
+export interface MyMatchItem {
+  matchId: string;
+  inviteCode: string;
+  status: MyMatchItemStatus;
+  playerCount: number;
+}
+
+export interface MyMatchesResponse {
+  matches: MyMatchItem[];
+}
+
 export type MatchSummaryStatus =
   (typeof MatchSummaryStatus)[keyof typeof MatchSummaryStatus];
 
@@ -128,6 +147,7 @@ export type PublicPlayerStateVault = {
 
 export interface PublicPlayerState {
   id: string;
+  displayName: string;
   life: number;
   isEliminated: boolean;
   court: RoyalInCourt[];
@@ -139,27 +159,10 @@ export interface AttackDeclaration {
   attackerPlayerId: string;
   attackerCardId: string;
   targetPlayerId: string;
-  blockerCardIds?: string[] | null;
+  blockerCardIds?: string[];
+  blockerDamageOrder?: string[];
   /** True when the defending player chose to not block this attack */
   passed?: boolean;
-}
-
-export interface PendingClubDebuff {
-  attackerPlayerId: string;
-  clubCardId: string;
-  targetPlayerId: string;
-  targetRoyalId: string;
-  defenderDiamondUsed?: boolean;
-}
-
-export interface DuelContext {
-  attackerPlayerId: string;
-  defenderPlayerId: string;
-  duelAttackerPassed: boolean;
-  duelBlockerPassed: boolean;
-  attackerDiamondUsed: boolean;
-  defenderDiamondUsed: boolean;
-  autoPassedPlayerIds?: string[];
 }
 
 export interface CombatPairOutcome {
@@ -174,6 +177,46 @@ export interface CombatPairOutcome {
 export interface CombatSummary {
   pairs: CombatPairOutcome[];
   autoPassedPlayerIds?: string[];
+  immediateHits?: CombatPairOutcome[];
+}
+
+export interface DuelContext {
+  attackerPlayerId: string;
+  defenderPlayerId: string;
+  duelAttackerPassed: boolean;
+  duelBlockerPassed: boolean;
+  attackerDiamondUsed: boolean;
+  defenderDiamondUsed: boolean;
+  resolvedPairAttackerIds?: string[];
+  autoPassedPlayerIds?: string[];
+  preResolvedUnblockedAttackerIds?: string[];
+  immediateHits?: CombatPairOutcome[];
+}
+
+export type PendingClubDebuffReturnPhase =
+  (typeof PendingClubDebuffReturnPhase)[keyof typeof PendingClubDebuffReturnPhase];
+
+export const PendingClubDebuffReturnPhase = {
+  draw: "draw",
+  main: "main",
+  declare_attacks: "declare_attacks",
+  declare_blocks: "declare_blocks",
+  assign_damage_order: "assign_damage_order",
+  duel_attacker_turn: "duel_attacker_turn",
+  duel_blocker_turn: "duel_blocker_turn",
+  resolve_combat: "resolve_combat",
+  end_turn: "end_turn",
+  discard: "discard",
+  respond_to_club: "respond_to_club",
+} as const;
+
+export interface PendingClubDebuff {
+  attackerPlayerId: string;
+  clubCardId: string;
+  targetPlayerId: string;
+  targetRoyalId: string;
+  defenderDiamondUsed?: boolean;
+  returnPhase?: PendingClubDebuffReturnPhase;
 }
 
 export type PlayerGameViewPhase =
@@ -210,7 +253,7 @@ export interface PlayerGameView {
   mine: string[];
   abyss: string[];
   attacks: AttackDeclaration[];
-  hasAttackedThisTurn?: boolean;
+  hasAttackedThisTurn: boolean;
   duelContext?: DuelContext;
   lastCombatSummary?: CombatSummary;
   pendingClubDebuff?: PendingClubDebuff;
@@ -240,10 +283,18 @@ export const GameActionRequestType = {
   confirm_declare_blocks: "confirm_declare_blocks",
   set_damage_order: "set_damage_order",
   duel_pass: "duel_pass",
+  resolve_combat: "resolve_combat",
   end_turn: "end_turn",
   discard_to_end_turn: "discard_to_end_turn",
   confirm_club_response: "confirm_club_response",
 } as const;
+
+/**
+ * Map of attacker cardId to either "pass" or an array of blocker cardIds
+ */
+export type GameActionRequestBlocks = { [key: string]: unknown };
+
+export type GameActionRequestAssignments = { [key: string]: string[] };
 
 export type GameActionRequestMode =
   (typeof GameActionRequestMode)[keyof typeof GameActionRequestMode];
@@ -260,16 +311,16 @@ export interface GameActionRequest {
   heartCardId?: string;
   spadeCardId?: string;
   clubCardId?: string;
-  diamondCardId?: string;
   targetRoyalId?: string;
   targetPlayerId?: string;
-  targetCardId?: string;
-  /** Map from attackerCardId to blocker card ID(s) or "pass" */
-  blocks?: Record<string, string | string[]>;
-  /** Ordered list of Royal card IDs to attack with */
   royalCardIds?: string[];
-  /** Map from attackerCardId to ordered blocker IDs for damage assignment */
-  assignments?: Record<string, string[]>;
+  /** Map of attacker cardId to either "pass" or an array of blocker cardIds */
+  blocks?: GameActionRequestBlocks;
+  assignments?: GameActionRequestAssignments;
+  attackerRoyalId?: string;
+  blockerRoyalId?: string;
+  attackerCardId?: string;
+  targetCardId?: string;
   mode?: GameActionRequestMode;
 }
 
@@ -306,22 +357,3 @@ export type RematchMatch200 = {
 export type AbandonMatch200 = {
   ok: true;
 };
-
-export type MyMatchItemStatus =
-  (typeof MyMatchItemStatus)[keyof typeof MyMatchItemStatus];
-
-export const MyMatchItemStatus = {
-  waiting: "waiting",
-  in_progress: "in_progress",
-} as const;
-
-export interface MyMatchItem {
-  matchId: string;
-  inviteCode: string;
-  status: MyMatchItemStatus;
-  playerCount: number;
-}
-
-export interface MyMatchesResponse {
-  matches: MyMatchItem[];
-}

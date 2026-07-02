@@ -9,6 +9,7 @@ export function makePlayer(
 ): PlayerState {
   return {
     id,
+    displayName: id,
     life: 20,
     isEliminated: false,
     hand: [],

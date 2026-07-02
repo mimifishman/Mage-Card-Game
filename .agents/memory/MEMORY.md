@@ -1,3 +1,5 @@
 - [Combat overhaul rules](combat-rules.md) — six mechanics rules implemented; key signatures changed in declareAttack, confirmDeclareBlocks, AttackDeclaration type.
 - [Clerk auth migration](clerk-auth.md) — Replit OIDC removed; API uses @clerk/express + populateUser middleware; mobile uses @clerk/clerk-expo with useOAuth.
 - [Clerk sign-in diagnostics](clerk-signin-diagnostics.md) — needs_client_trust=first-factor email code; published Expo bakes Clerk key at build time, so a dead baked instance = slow load + all logins fail (fix: re-publish, not rollback).
+- [openapi.yaml drift](openapi-spec-drift.md) — spec can silently drift from game/types.ts + actions.ts; codegen (orval) then regresses mobile types. Verify spec against real server types before trusting codegen output.
+- [Expo web + Playwright test harness](expo-playwright-harness.md) — runTest can render a blank page for this Expo web app even when the app works fine (confirmed via direct screenshot); don't assume a real regression from one failed e2e run alone.

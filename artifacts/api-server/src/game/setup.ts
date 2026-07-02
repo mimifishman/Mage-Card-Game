@@ -9,6 +9,7 @@ const DEFAULT_LIFE = 20;
 export function createInitialGameState(
   matchId: string,
   playerIds: string[],
+  displayNames: Record<string, string> = {},
 ): Result<GameState> {
   if (playerIds.length < 2 || playerIds.length > 4) {
     return err("Game requires 2-4 players");
@@ -20,6 +21,7 @@ export function createInitialGameState(
   for (const id of playerIds) {
     players[id] = {
       id,
+      displayName: displayNames[id] || id,
       life: DEFAULT_LIFE,
       isEliminated: false,
       hand: [],
