@@ -9,4 +9,5 @@ Auto pass when no actions are possible-Not doing now
 
 Diamond text +1 instead of + value
 Task 119 -Done
-Task #113: Allow any-player targeting for all suit actions
+
+Task #113: Allow any-player targeting for all suit actions-Done
