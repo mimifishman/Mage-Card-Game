@@ -11,7 +11,7 @@ import {
   loadEngineState,
   saveEngineState,
   finishMatch,
-  resetMatchForRematch,
+  createRematch,
   logAction,
   getOpenMatchesForUser,
 } from "../repositories/matchRepository";
@@ -360,11 +360,11 @@ router.post("/:id/rematch", async (req: Request, res: Response) => {
       return;
     }
 
-    await resetMatchForRematch(id);
+    const newMatchId = await createRematch(id);
 
-    broadcastToMatch(id, { type: "rematch", matchId: id });
+    broadcastToMatch(id, { type: "rematch", matchId: newMatchId });
 
-    res.json({ ok: true, matchId: id });
+    res.json({ ok: true, matchId: newMatchId });
   } catch (err) {
     req.log.error({ err }, "Failed to initiate rematch");
     res.status(500).json({ error: "Failed to initiate rematch" });

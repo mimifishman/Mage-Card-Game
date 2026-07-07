@@ -29,10 +29,10 @@ export default function GameOverScreen() {
 
   const { mutate: requestRematch, isPending: isRequestingRematch } = useRematchMatch({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (data) => {
         router.replace({
           pathname: "/(game)/waiting-room",
-          params: { matchId },
+          params: { matchId: data.matchId },
         });
       },
       onError: (err: unknown) => {
@@ -63,10 +63,10 @@ export default function GameOverScreen() {
         if (!mounted) return;
         try {
           const msg = JSON.parse(event.data as string) as { type: string; matchId?: string };
-          if (msg.type === "rematch" && msg.matchId === matchId) {
+          if (msg.type === "rematch" && msg.matchId) {
             router.replace({
               pathname: "/(game)/waiting-room",
-              params: { matchId },
+              params: { matchId: msg.matchId },
             });
           }
         } catch {

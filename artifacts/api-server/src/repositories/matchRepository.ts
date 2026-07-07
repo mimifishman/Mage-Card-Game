@@ -193,21 +193,33 @@ export async function finishMatch(matchId: string, winnerUserId: string | null):
     .where(eq(matchesTable.id, matchId));
 }
 
-export async function resetMatchForRematch(matchId: string): Promise<void> {
-  await db
-    .update(matchesTable)
-    .set({
-      status: "waiting",
-      startedAt: null,
-      finishedAt: null,
-      winnerUserId: null,
-      currentTurnPlayerId: null,
-      turnNumber: undefined,
-    })
-    .where(eq(matchesTable.id, matchId));
+export async function createRematch(matchId: string): Promise<string> {
+  const players = await db
+    .select({ userId: matchPlayersTable.userId, turnOrder: matchPlayersTable.turnOrder })
+    .from(matchPlayersTable)
+    .where(eq(matchPlayersTable.matchId, matchId))
+    .orderBy(matchPlayersTable.turnOrder);
 
-  await db.delete(gameStateTable).where(eq(gameStateTable.matchId, matchId));
-  await db.delete(gameActionsLogTable).where(eq(gameActionsLogTable.matchId, matchId));
+  if (players.length === 0) throw new Error("No players found for match");
+
+  const hostUserId = players[0]!.userId;
+  const inviteCode = generateInviteCode();
+
+  const [newMatch] = await db
+    .insert(matchesTable)
+    .values({ createdBy: hostUserId, inviteCode })
+    .returning();
+  if (!newMatch) throw new Error("Failed to create rematch");
+
+  await db.insert(matchPlayersTable).values(
+    players.map((p) => ({
+      matchId: newMatch.id,
+      userId: p.userId,
+      turnOrder: p.turnOrder,
+    })),
+  );
+
+  return newMatch.id;
 }
 
 export async function getActiveMatchForUser(userId: string): Promise<string | null> {
