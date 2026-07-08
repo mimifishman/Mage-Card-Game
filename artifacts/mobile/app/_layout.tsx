@@ -12,6 +12,7 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -26,8 +27,14 @@ SplashScreen.preventAutoHideAsync();
 // rejection that crashes the web preview with a red error overlay. This
 // is cosmetic (worst case: a brief system-font fallback), so we swallow
 // only this specific, known-benign rejection and let everything else
-// surface normally.
-if (typeof window !== "undefined") {
+// surface normally. Native (iOS/Android) doesn't use this loading path
+// and RN's `window` global has no `addEventListener`, so this must be
+// gated on Platform.OS === "web", not just `typeof window`.
+if (
+  Platform.OS === "web" &&
+  typeof window !== "undefined" &&
+  typeof window.addEventListener === "function"
+) {
   window.addEventListener("unhandledrejection", (event) => {
     const message =
       event.reason && typeof event.reason.message === "string"

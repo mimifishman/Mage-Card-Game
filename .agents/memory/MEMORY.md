@@ -4,3 +4,4 @@
 - [openapi.yaml drift](openapi-spec-drift.md) — spec can silently drift from game/types.ts + actions.ts; codegen (orval) then regresses mobile types. Verify spec against real server types before trusting codegen output.
 - [Expo web + Playwright test harness](expo-playwright-harness.md) — runTest can render a blank page for this Expo web app even when the app works fine (confirmed via direct screenshot); don't assume a real regression from one failed e2e run alone.
 - [Mage card targeting architecture](mage-card-targeting.md) — two independent UI paths (modal + direct board tap) apply targeted card actions; update both when changing targeting rules.
+- [RN `window` global pitfall](rn-window-global-pitfall.md) — `typeof window !== "undefined"` is true on native too; gate web-only browser API usage on `Platform.OS === "web"` as well.
