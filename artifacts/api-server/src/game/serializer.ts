@@ -32,6 +32,8 @@ export interface PlayerGameView {
   duelContext?: DuelContext;
   lastCombatSummary?: CombatSummary;
   pendingClubDebuff?: PendingClubDebuff;
+  pendingBlockDefenders?: string[];
+  duelQueue?: string[];
 }
 
 function serializePlayer(player: PlayerState, mine: CardId[]): PublicPlayerState {
@@ -76,6 +78,8 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
     duelContext: state.duelContext,
     lastCombatSummary: state.lastCombatSummary,
     pendingClubDebuff: state.pendingClubDebuff,
+    pendingBlockDefenders: state.pendingBlockDefenders,
+    duelQueue: state.duelQueue,
   };
 }
 

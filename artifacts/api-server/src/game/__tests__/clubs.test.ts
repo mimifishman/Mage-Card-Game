@@ -680,8 +680,8 @@ describe("per-pair duel resolution (Task: end duel pair when Royal is debuffed)"
     expect(result.value.duelContext!.resolvedPairAttackerIds).not.toContain("QS");
   });
 
-  it("rejects Club targeting a Royal in a pair whose duel has already ended", () => {
-    // KH/JD pair already resolved. Attacker tries to play another Club on JD.
+  it("allows Club targeting a Royal in a pair whose duel has already ended", () => {
+    // KH/JD pair already resolved. Attacker plays another Club on JD — any Royal is targetable.
     const state = makeState({
       phase: "duel_attacker_turn",
       mine: ["10D"],
@@ -711,13 +711,15 @@ describe("per-pair duel resolution (Task: end duel pair when Royal is debuffed)"
     });
 
     const result = applyClubToRoyal(state, P1, "3C", P2, "JD");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/pair whose duel has already ended/i);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("respond_to_club");
+    expect(result.value.pendingClubDebuff?.targetRoyalId).toBe("JD");
+    expect(result.value.pendingClubDebuff?.returnPhase).toBe("duel_attacker_turn");
   });
 
-  it("rejects attachHeart targeting a Royal in a resolved pair", () => {
-    // After KH/JD pair is resolved, defender cannot buff JD (their blocker) with a Heart.
+  it("allows attachHeart targeting a Royal in a resolved pair", () => {
+    // After KH/JD pair is resolved, defender can still buff JD (their blocker) with a Heart.
     const state = makeState({
       phase: "duel_blocker_turn",
       mine: ["10D"],
@@ -747,12 +749,14 @@ describe("per-pair duel resolution (Task: end duel pair when Royal is debuffed)"
     });
 
     const result = attachHeart(state, P2, "5H", "JD");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/pair whose duel has already ended/i);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const jd = result.value.players[P2]!.court.find((r) => r.cardId === "JD")!;
+    expect(jd.buffHealth).toBe(5);
+    expect(jd.attachedCards).toContain("5H");
   });
 
-  it("rejects attachSpade targeting a Royal in a resolved pair", () => {
+  it("allows attachSpade targeting a Royal in a resolved pair", () => {
     const state = makeState({
       phase: "duel_blocker_turn",
       mine: ["10D"],
@@ -782,9 +786,11 @@ describe("per-pair duel resolution (Task: end duel pair when Royal is debuffed)"
     });
 
     const result = attachSpade(state, P2, "4S", "JD");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/pair whose duel has already ended/i);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const jd = result.value.players[P2]!.court.find((r) => r.cardId === "JD")!;
+    expect(jd.buffAttack).toBe(4);
+    expect(jd.buffHealth).toBe(4);
   });
 
   it("Club debuff that destroys a Royal in a blocked pair also resolves that pair immediately", () => {
@@ -952,9 +958,9 @@ describe("per-pair duel resolution (Task: end duel pair when Royal is debuffed)"
     expect(jd?.buffHealth).toBe(17);
   });
 
-  it("rejects Club targeting a bench Royal (not in any blocked pair) during duel with blocked pairs", () => {
+  it("allows Club targeting a bench Royal (not in any blocked pair) during duel with blocked pairs", () => {
     // P1 has two Royals: KH is attacking with a blocker, QH is a bench Royal.
-    // P1 should NOT be able to Club P2's bench Royal QD during the duel.
+    // P1 CAN Club P2's bench Royal QD during the duel — any Royal is targetable.
     const state = makeState({
       phase: "duel_attacker_turn",
       mine: ["10D"],
@@ -983,11 +989,13 @@ describe("per-pair duel resolution (Task: end duel pair when Royal is debuffed)"
       },
     });
 
-    // QD is a bench Royal — not part of any blocked pair
+    // QD is a bench Royal — not part of any blocked pair, but still a valid target
     const result = applyClubToRoyal(state, P1, "3C", P2, "QD");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/active duel pair/i);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("respond_to_club");
+    expect(result.value.pendingClubDebuff?.targetRoyalId).toBe("QD");
+    expect(result.value.pendingClubDebuff?.returnPhase).toBe("duel_attacker_turn");
   });
 
   it("regression: debuffed Royal that survives the Club is NOT killed by subsequent combat damage", () => {

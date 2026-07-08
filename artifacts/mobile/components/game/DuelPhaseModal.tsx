@@ -24,6 +24,7 @@ interface DuelPhaseModalProps {
   displayNames: Record<string, string>;
   isSubmitting: boolean;
   autoPassMessage?: string | null;
+  remainingOpponentIds?: string[];
   onPass: () => void;
   onDismissAutoPass?: () => void;
 }
@@ -39,6 +40,7 @@ export default function DuelPhaseModal({
   displayNames,
   isSubmitting,
   autoPassMessage,
+  remainingOpponentIds = [],
   onPass,
   onDismissAutoPass,
 }: DuelPhaseModalProps) {
@@ -49,8 +51,24 @@ export default function DuelPhaseModal({
   const isAttacker = myId === duelContext.attackerPlayerId;
   const myDiamondUsed = isAttacker ? duelContext.attackerDiamondUsed : duelContext.defenderDiamondUsed;
 
-  const attackerName = displayNames[duelContext.attackerPlayerId] ?? duelContext.attackerPlayerId.slice(0, 8);
-  const defenderName = displayNames[duelContext.defenderPlayerId] ?? duelContext.defenderPlayerId.slice(0, 8);
+  const nameFor = (id: string) =>
+    id === myId ? "You" : (displayNames[id] ?? id.slice(0, 8));
+  const attackerName = nameFor(duelContext.attackerPlayerId);
+  const defenderName = nameFor(duelContext.defenderPlayerId);
+
+  const myDuelCardIds = isAttacker
+    ? attacks.map((a) => a.attackerCardId)
+    : myId === duelContext.defenderPlayerId
+      ? attacks.flatMap((a) => a.blockerCardIds ?? [])
+      : [];
+  const uniqueMyDuelCardIds = Array.from(new Set(myDuelCardIds));
+  const myDuelCardsLabel = uniqueMyDuelCardIds
+    .map((id) => {
+      const c = parseCardId(id);
+      return `${c.displayRank}${c.suitSymbol}`;
+    })
+    .join(", ");
+  const myDuelCardsPlural = uniqueMyDuelCardIds.length > 1;
 
   if (!visible) return null;
 
@@ -67,6 +85,36 @@ export default function DuelPhaseModal({
           )}
         </View>
 
+        {remainingOpponentIds.length > 0 && (
+          <View style={styles.queueRow}>
+            {[duelContext.defenderPlayerId, ...remainingOpponentIds].map((oppId, idx) => {
+              const isCurrent = idx === 0;
+              const name = oppId === myId
+                ? "You"
+                : (displayNames[oppId] ?? oppId.slice(0, 8));
+              return (
+                <View
+                  key={oppId}
+                  style={[styles.queueStep, isCurrent ? styles.queueStepCurrent : styles.queueStepPending]}
+                >
+                  <View style={[styles.queueStepNum, isCurrent && styles.queueStepNumCurrent]}>
+                    <Text style={[styles.queueStepNumText, isCurrent && styles.queueStepNumTextCurrent]}>
+                      {idx + 1}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[styles.queueStepText, isCurrent ? styles.queueStepTextCurrent : null]}
+                    numberOfLines={1}
+                  >
+                    {isCurrent ? `Fighting ${name}` : name}
+                  </Text>
+                  {isCurrent && <Ionicons name="flash" size={10} color="#C89B3C" />}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {autoPassMessage ? (
           <Animated.View entering={FadeIn.duration(200)} style={styles.autoPassBanner}>
             <Ionicons name="alert-circle" size={14} color="#C89B3C" />
@@ -75,7 +123,9 @@ export default function DuelPhaseModal({
         ) : isMyDuelTurn ? (
           <Animated.View entering={FadeIn.duration(300)} style={styles.myTurnBadge}>
             <Ionicons name="flash" size={12} color={Colors.bgDeep} />
-            <Text style={styles.myTurnText}>YOUR TURN — tap a card below or pass</Text>
+            <Text style={styles.myTurnText}>
+              YOUR TURN — {myDuelCardsLabel ? `your ${myDuelCardsLabel} ${myDuelCardsPlural ? "are" : "is"} dueling (marked ⚔ on the board). ` : ""}Play a card or pass
+            </Text>
           </Animated.View>
         ) : (
           <View style={styles.waitingBadge}>
@@ -244,6 +294,60 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
+  },
+  queueRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  queueStep: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    maxWidth: 170,
+  },
+  queueStepCurrent: {
+    backgroundColor: "rgba(200,155,60,0.14)",
+    borderColor: "#C89B3C",
+  },
+  queueStepPending: {
+    backgroundColor: Colors.bgSurface,
+    borderColor: Colors.border,
+    opacity: 0.75,
+  },
+  queueStepNum: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.bgDeep,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  queueStepNumCurrent: {
+    borderColor: "#C89B3C",
+  },
+  queueStepNumText: {
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textMuted,
+  },
+  queueStepNumTextCurrent: {
+    color: "#C89B3C",
+  },
+  queueStepText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textMuted,
+    flexShrink: 1,
+  },
+  queueStepTextCurrent: {
+    color: "#C89B3C",
   },
   pairsRow: {
     flexGrow: 0,

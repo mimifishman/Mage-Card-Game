@@ -4,12 +4,7 @@ import { err, ok } from "./types";
 import { spendVault } from "./vault";
 import { canPlayCard, isDuelPhase } from "./validation";
 import { checkAndApplyCancellation } from "./attachments";
-import {
-  findPairAttackerIdForRoyal,
-  isRoyalInActiveDuelPair,
-  isRoyalInResolvedDuelPair,
-  markDuelPairResolved,
-} from "./combat";
+import { findPairAttackerIdForRoyal, markDuelPairResolved } from "./combat";
 
 function destroyRoyalToAbyss(
   player: PlayerState,
@@ -148,7 +143,10 @@ export function applyClub(
     if (state.pendingClubDebuff?.returnPhase && isDuelPhase(state.pendingClubDebuff.returnPhase)) {
       const ctx = withPending.duelContext;
       if (ctx) {
-        const pairId = findPairAttackerIdForRoyal(withPending.attacks, targetCardId);
+        const currentDuelPairs = withPending.attacks.filter(
+          (a) => a.targetPlayerId === ctx.defenderPlayerId,
+        );
+        const pairId = findPairAttackerIdForRoyal(currentDuelPairs, targetCardId);
         if (pairId) {
           const resolved = ctx.resolvedPairAttackerIds ?? [];
           if (!resolved.includes(pairId)) {
@@ -178,15 +176,6 @@ export function applyClub(
   }
 
   const returnPhase = isDuelPhase(state.phase) ? state.phase : undefined;
-
-  if (isDuelPhase(state.phase) && state.attacks.some((a) => a.blockerCardIds?.length)) {
-    if (!isRoyalInActiveDuelPair(state, targetCardId)) {
-      if (isRoyalInResolvedDuelPair(state, targetCardId)) {
-        return err("Cannot target a Royal in a pair whose duel has already ended");
-      }
-      return err("Can only target a Royal that is part of an active duel pair");
-    }
-  }
 
   return ok({
     ...state,

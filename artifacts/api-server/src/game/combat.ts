@@ -1,6 +1,7 @@
 import { effectiveAttack, effectiveHealth, getCard } from "./cards";
 import type {
   AttackDeclaration,
+  AttackTargetGroup,
   CardId,
   CombatPairOutcome,
   CombatSummary,
@@ -39,8 +40,7 @@ function hasDuelPlayableCard(player: PlayerState, state: GameState): boolean {
 export function declareAttack(
   state: GameState,
   attackerPlayerId: string,
-  targetPlayerId: string,
-  royalCardIds: CardId[],
+  targets: AttackTargetGroup[],
 ): Result<GameState> {
   if (state.activePlayerId !== attackerPlayerId) {
     return err("It is not your turn");
@@ -48,40 +48,56 @@ export function declareAttack(
   if (state.phase !== "main") {
     return err(`Cannot declare attack during phase "${state.phase}". Must be in "main".`);
   }
-  if (attackerPlayerId === targetPlayerId) {
-    return err("Cannot attack yourself");
-  }
   if (state.hasAttackedThisTurn) {
     return err("You have already attacked this turn");
   }
-  if (royalCardIds.length === 0) {
+  if (targets.length === 0) {
+    return err("Must select at least one opponent to attack");
+  }
+
+  const targetPlayerIds = targets.map((t) => t.targetPlayerId);
+  if (new Set(targetPlayerIds).size !== targetPlayerIds.length) {
+    return err("Cannot assign more than one attack group to the same opponent");
+  }
+
+  const allRoyalIds = targets.flatMap((t) => t.royalCardIds);
+  if (allRoyalIds.length === 0) {
     return err("Must select at least one Royal to attack with");
   }
-  if (new Set(royalCardIds).size !== royalCardIds.length) {
-    return err("Duplicate Royal IDs in attack selection — each Royal can only attack once");
+  if (new Set(allRoyalIds).size !== allRoyalIds.length) {
+    return err("Duplicate Royal IDs in attack selection — each Royal can only attack once, and can't be assigned to more than one opponent");
   }
 
   const attacker = state.players[attackerPlayerId];
   if (!attacker) return err(`Player ${attackerPlayerId} not found`);
 
-  const target = state.players[targetPlayerId];
-  if (!target) return err(`Player ${targetPlayerId} not found`);
-  if (target.isEliminated) return err(`Player ${targetPlayerId} is eliminated`);
+  for (const target of targets) {
+    if (target.royalCardIds.length === 0) {
+      return err(`Must assign at least one Royal to attack ${target.targetPlayerId}`);
+    }
+    if (target.targetPlayerId === attackerPlayerId) {
+      return err("Cannot attack yourself");
+    }
 
-  for (const royalId of royalCardIds) {
-    const royal = attacker.court.find((r) => r.cardId === royalId);
-    if (!royal) {
-      return err(`Royal ${royalId} is not in your Court`);
-    }
-    if (royal.hasteLocked) {
-      return err(`Royal ${royalId} is haste-locked and cannot attack`);
-    }
-    if (royal.hasAttackedThisTurn) {
-      return err(`Royal ${royalId} has already attacked this turn`);
+    const targetPlayer = state.players[target.targetPlayerId];
+    if (!targetPlayer) return err(`Player ${target.targetPlayerId} not found`);
+    if (targetPlayer.isEliminated) return err(`Player ${target.targetPlayerId} is eliminated`);
+
+    for (const royalId of target.royalCardIds) {
+      const royal = attacker.court.find((r) => r.cardId === royalId);
+      if (!royal) {
+        return err(`Royal ${royalId} is not in your Court`);
+      }
+      if (royal.hasteLocked) {
+        return err(`Royal ${royalId} is haste-locked and cannot attack`);
+      }
+      if (royal.hasAttackedThisTurn) {
+        return err(`Royal ${royalId} has already attacked this turn`);
+      }
     }
   }
 
-  const selectedIds = new Set(royalCardIds);
+  const selectedIds = new Set(allRoyalIds);
   const updatedCourt = attacker.court.map((r) =>
     selectedIds.has(r.cardId)
       ? { ...r, hasAttackedThisTurn: true }
@@ -89,11 +105,13 @@ export function declareAttack(
   );
   const updatedAttacker: PlayerState = { ...attacker, court: updatedCourt };
 
-  const newAttacks: AttackDeclaration[] = royalCardIds.map((royalId) => ({
-    attackerPlayerId,
-    attackerCardId: royalId,
-    targetPlayerId,
-  }));
+  const newAttacks: AttackDeclaration[] = targets.flatMap((target) =>
+    target.royalCardIds.map((royalId) => ({
+      attackerPlayerId,
+      attackerCardId: royalId,
+      targetPlayerId: target.targetPlayerId,
+    })),
+  );
 
   return ok({
     ...state,
@@ -101,6 +119,7 @@ export function declareAttack(
     hasAttackedThisTurn: true,
     players: { ...state.players, [attackerPlayerId]: updatedAttacker },
     attacks: newAttacks,
+    pendingBlockDefenders: targetPlayerIds,
   });
 }
 
@@ -111,6 +130,13 @@ export function confirmDeclareBlocks(
 ): Result<GameState> {
   if (state.phase !== "declare_blocks") {
     return err(`Can only confirm blocks during "declare_blocks" phase`);
+  }
+
+  const pendingDefenders =
+    state.pendingBlockDefenders ?? Array.from(new Set(state.attacks.map((a) => a.targetPlayerId)));
+
+  if (!pendingDefenders.includes(defenderPlayerId)) {
+    return err("You have already submitted your blocks, or no attacks are targeting you");
   }
 
   const incomingAttacks = state.attacks.filter((a) => a.targetPlayerId === defenderPlayerId);
@@ -153,13 +179,120 @@ export function confirmDeclareBlocks(
     }
   }
 
-  const attackerPlayerId = incomingAttacks[0]!.attackerPlayerId;
+  const remainingPending = pendingDefenders.filter((id) => id !== defenderPlayerId);
 
-  const hasMultiBlocker = updatedAttacks.some(
-    (a) => a.blockerCardIds && a.blockerCardIds.length > 1,
-  );
+  const stateAfterThisDefender: GameState = {
+    ...state,
+    attacks: updatedAttacks,
+    pendingBlockDefenders: remainingPending,
+  };
+
+  if (remainingPending.length > 0) {
+    // Other targeted opponents still need to submit their blocks (or pass)
+    // independently before any fights can begin.
+    return ok(stateAfterThisDefender);
+  }
+
+  return beginCombatResolution(stateAfterThisDefender);
+}
+
+/**
+ * Called once every targeted opponent has submitted blocks (or passed).
+ * Resolves unblocked hits immediately across every target, then enters the
+ * duel for the first opponent with a blocked pair (queuing the rest, in the
+ * order the opponents were targeted, to be resolved one at a time).
+ */
+function beginCombatResolution(state: GameState): Result<GameState> {
+  const attackerPlayerId = state.attacks[0]?.attackerPlayerId;
+  if (!attackerPlayerId) {
+    return ok({ ...state, phase: "main", attacks: [], pendingBlockDefenders: undefined, lastCombatSummary: undefined });
+  }
+
+  const { players, immediateHits, preResolvedIds } = computeImmediateUnblockedHits(state);
+
+  const stateWithImmediateHits: GameState = {
+    ...state,
+    players,
+    pendingBlockDefenders: undefined,
+    lastCombatSummary: undefined,
+  };
+
+  const blockedDefenderIds: string[] = [];
+  for (const attack of state.attacks) {
+    if (attack.blockerCardIds?.length && !blockedDefenderIds.includes(attack.targetPlayerId)) {
+      blockedDefenderIds.push(attack.targetPlayerId);
+    }
+  }
+
+  if (blockedDefenderIds.length === 0) {
+    let players2 = { ...stateWithImmediateHits.players };
+    let abyss2 = [...stateWithImmediateHits.abyss];
+    for (const playerId of activePlayers(stateWithImmediateHits)) {
+      const result = removeDeadRoyals(players2[playerId]!, abyss2);
+      players2[playerId] = result.player;
+      abyss2 = result.abyss;
+    }
+
+    return ok({
+      ...stateWithImmediateHits,
+      phase: "main",
+      players: players2,
+      abyss: abyss2,
+      attacks: [],
+      duelContext: undefined,
+      duelQueue: undefined,
+      lastCombatSummary: {
+        pairs: buildCombatSummary(stateWithImmediateHits, stateWithImmediateHits.attacks),
+        autoPassedPlayerIds: undefined,
+        immediateHits: immediateHits.length ? immediateHits : undefined,
+      },
+    });
+  }
+
+  const [firstDefenderId, ...restQueue] = blockedDefenderIds;
+  const relevantAttacks = stateWithImmediateHits.attacks.filter((a) => a.targetPlayerId === firstDefenderId);
+  const hasMultiBlocker = relevantAttacks.some((a) => a.blockerCardIds && a.blockerCardIds.length > 1);
 
   const duelContext: DuelContext = {
+    attackerPlayerId,
+    defenderPlayerId: firstDefenderId!,
+    duelAttackerPassed: false,
+    duelBlockerPassed: false,
+    attackerDiamondUsed: false,
+    defenderDiamondUsed: false,
+    resolvedPairAttackerIds: [],
+    preResolvedUnblockedAttackerIds: preResolvedIds,
+    immediateHits,
+  };
+
+  const nextState: GameState = {
+    ...stateWithImmediateHits,
+    duelContext,
+    duelQueue: restQueue,
+    phase: hasMultiBlocker ? "assign_damage_order" : "duel_blocker_turn",
+  };
+
+  if (hasMultiBlocker) return ok(nextState);
+  return autoAdvanceDuelIfNeeded(nextState);
+}
+
+/**
+ * Advances the sequential duel queue to the next targeted opponent once the
+ * current opponent's fight has fully resolved. Carries over the global
+ * immediate-hit bookkeeping (computed once for the whole multi-target attack)
+ * so it keeps surfacing correctly in the final combined combat summary.
+ */
+function enterNextDuel(
+  state: GameState,
+  attackerPlayerId: string,
+  defenderPlayerId: string,
+  restQueue: string[],
+): Result<GameState> {
+  const prevCtx = state.duelContext!;
+  const relevantAttacks = state.attacks.filter((a) => a.targetPlayerId === defenderPlayerId);
+  const hasMultiBlocker = relevantAttacks.some((a) => a.blockerCardIds && a.blockerCardIds.length > 1);
+
+  const newDuelContext: DuelContext = {
     attackerPlayerId,
     defenderPlayerId,
     duelAttackerPassed: false,
@@ -167,38 +300,19 @@ export function confirmDeclareBlocks(
     attackerDiamondUsed: false,
     defenderDiamondUsed: false,
     resolvedPairAttackerIds: [],
+    preResolvedUnblockedAttackerIds: prevCtx.preResolvedUnblockedAttackerIds,
+    immediateHits: prevCtx.immediateHits,
   };
 
-  const baseStateForDuel: GameState = {
+  const nextState: GameState = {
     ...state,
-    attacks: updatedAttacks,
-    duelContext,
-    lastCombatSummary: undefined,
+    duelContext: newDuelContext,
+    duelQueue: restQueue,
+    phase: hasMultiBlocker ? "assign_damage_order" : "duel_blocker_turn",
   };
 
-  const stateWithImmediateHits = applyUnblockedDamageAtDuelStart(baseStateForDuel);
-
-  const hasAnyBlockedPair = updatedAttacks.some(
-    (a) => a.blockerCardIds && a.blockerCardIds.length > 0,
-  );
-
-  if (!hasAnyBlockedPair) {
-    return executeResolveCombat(stateWithImmediateHits);
-  }
-
-  if (hasMultiBlocker) {
-    return ok({
-      ...stateWithImmediateHits,
-      phase: "assign_damage_order",
-    });
-  }
-
-  const stateWithDuel: GameState = {
-    ...stateWithImmediateHits,
-    phase: "duel_blocker_turn",
-  };
-
-  return autoAdvanceDuelIfNeeded(stateWithDuel);
+  if (hasMultiBlocker) return ok(nextState);
+  return autoAdvanceDuelIfNeeded(nextState);
 }
 
 export function setDamageOrder(
@@ -218,7 +332,10 @@ export function setDamageOrder(
   }
 
   const multiBlockerAttacks = state.attacks.filter(
-    (a) => a.blockerCardIds && a.blockerCardIds.length > 1,
+    (a) =>
+      a.targetPlayerId === ctx.defenderPlayerId &&
+      a.blockerCardIds &&
+      a.blockerCardIds.length > 1,
   );
 
   for (const attack of multiBlockerAttacks) {
@@ -291,16 +408,18 @@ function removeDeadRoyals(
 }
 
 /**
- * Immediately applies direct damage for all unblocked attacks (passed: true)
- * when transitioning into the duel phase. Records the pre-resolved IDs and
- * hit outcomes so executeResolveCombat can skip them and the combat summary
- * can surface the immediate hits to the UI.
- *
- * Must be called after duelContext is set on the state.
+ * Computes direct damage for every unblocked attack (passed: true) across
+ * ALL targeted opponents at once — called once, right after every targeted
+ * opponent has submitted blocks, before entering the sequential duel queue.
+ * Returns the updated player life totals plus the hit outcomes and
+ * pre-resolved attacker IDs so executeResolveCombat can skip re-applying them.
  */
-function applyUnblockedDamageAtDuelStart(state: GameState): GameState {
+function computeImmediateUnblockedHits(state: GameState): {
+  players: Record<string, PlayerState>;
+  immediateHits: CombatPairOutcome[];
+  preResolvedIds: CardId[];
+} {
   const unblockedAttacks = state.attacks.filter((a) => a.passed && !a.blockerCardIds?.length);
-  if (unblockedAttacks.length === 0) return state;
 
   let players = { ...state.players };
   const immediateHits: CombatPairOutcome[] = [];
@@ -329,24 +448,15 @@ function applyUnblockedDamageAtDuelStart(state: GameState): GameState {
     preResolvedIds.push(attack.attackerCardId);
   }
 
-  const updatedDuelContext: DuelContext = {
-    ...state.duelContext!,
-    preResolvedUnblockedAttackerIds: preResolvedIds,
-    immediateHits,
-  };
-
-  return { ...state, players, duelContext: updatedDuelContext };
+  return { players, immediateHits, preResolvedIds };
 }
 
-function buildCombatSummary(stateBefore: GameState): CombatSummary {
-  const autoPassedPlayerIds = stateBefore.duelContext?.autoPassedPlayerIds?.length
-    ? stateBefore.duelContext.autoPassedPlayerIds
-    : undefined;
-  const immediateHits = stateBefore.duelContext?.immediateHits?.length
-    ? stateBefore.duelContext.immediateHits
-    : undefined;
-
-  const pairs: CombatPairOutcome[] = stateBefore.attacks.map((attack) => {
+/**
+ * Builds combat pair outcomes for the given scope of attacks (only the
+ * currently-fighting opponent's attacks when a duel is in progress).
+ */
+function buildCombatSummary(stateBefore: GameState, attacksScope: AttackDeclaration[]): CombatPairOutcome[] {
+  return attacksScope.map((attack) => {
     const attacker = stateBefore.players[attack.attackerPlayerId];
     const target = stateBefore.players[attack.targetPlayerId];
 
@@ -423,20 +533,26 @@ function buildCombatSummary(stateBefore: GameState): CombatSummary {
       targetPlayerId: attack.targetPlayerId,
     };
   });
+}
 
-  return { pairs, autoPassedPlayerIds, immediateHits };
+function currentDuelAttacks(state: GameState): AttackDeclaration[] {
+  const ctx = state.duelContext;
+  if (!ctx) return state.attacks;
+  return state.attacks.filter((a) => a.targetPlayerId === ctx.defenderPlayerId);
 }
 
 function executeResolveCombat(state: GameState): Result<GameState> {
-  const summary = buildCombatSummary(state);
+  const ctx = state.duelContext;
+  const scopeAttacks = currentDuelAttacks(state);
+  const pairs = buildCombatSummary(state, scopeAttacks);
 
   let players = { ...state.players };
   let abyss = [...state.abyss];
 
-  const resolvedPairs = state.duelContext?.resolvedPairAttackerIds ?? [];
-  const preResolvedUnblocked = state.duelContext?.preResolvedUnblockedAttackerIds ?? [];
+  const resolvedPairs = ctx?.resolvedPairAttackerIds ?? [];
+  const preResolvedUnblocked = ctx?.preResolvedUnblockedAttackerIds ?? [];
 
-  for (const attack of state.attacks) {
+  for (const attack of scopeAttacks) {
     if (resolvedPairs.includes(attack.attackerCardId)) continue;
     if (preResolvedUnblocked.includes(attack.attackerCardId)) continue;
 
@@ -498,6 +614,35 @@ function executeResolveCombat(state: GameState): Result<GameState> {
     abyss = result.abyss;
   }
 
+  const accumulatedPairs = [...(state.combatPairsAccumulator ?? []), ...pairs];
+  const accumulatedAutoPassed = Array.from(
+    new Set([...(state.combatAutoPassedAccum ?? []), ...(ctx?.autoPassedPlayerIds ?? [])]),
+  );
+
+  const queue = state.duelQueue ?? [];
+
+  if (queue.length > 0 && ctx) {
+    const [nextDefenderId, ...restQueue] = queue;
+    return enterNextDuel(
+      {
+        ...state,
+        players,
+        abyss,
+        combatPairsAccumulator: accumulatedPairs,
+        combatAutoPassedAccum: accumulatedAutoPassed,
+      },
+      ctx.attackerPlayerId,
+      nextDefenderId!,
+      restQueue,
+    );
+  }
+
+  const finalSummary: CombatSummary = {
+    pairs: accumulatedPairs,
+    autoPassedPlayerIds: accumulatedAutoPassed.length ? accumulatedAutoPassed : undefined,
+    immediateHits: ctx?.immediateHits?.length ? ctx.immediateHits : undefined,
+  };
+
   return ok({
     ...state,
     phase: "main",
@@ -505,7 +650,10 @@ function executeResolveCombat(state: GameState): Result<GameState> {
     abyss,
     attacks: [],
     duelContext: undefined,
-    lastCombatSummary: summary,
+    duelQueue: undefined,
+    combatPairsAccumulator: undefined,
+    combatAutoPassedAccum: undefined,
+    lastCombatSummary: finalSummary,
   });
 }
 
@@ -518,19 +666,21 @@ export function isRoyalInResolvedDuelPair(state: GameState, royalId: CardId): bo
   if (!ctx) return false;
   const resolved = ctx.resolvedPairAttackerIds ?? [];
   if (resolved.length === 0) return false;
-  const pairId = findPairAttackerIdForRoyal(state.attacks, royalId);
+  const pairId = findPairAttackerIdForRoyal(currentDuelAttacks(state), royalId);
   return pairId !== undefined && resolved.includes(pairId);
 }
 
 /**
  * Returns true if the given Royal is part of a blocked pair that is still
- * active (not yet resolved). Use this to gate duel card plays to active pairs.
+ * active (not yet resolved) IN THE CURRENTLY-FIGHTING opponent's duel. Use
+ * this to gate duel card plays to active pairs — queued (not-yet-active)
+ * opponents' pairs are intentionally excluded.
  */
 export function isRoyalInActiveDuelPair(state: GameState, royalId: CardId): boolean {
   const ctx = state.duelContext;
   if (!ctx) return false;
   const resolved = ctx.resolvedPairAttackerIds ?? [];
-  for (const attack of state.attacks) {
+  for (const attack of currentDuelAttacks(state)) {
     if (!attack.blockerCardIds?.length) continue;
     if (resolved.includes(attack.attackerCardId)) continue;
     if (attack.attackerCardId === royalId || attack.blockerCardIds.includes(royalId)) {
@@ -544,6 +694,8 @@ export function isRoyalInActiveDuelPair(state: GameState, royalId: CardId): bool
  * Returns the attackerCardId of the duel pair that contains the given Royal
  * (as either attacker or blocker). Only considers blocked pairs (duel pairs).
  * Returns undefined if the Royal is not part of any blocked pair.
+ * Callers should pass an already-scoped attacks list (e.g. currentDuelAttacks)
+ * when a duel is in progress, so queued opponents' pairs aren't matched.
  */
 export function findPairAttackerIdForRoyal(
   attacks: AttackDeclaration[],
@@ -559,14 +711,16 @@ export function findPairAttackerIdForRoyal(
 
 /**
  * Marks the duel pair containing `royalId` as resolved (a Club debuff landed).
- * If all blocked pairs are now resolved, executes combat resolution immediately.
+ * If all of the CURRENT opponent's blocked pairs are now resolved, executes
+ * combat resolution (which advances to the next opponent in the queue, if any).
  * If the Royal is not part of any blocked pair, or if already resolved, returns the state unchanged.
  */
 export function markDuelPairResolved(state: GameState, royalId: CardId): Result<GameState> {
   const ctx = state.duelContext;
   if (!ctx) return ok(state);
 
-  const pairAttackerId = findPairAttackerIdForRoyal(state.attacks, royalId);
+  const scopeAttacks = currentDuelAttacks(state);
+  const pairAttackerId = findPairAttackerIdForRoyal(scopeAttacks, royalId);
   const resolved = ctx.resolvedPairAttackerIds ?? [];
 
   const updatedResolved =
@@ -581,7 +735,7 @@ export function markDuelPairResolved(state: GameState, royalId: CardId): Result<
 
   const newState: GameState = { ...state, duelContext: updatedCtx };
 
-  const blockedPairs = state.attacks.filter((a) => a.blockerCardIds?.length);
+  const blockedPairs = scopeAttacks.filter((a) => a.blockerCardIds?.length);
   const allResolved =
     blockedPairs.length > 0 &&
     blockedPairs.every((a) => updatedResolved.includes(a.attackerCardId));
@@ -602,7 +756,8 @@ export function resolveCombat(state: GameState, callerPlayerId: string): Result<
     return err("Only the active player can resolve combat");
   }
 
-  const undecided = state.attacks.filter((a) => !a.blockerCardIds?.length && !a.passed);
+  const scopeAttacks = currentDuelAttacks(state);
+  const undecided = scopeAttacks.filter((a) => !a.blockerCardIds?.length && !a.passed);
   if (undecided.length > 0) {
     return err("All defenders must block or pass before combat can be resolved");
   }

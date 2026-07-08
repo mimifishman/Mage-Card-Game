@@ -30,6 +30,7 @@ interface CardActionSheetProps {
   isPending: boolean;
   hasTakenDiamondAction?: boolean;
   abyss: string[];
+  duelRoyalIdsByPlayer?: Record<string, Set<string>>;
   onClose: () => void;
   onAction: (params: ActionParams) => void;
 }
@@ -59,6 +60,7 @@ export default function CardActionSheet({
   isPending,
   hasTakenDiamondAction = false,
   abyss,
+  duelRoyalIdsByPlayer,
   onClose,
   onAction,
 }: CardActionSheetProps) {
@@ -301,11 +303,19 @@ export default function CardActionSheet({
                     )}
                     {showsRoyalPicker && p.court.length > 0 ? (
                       <View style={styles.oppCourt}>
-                        <Text style={styles.courtHint}>→ pick a Royal to target:</Text>
+                        <Text style={styles.courtHint}>
+                          {duelRoyalIdsByPlayer?.[p.id]?.size
+                            ? "→ pick a Royal to target (⚔ DUEL = in this fight):"
+                            : "→ pick a Royal to target:"}
+                        </Text>
                         <CourtZone
                           court={p.court}
                           size="sm"
                           onRoyalPress={(royalId) => handlePlayerTarget(p.id, royalId)}
+                          highlightedIds={duelRoyalIdsByPlayer?.[p.id]}
+                          highlightBadgeText={
+                            duelRoyalIdsByPlayer?.[p.id]?.size ? "⚔ DUEL" : undefined
+                          }
                         />
                       </View>
                     ) : showsRoyalPicker && p.court.length === 0 ? (

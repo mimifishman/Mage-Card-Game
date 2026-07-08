@@ -252,6 +252,17 @@ export const SubmitGameActionBody = zod.object({
   targetRoyalId: zod.string().optional(),
   targetPlayerId: zod.string().optional(),
   royalCardIds: zod.array(zod.string()).optional(),
+  targets: zod
+    .array(
+      zod.object({
+        targetPlayerId: zod.string(),
+        royalCardIds: zod.array(zod.string()),
+      }),
+    )
+    .optional()
+    .describe(
+      "For declare_attack: one or more target groups, each assigning a subset of the attacker's Royals to a single opponent. Multiple groups allow attacking different opponents in the same action.",
+    ),
   blocks: zod
     .record(zod.string(), zod.unknown())
     .optional()
@@ -414,6 +425,18 @@ export const SubmitGameActionResponse = zod.object({
           .optional(),
       })
       .optional(),
+    pendingBlockDefenders: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "Opponents targeted by the current attack who have not yet submitted their block declarations.",
+      ),
+    duelQueue: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "Remaining defender player IDs still waiting to fight their duel, in resolution order, after the current duel finishes.",
+      ),
   }),
   winnerUserId: zod.string().nullish(),
 });
@@ -616,5 +639,17 @@ export const GetMatchStateResponse = zod.object({
           .optional(),
       })
       .optional(),
+    pendingBlockDefenders: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "Opponents targeted by the current attack who have not yet submitted their block declarations.",
+      ),
+    duelQueue: zod
+      .array(zod.string())
+      .optional()
+      .describe(
+        "Remaining defender player IDs still waiting to fight their duel, in resolution order, after the current duel finishes.",
+      ),
   }),
 });

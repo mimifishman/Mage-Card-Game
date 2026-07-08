@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import type { PublicPlayerState } from "@workspace/api-client-react";
 import CourtZone from "./CourtZone";
 import Colors from "@/constants/colors";
+import { parseCardId } from "@/lib/gameUtils";
 
 interface OpponentPanelProps {
   player: PublicPlayerState;
@@ -11,6 +12,8 @@ interface OpponentPanelProps {
   isEliminated?: boolean;
   onRoyalPress?: (royalId: string) => void;
   selectedTargetId?: string | null;
+  attackingYouWith?: string[];
+  duelingIds?: Set<string>;
 }
 
 export default function OpponentPanel({
@@ -20,6 +23,8 @@ export default function OpponentPanel({
   isEliminated = false,
   onRoyalPress,
   selectedTargetId,
+  attackingYouWith,
+  duelingIds,
 }: OpponentPanelProps) {
   return (
     <View style={[
@@ -66,12 +71,30 @@ export default function OpponentPanel({
           </>
         )}
       </View>
+      {attackingYouWith && attackingYouWith.length > 0 && (
+        <View style={styles.attackingBadge}>
+          <Text style={styles.attackingBadgeTitle}>⚔ ATTACKING YOU</Text>
+          {attackingYouWith.map((cardId) => {
+            const card = parseCardId(cardId);
+            return (
+              <Text key={cardId} style={styles.attackingBadgeCard}>
+                <Text style={{ color: card.suitColor === "#0D0D0D" ? Colors.textPrimary : card.suitColor }}>
+                  {card.displayRank}{card.suitSymbol}
+                </Text>
+                {" "}({card.pipValue} dmg)
+              </Text>
+            );
+          })}
+        </View>
+      )}
       <View style={[styles.court, isEliminated && styles.courtEliminated]}>
         <CourtZone
           court={player.court}
           size="md"
           onRoyalPress={isEliminated ? undefined : onRoyalPress}
           selectedTargetId={selectedTargetId}
+          highlightedIds={duelingIds}
+          highlightBadgeText={duelingIds && duelingIds.size > 0 ? "⚔ DUEL" : undefined}
         />
         {isEliminated && player.court.length === 0 && (
           <Text style={styles.emptyEliminated}>No court</Text>
@@ -189,6 +212,27 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.textMuted,
     letterSpacing: 1.2,
+  },
+  attackingBadge: {
+    backgroundColor: "rgba(200,16,46,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(200,16,46,0.5)",
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    gap: 2,
+    alignSelf: "center",
+  },
+  attackingBadgeTitle: {
+    fontSize: 8,
+    fontFamily: "Inter_700Bold",
+    color: Colors.accentRed,
+    letterSpacing: 0.8,
+  },
+  attackingBadgeCard: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textSecondary,
   },
   emptyEliminated: {
     fontSize: 10,

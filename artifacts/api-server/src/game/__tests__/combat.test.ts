@@ -26,7 +26,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2, { court: [mkRoyal("JD")] }),
       },
     });
-    const result = declareAttack(state, P1, P2, ["KH", "QS"]);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P2, royalCardIds: ["KH", "QS"] }]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.attacks).toHaveLength(2);
@@ -45,7 +45,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2, ["KH"]);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P2, royalCardIds: ["KH"] }]);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.attacks).toHaveLength(1);
@@ -62,7 +62,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2, ["KH", "QS"]);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P2, royalCardIds: ["KH", "QS"] }]);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/haste-locked/i);
@@ -76,7 +76,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2, []);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P2, royalCardIds: [] }]);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/at least one/i);
@@ -90,7 +90,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2, ["KH"]);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P2, royalCardIds: ["KH"] }]);
     expect(result.ok).toBe(false);
   });
 
@@ -101,7 +101,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P1, ["KH"]);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P1, royalCardIds: ["KH"] }]);
     expect(result.ok).toBe(false);
   });
 
@@ -113,7 +113,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2, ["KH"]);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P2, royalCardIds: ["KH"] }]);
     expect(result.ok).toBe(false);
   });
 
@@ -125,7 +125,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2, ["KH"]);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P2, royalCardIds: ["KH"] }]);
     expect(result.ok).toBe(false);
   });
 
@@ -137,7 +137,7 @@ describe("declareAttack (multi-Royal, Rule 1)", () => {
         [P2]: makePlayer(P2),
       },
     });
-    const result = declareAttack(state, P1, P2, ["KH", "KH"]);
+    const result = declareAttack(state, P1, [{ targetPlayerId: P2, royalCardIds: ["KH", "KH"] }]);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/duplicate/i);
@@ -520,7 +520,7 @@ describe("full duel flow: attack → blocks → duel → resolve", () => {
       },
     });
 
-    const afterAttack = declareAttack(initial, P1, P2, ["KH", "QS"]);
+    const afterAttack = declareAttack(initial, P1, [{ targetPlayerId: P2, royalCardIds: ["KH", "QS"] }]);
     expect(afterAttack.ok).toBe(true);
     if (!afterAttack.ok) return;
     expect(afterAttack.value.phase).toBe("declare_blocks");
@@ -1019,6 +1019,264 @@ describe("unblocked damage at duel start (mixed blocked/unblocked)", () => {
   });
 });
 
+const P3 = "player-3";
+
+describe("declareAttack — multi-opponent targeting", () => {
+  function threePlayerState(overrides: Partial<ReturnType<typeof makeState>> = {}) {
+    return makeState({
+      turnOrder: [P1, P2, P3],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("JD")] }),
+        [P3]: makePlayer(P3, { court: [mkRoyal("JS")] }),
+      },
+      ...overrides,
+    });
+  }
+
+  it("assigns different Royals to different opponents in a single action", () => {
+    const state = threePlayerState();
+    const result = declareAttack(state, P1, [
+      { targetPlayerId: P2, royalCardIds: ["KH"] },
+      { targetPlayerId: P3, royalCardIds: ["QS"] },
+    ]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.attacks).toHaveLength(2);
+    const kh = result.value.attacks.find((a) => a.attackerCardId === "KH");
+    const qs = result.value.attacks.find((a) => a.attackerCardId === "QS");
+    expect(kh?.targetPlayerId).toBe(P2);
+    expect(qs?.targetPlayerId).toBe(P3);
+    expect(result.value.phase).toBe("declare_blocks");
+    expect(result.value.pendingBlockDefenders).toEqual(expect.arrayContaining([P2, P3]));
+  });
+
+  it("rejects reusing the same Royal across two target groups", () => {
+    const state = threePlayerState();
+    const result = declareAttack(state, P1, [
+      { targetPlayerId: P2, royalCardIds: ["KH"] },
+      { targetPlayerId: P3, royalCardIds: ["KH"] },
+    ]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/duplicate/i);
+  });
+
+  it("rejects duplicate target groups for the same opponent", () => {
+    const state = threePlayerState();
+    const result = declareAttack(state, P1, [
+      { targetPlayerId: P2, royalCardIds: ["KH"] },
+      { targetPlayerId: P2, royalCardIds: ["QS"] },
+    ]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/same opponent/i);
+  });
+
+  it("rejects attacking an eliminated opponent", () => {
+    const state = threePlayerState({
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("JD")] }),
+        [P3]: makePlayer(P3, { court: [mkRoyal("JS")], isEliminated: true }),
+      },
+    });
+    const result = declareAttack(state, P1, [
+      { targetPlayerId: P2, royalCardIds: ["KH"] },
+      { targetPlayerId: P3, royalCardIds: ["QS"] },
+    ]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/eliminated/i);
+  });
+
+  it("rejects self-targeting within a multi-target attack", () => {
+    const state = threePlayerState();
+    const result = declareAttack(state, P1, [
+      { targetPlayerId: P2, royalCardIds: ["KH"] },
+      { targetPlayerId: P1, royalCardIds: ["QS"] },
+    ]);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/attack yourself/i);
+  });
+});
+
+describe("confirmDeclareBlocks — parallel multi-opponent blocking", () => {
+  function declaredMultiAttackState() {
+    const state = makeState({
+      turnOrder: [P1, P2, P3],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("JD")], life: 20 }),
+        [P3]: makePlayer(P3, { court: [mkRoyal("JS")], life: 20 }),
+      },
+    });
+    const declared = declareAttack(state, P1, [
+      { targetPlayerId: P2, royalCardIds: ["KH"] },
+      { targetPlayerId: P3, royalCardIds: ["QS"] },
+    ]);
+    if (!declared.ok) throw new Error("setup failed");
+    return declared.value;
+  }
+
+  it("does not begin combat resolution until every targeted opponent has submitted blocks", () => {
+    const state = declaredMultiAttackState();
+    const afterP2 = confirmDeclareBlocks(state, P2, { KH: "pass" });
+    expect(afterP2.ok).toBe(true);
+    if (!afterP2.ok) return;
+    // Still waiting on P3 — should still be in declare_blocks, no life changes yet
+    expect(afterP2.value.phase).toBe("declare_blocks");
+    expect(afterP2.value.pendingBlockDefenders).toEqual([P3]);
+    expect(afterP2.value.players[P2]!.life).toBe(20);
+  });
+
+  it("accepts opponents submitting blocks in any order and then resolves", () => {
+    const state = declaredMultiAttackState();
+    const afterP3 = confirmDeclareBlocks(state, P3, { QS: "pass" });
+    expect(afterP3.ok).toBe(true);
+    if (!afterP3.ok) return;
+    expect(afterP3.value.phase).toBe("declare_blocks");
+    expect(afterP3.value.pendingBlockDefenders).toEqual([P2]);
+
+    const afterP2 = confirmDeclareBlocks(afterP3.value, P2, { KH: "pass" });
+    expect(afterP2.ok).toBe(true);
+    if (!afterP2.ok) return;
+    // Both unblocked — combat resolves fully with immediate hits, no duel needed
+    expect(afterP2.value.phase).toBe("main");
+    expect(afterP2.value.players[P2]!.life).toBe(17); // KH direct damage
+    expect(afterP2.value.players[P3]!.life).toBe(18); // QS direct damage
+  });
+
+  it("rejects a defender submitting blocks who wasn't targeted", () => {
+    const state = declaredMultiAttackState();
+    const result = confirmDeclareBlocks(state, P1, { KH: "pass" });
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects a defender submitting blocks twice", () => {
+    const state = declaredMultiAttackState();
+    const afterP2 = confirmDeclareBlocks(state, P2, { KH: "pass" });
+    expect(afterP2.ok).toBe(true);
+    if (!afterP2.ok) return;
+    const secondSubmit = confirmDeclareBlocks(afterP2.value, P2, { KH: "pass" });
+    expect(secondSubmit.ok).toBe(false);
+  });
+});
+
+describe("sequential duel queue — multi-opponent combat resolution", () => {
+  function bothBlockedState() {
+    const state = makeState({
+      turnOrder: [P1, P2, P3],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["2D"], court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2, { hand: ["3D"], court: [mkRoyal("JD")], life: 20 }),
+        [P3]: makePlayer(P3, { hand: ["4D"], court: [mkRoyal("JS")], life: 20 }),
+      },
+    });
+    const declared = declareAttack(state, P1, [
+      { targetPlayerId: P2, royalCardIds: ["KH"] },
+      { targetPlayerId: P3, royalCardIds: ["QS"] },
+    ]);
+    if (!declared.ok) throw new Error("setup failed");
+    return declared.value;
+  }
+
+  it("enters a duel with the first targeted opponent (in declared order) when both block", () => {
+    const state = bothBlockedState();
+    const afterP2 = confirmDeclareBlocks(state, P2, { KH: ["JD"] });
+    expect(afterP2.ok).toBe(true);
+    if (!afterP2.ok) return;
+    const afterP3 = confirmDeclareBlocks(afterP2.value, P3, { QS: ["JS"] });
+    expect(afterP3.ok).toBe(true);
+    if (!afterP3.ok) return;
+
+    expect(afterP3.value.duelContext?.defenderPlayerId).toBe(P2);
+    expect(afterP3.value.duelQueue).toEqual([P3]);
+    expect(["duel_blocker_turn", "duel_attacker_turn"]).toContain(afterP3.value.phase);
+  });
+
+  it("advances the queue to the next opponent once the first opponent's fight resolves, and produces a combined summary", () => {
+    const state = bothBlockedState();
+    const afterP2 = confirmDeclareBlocks(state, P2, { KH: ["JD"] });
+    if (!afterP2.ok) throw new Error("setup failed");
+    const afterP3 = confirmDeclareBlocks(afterP2.value, P3, { QS: ["JS"] });
+    if (!afterP3.ok) throw new Error("setup failed");
+
+    // Resolve the first duel (P1 vs P2) via mutual pass — blocker (defender) acts first
+    const p2PassFirst = duelPass(afterP3.value, P2);
+    if (!p2PassFirst.ok) throw new Error(p2PassFirst.error);
+    const bothPassFirst = duelPass(p2PassFirst.value, P1);
+    expect(bothPassFirst.ok).toBe(true);
+    if (!bothPassFirst.ok) return;
+
+    // Should now have advanced into the duel against P3, not finalized yet
+    expect(bothPassFirst.value.phase).not.toBe("main");
+    expect(bothPassFirst.value.duelContext?.defenderPlayerId).toBe(P3);
+    expect(bothPassFirst.value.duelQueue).toEqual([]);
+
+    // Resolve the second duel (P1 vs P3) via mutual pass — blocker acts first
+    const p3PassSecond = duelPass(bothPassFirst.value, P3);
+    if (!p3PassSecond.ok) throw new Error(p3PassSecond.error);
+    const finalState = duelPass(p3PassSecond.value, P1);
+    expect(finalState.ok).toBe(true);
+    if (!finalState.ok) return;
+
+    expect(finalState.value.phase).toBe("main");
+    expect(finalState.value.duelContext).toBeUndefined();
+    expect(finalState.value.duelQueue).toBeUndefined();
+    // Combined summary should include pairs from BOTH fights
+    const pairs = finalState.value.lastCombatSummary?.pairs ?? [];
+    expect(pairs.some((p) => p.attackerCardId === "KH")).toBe(true);
+    expect(pairs.some((p) => p.attackerCardId === "QS")).toBe(true);
+  });
+
+  it("applies unblocked hits for one opponent while still fighting a blocked pair with another", () => {
+    const state = makeState({
+      turnOrder: [P1, P2, P3],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["2D"], court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2, { hand: ["3D"], court: [mkRoyal("JD")], life: 20 }),
+        [P3]: makePlayer(P3, { court: [], life: 20 }),
+      },
+    });
+    const declared = declareAttack(state, P1, [
+      { targetPlayerId: P2, royalCardIds: ["KH"] },
+      { targetPlayerId: P3, royalCardIds: ["QS"] },
+    ]);
+    if (!declared.ok) throw new Error("setup failed");
+
+    const afterP2 = confirmDeclareBlocks(declared.value, P2, { KH: ["JD"] });
+    if (!afterP2.ok) throw new Error("setup failed");
+    const afterP3 = confirmDeclareBlocks(afterP2.value, P3, { QS: "pass" });
+    expect(afterP3.ok).toBe(true);
+    if (!afterP3.ok) return;
+
+    // P3 takes immediate unblocked damage from QS right away, before the KH/JD duel resolves
+    expect(afterP3.value.players[P3]!.life).toBe(18);
+    expect(afterP3.value.duelContext?.defenderPlayerId).toBe(P2);
+    // Only P2 (blocked) enters the duel queue; P3 (fully unblocked) is skipped entirely
+    expect(afterP3.value.duelQueue).toEqual([]);
+  });
+
+  it("single-target attacks are unaffected: no duel queue is created", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2, blockerCardIds: ["JD"] }],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { court: [mkRoyal("JD")], life: 20 }),
+      },
+    });
+    const result = confirmDeclareBlocks(state, P2, { KH: ["JD"] });
+    // Blocks already assigned via `attacks` above; this call re-confirms with the same defender.
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Single-target combat still resolves without leaving a multi-opponent duel queue.
+    expect(result.value.duelQueue ?? []).toEqual([]);
+  });
+});
+
 describe("setDamageOrder (Rule 2 validation)", () => {
   function multiBlockerState() {
     // Give both players non-Royal cards AND sufficient vault so
@@ -1110,5 +1368,53 @@ describe("setDamageOrder (Rule 2 validation)", () => {
     });
     const result = setDamageOrder(state, P1, {});
     expect(result.ok).toBe(false);
+  });
+
+  it("only requires a damage order for the currently active defender's multi-blocker attack, not other queued opponents", () => {
+    // Multi-target attack: KH -> P2 (multi-blocked), QS -> P3 (multi-blocked, but
+    // P3 is queued behind P2 and not the current duel's defender yet).
+    const state = makeState({
+      phase: "assign_damage_order",
+      mine: ["5D"],
+      attacks: [
+        {
+          attackerPlayerId: P1,
+          attackerCardId: "KH",
+          targetPlayerId: P2,
+          blockerCardIds: ["JD", "QS_BLOCKER"],
+        },
+        {
+          attackerPlayerId: P1,
+          attackerCardId: "QS",
+          targetPlayerId: P3,
+          blockerCardIds: ["JD2", "QS2"],
+        },
+      ],
+      duelQueue: [P3],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: P2,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+      },
+      players: {
+        [P1]: makePlayer(P1, { hand: ["5H"], court: [mkRoyal("KH"), mkRoyal("QS")] }),
+        [P2]: makePlayer(P2, { hand: ["3H"], life: 20, court: [mkRoyal("JD"), mkRoyal("QS_BLOCKER")] }),
+        [P3]: makePlayer(P3, { hand: ["3H"], life: 20, court: [mkRoyal("JD2"), mkRoyal("QS2")] }),
+      },
+    });
+
+    // Only providing the order for P2's fight (the active duel) should succeed
+    // without needing to also supply an order for P3's still-queued fight.
+    const result = setDamageOrder(state, P1, { KH: ["JD", "QS_BLOCKER"] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("duel_blocker_turn");
+    const kh = result.value.attacks.find((a) => a.attackerCardId === "KH");
+    expect(kh?.blockerDamageOrder).toEqual(["JD", "QS_BLOCKER"]);
+    const qs = result.value.attacks.find((a) => a.attackerCardId === "QS");
+    expect(qs?.blockerDamageOrder).toBeUndefined();
   });
 });

@@ -73,10 +73,14 @@ export const PlayJokerActionSchema = z.object({
   targetPlayerId: z.string().optional(),
 });
 
-export const DeclareAttackActionSchema = z.object({
-  type: z.literal("declare_attack"),
+export const AttackTargetGroupSchema = z.object({
   targetPlayerId: z.string(),
   royalCardIds: z.array(z.string()).min(1),
+});
+
+export const DeclareAttackActionSchema = z.object({
+  type: z.literal("declare_attack"),
+  targets: z.array(AttackTargetGroupSchema).min(1),
 });
 
 export const ConfirmDeclareBlocksActionSchema = z.object({

@@ -113,6 +113,11 @@ export type TurnPhase =
   | "discard"
   | "respond_to_club";
 
+export interface AttackTargetGroup {
+  targetPlayerId: string;
+  royalCardIds: CardId[];
+}
+
 export interface GameState {
   matchId: string;
   phase: TurnPhase;
@@ -128,6 +133,14 @@ export interface GameState {
   duelContext?: DuelContext;
   lastCombatSummary?: CombatSummary;
   pendingClubDebuff?: PendingClubDebuff;
+  /** Targeted opponents who still need to submit (or pass on) blocks during "declare_blocks". Cleared once all have submitted. */
+  pendingBlockDefenders?: string[];
+  /** Ordered queue of remaining opponent IDs (with blocked pairs) still waiting to have their fight resolved, after the one currently in duelContext. */
+  duelQueue?: string[];
+  /** Accumulates resolved combat pairs across every opponent fought this combat, so the final lastCombatSummary covers all of them. */
+  combatPairsAccumulator?: CombatPairOutcome[];
+  /** Accumulates auto-passed player IDs across every opponent fought this combat. */
+  combatAutoPassedAccum?: string[];
 }
 
 export type Result<T, E extends string = string> =

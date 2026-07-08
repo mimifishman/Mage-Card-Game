@@ -118,7 +118,7 @@ export function dispatchAction(
     }
 
     case "declare_attack":
-      return declareAttack(state, playerId, action.targetPlayerId, action.royalCardIds);
+      return declareAttack(state, playerId, action.targets);
 
     case "confirm_declare_blocks":
       return confirmDeclareBlocks(state, playerId, action.blocks);

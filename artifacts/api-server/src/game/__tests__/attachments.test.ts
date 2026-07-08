@@ -780,7 +780,7 @@ function mkRoyalLocal(cardId: string, overrides: Partial<RoyalInCourt> = {}): Ro
   };
 }
 
-describe("duel attacker turn — unblocked Royal restriction", () => {
+describe("duel attacker turn — any Royal is targetable", () => {
   function makeDuelAttackerState() {
     return makeState({
       mine: ["10D"],
@@ -811,20 +811,23 @@ describe("duel attacker turn — unblocked Royal restriction", () => {
     });
   }
 
-  it("rejects attachHeart on an unblocked attacking Royal", () => {
+  it("allows attachHeart on an unblocked attacking Royal", () => {
     const state = makeDuelAttackerState();
     const result = attachHeart(state, P1, "6H", "KS");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/unblocked/i);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const royal = result.value.players[P1]!.court.find(r => r.cardId === "KS")!;
+    expect(royal.buffHealth).toBe(6);
+    expect(royal.attachedCards).toContain("6H");
   });
 
-  it("rejects attachSpade on an unblocked attacking Royal", () => {
+  it("allows attachSpade on an unblocked attacking Royal", () => {
     const state = makeDuelAttackerState();
     const result = attachSpade(state, P1, "5S", "KS");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/unblocked/i);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const royal = result.value.players[P1]!.court.find(r => r.cardId === "KS")!;
+    expect(royal.buffAttack).toBe(5);
   });
 
   it("allows attachHeart on a blocked attacking Royal", () => {

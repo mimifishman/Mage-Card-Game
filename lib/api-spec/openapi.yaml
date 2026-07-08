@@ -762,6 +762,16 @@ components:
         passed:
           type: boolean
           description: True when the defending player chose to not block this attack
+    AttackTargetGroup:
+      type: object
+      required: [targetPlayerId, royalCardIds]
+      properties:
+        targetPlayerId:
+          type: string
+        royalCardIds:
+          type: array
+          items:
+            type: string
     CombatPairOutcome:
       type: object
       required: [attackerCardId, blockerCardIds, attackerDestroyed, blockerDestroyed, directDamage, targetPlayerId]
@@ -896,6 +906,20 @@ components:
           $ref: "#/components/schemas/CombatSummary"
         pendingClubDebuff:
           $ref: "#/components/schemas/PendingClubDebuff"
+        pendingBlockDefenders:
+          type: array
+          description: >-
+            Opponents targeted by the current attack who have not yet
+            submitted their block declarations.
+          items:
+            type: string
+        duelQueue:
+          type: array
+          description: >-
+            Remaining defender player IDs still waiting to fight their duel,
+            in resolution order, after the current duel finishes.
+          items:
+            type: string
     MatchStateResponse:
       type: object
       required: [state]
@@ -947,6 +971,14 @@ components:
           type: array
           items:
             type: string
+        targets:
+          type: array
+          description: >-
+            For declare_attack: one or more target groups, each assigning a
+            subset of the attacker's Royals to a single opponent. Multiple
+            groups allow attacking different opponents in the same action.
+          items:
+            $ref: "#/components/schemas/AttackTargetGroup"
         blocks:
           type: object
           additionalProperties: true

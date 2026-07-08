@@ -165,6 +165,11 @@ export interface AttackDeclaration {
   passed?: boolean;
 }
 
+export interface AttackTargetGroup {
+  targetPlayerId: string;
+  royalCardIds: string[];
+}
+
 export interface CombatPairOutcome {
   attackerCardId: string;
   blockerCardIds: string[];
@@ -257,6 +262,10 @@ export interface PlayerGameView {
   duelContext?: DuelContext;
   lastCombatSummary?: CombatSummary;
   pendingClubDebuff?: PendingClubDebuff;
+  /** Opponents targeted by the current attack who have not yet submitted their block declarations. */
+  pendingBlockDefenders?: string[];
+  /** Remaining defender player IDs still waiting to fight their duel, in resolution order, after the current duel finishes. */
+  duelQueue?: string[];
 }
 
 export interface MatchStateResponse {
@@ -314,6 +323,8 @@ export interface GameActionRequest {
   targetRoyalId?: string;
   targetPlayerId?: string;
   royalCardIds?: string[];
+  /** For declare_attack: one or more target groups, each assigning a subset of the attacker's Royals to a single opponent. Multiple groups allow attacking different opponents in the same action. */
+  targets?: AttackTargetGroup[];
   /** Map of attacker cardId to either "pass" or an array of blocker cardIds */
   blocks?: GameActionRequestBlocks;
   assignments?: GameActionRequestAssignments;

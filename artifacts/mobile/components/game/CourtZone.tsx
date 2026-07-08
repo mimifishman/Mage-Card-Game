@@ -23,6 +23,7 @@ interface CourtZoneProps {
   isDefender?: boolean;
   highlightedIds?: Set<string>;
   dimmedIds?: Set<string>;
+  highlightBadgeText?: string;
 }
 
 const ATTACHED_SIZE: Record<"sm" | "md" | "lg" | "xl", "xs" | "sm" | "md" | "lg" | "xl"> = {
@@ -44,6 +45,7 @@ export default function CourtZone({
   isDefender = false,
   highlightedIds,
   dimmedIds,
+  highlightBadgeText,
 }: CourtZoneProps) {
   const statFontSize = size === "xl" ? 14 : size === "lg" ? 13 : 11;
 
@@ -85,6 +87,7 @@ export default function CourtZone({
                   isTapped && styles.royalTapped,
                   isDimmed && styles.royalDimmed,
                   isHighlighted && styles.royalHighlighted,
+                  isHighlighted && !!highlightBadgeText && styles.royalDuelGlow,
                   pressed && canInteract && { opacity: 0.75 },
                   isSelected && styles.royalSelected,
                 ]}
@@ -124,6 +127,12 @@ export default function CourtZone({
                         size={ATTACHED_SIZE[size]}
                       />
                     ))}
+                  </View>
+                )}
+
+                {isHighlighted && !!highlightBadgeText && (
+                  <View style={styles.duelBadge}>
+                    <Text style={styles.duelBadgeText}>{highlightBadgeText}</Text>
                   </View>
                 )}
 
@@ -200,6 +209,25 @@ const styles = StyleSheet.create({
   },
   royalHighlighted: {
     transform: [{ translateY: -4 }],
+  },
+  royalDuelGlow: {
+    borderWidth: 2,
+    borderColor: "#C89B3C",
+    borderRadius: 10,
+    backgroundColor: "rgba(200,155,60,0.12)",
+    padding: 3,
+  },
+  duelBadge: {
+    backgroundColor: "#C89B3C",
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  duelBadgeText: {
+    fontSize: 8,
+    color: Colors.bgDeep,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.8,
   },
   statRow: {
     flexDirection: "row",

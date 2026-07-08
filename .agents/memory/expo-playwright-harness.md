@@ -19,3 +19,12 @@ immediately treat it as a real bug — corroborate with a direct `screenshot`
 (app_preview) call to the same path first. If the screenshot renders fine, fall back to
 unit tests + typecheck + manual screenshot verification instead of blocking on e2e for
 this particular app.
+
+Also seen: `runTest` navigating to `/login` (or even the full explicit
+`https://$REPLIT_EXPO_DEV_DOMAIN/login` URL passed directly in the test plan) instead
+resolves to the project's `mockup-sandbox` design-preview server ("Component Preview
+Server" page suggesting `/__mockup`), not the actual Expo app — even though a direct
+`screenshot(app_preview)` or `curl` to the same domain/path returns the real app with a
+200. This is the same harness/proxy-navigation limitation, just manifesting as wrong-app
+routing instead of a blank page. Don't retry with slightly different URL phrasing; corroborate with
+`screenshot`/`curl` directly and fall back to unit tests + typecheck + manual screenshots.
