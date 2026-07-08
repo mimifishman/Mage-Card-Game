@@ -19,6 +19,26 @@ import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
 
+// expo-font's web implementation (fontfaceobserver) has a hardcoded 6s
+// timeout for detecting when a @font-face has finished loading. On slow
+// or proxied connections it can fire a rejected promise even after the
+// font already loaded successfully via useFonts, producing an unhandled
+// rejection that crashes the web preview with a red error overlay. This
+// is cosmetic (worst case: a brief system-font fallback), so we swallow
+// only this specific, known-benign rejection and let everything else
+// surface normally.
+if (typeof window !== "undefined") {
+  window.addEventListener("unhandledrejection", (event) => {
+    const message =
+      event.reason && typeof event.reason.message === "string"
+        ? event.reason.message
+        : "";
+    if (message.includes("timeout exceeded")) {
+      event.preventDefault();
+    }
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
