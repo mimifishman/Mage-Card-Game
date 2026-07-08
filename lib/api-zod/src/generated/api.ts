@@ -243,6 +243,7 @@ export const SubmitGameActionBody = zod.object({
     "end_turn",
     "discard_to_end_turn",
     "confirm_club_response",
+    "interrupt_pass",
   ]),
   cardId: zod.string().optional(),
   supportCardId: zod.string().optional(),
@@ -294,6 +295,7 @@ export const SubmitGameActionResponse = zod.object({
       "end_turn",
       "discard",
       "respond_to_club",
+      "interrupt_window",
     ]),
     turnNumber: zod.number(),
     activePlayerId: zod.string(),
@@ -437,6 +439,96 @@ export const SubmitGameActionResponse = zod.object({
       .describe(
         "Remaining defender player IDs still waiting to fight their duel, in resolution order, after the current duel finishes.",
       ),
+    interruptStack: zod
+      .object({
+        entries: zod
+          .array(
+            zod.object({
+              playerId: zod.string(),
+              action: zod.object({
+                type: zod.enum([
+                  "play_diamond_to_mine",
+                  "discard_diamond_to_draw",
+                  "discard_diamond_for_boost",
+                  "discard_to_abyss",
+                  "play_royal_to_court",
+                  "attach_royal_support",
+                  "attach_heart",
+                  "attach_spade",
+                  "discard_heart_to_heal",
+                  "discard_spade_to_return",
+                  "apply_club",
+                  "play_joker",
+                  "declare_attack",
+                  "confirm_declare_blocks",
+                  "set_damage_order",
+                  "duel_pass",
+                  "resolve_combat",
+                  "end_turn",
+                  "discard_to_end_turn",
+                  "confirm_club_response",
+                  "interrupt_pass",
+                ]),
+                cardId: zod.string().optional(),
+                supportCardId: zod.string().optional(),
+                heartCardId: zod.string().optional(),
+                spadeCardId: zod.string().optional(),
+                clubCardId: zod.string().optional(),
+                targetRoyalId: zod.string().optional(),
+                targetPlayerId: zod.string().optional(),
+                royalCardIds: zod.array(zod.string()).optional(),
+                targets: zod
+                  .array(
+                    zod.object({
+                      targetPlayerId: zod.string(),
+                      royalCardIds: zod.array(zod.string()),
+                    }),
+                  )
+                  .optional()
+                  .describe(
+                    "For declare_attack: one or more target groups, each assigning a subset of the attacker's Royals to a single opponent. Multiple groups allow attacking different opponents in the same action.",
+                  ),
+                blocks: zod
+                  .record(zod.string(), zod.unknown())
+                  .optional()
+                  .describe(
+                    'Map of attacker cardId to either \"pass\" or an array of blocker cardIds',
+                  ),
+                assignments: zod
+                  .record(zod.string(), zod.array(zod.string()))
+                  .optional(),
+                attackerRoyalId: zod.string().optional(),
+                blockerRoyalId: zod.string().optional(),
+                attackerCardId: zod.string().optional(),
+                targetCardId: zod.string().optional(),
+                mode: zod.enum(["destroy_royal", "damage_player"]).optional(),
+              }),
+            }),
+          )
+          .describe(
+            "LIFO stack of pending interrupts; the last element is the top (resolves first)",
+          ),
+        returnPhase: zod.enum([
+          "draw",
+          "main",
+          "declare_attacks",
+          "declare_blocks",
+          "assign_damage_order",
+          "duel_attacker_turn",
+          "duel_blocker_turn",
+          "resolve_combat",
+          "end_turn",
+          "discard",
+          "respond_to_club",
+        ]),
+        priorityPlayerId: zod
+          .string()
+          .describe(
+            "Player who currently has priority to add another interrupt or pass",
+          ),
+        passedPlayerIds: zod.array(zod.string()),
+      })
+      .optional(),
   }),
   winnerUserId: zod.string().nullish(),
 });
@@ -508,6 +600,7 @@ export const GetMatchStateResponse = zod.object({
       "end_turn",
       "discard",
       "respond_to_club",
+      "interrupt_window",
     ]),
     turnNumber: zod.number(),
     activePlayerId: zod.string(),
@@ -651,5 +744,95 @@ export const GetMatchStateResponse = zod.object({
       .describe(
         "Remaining defender player IDs still waiting to fight their duel, in resolution order, after the current duel finishes.",
       ),
+    interruptStack: zod
+      .object({
+        entries: zod
+          .array(
+            zod.object({
+              playerId: zod.string(),
+              action: zod.object({
+                type: zod.enum([
+                  "play_diamond_to_mine",
+                  "discard_diamond_to_draw",
+                  "discard_diamond_for_boost",
+                  "discard_to_abyss",
+                  "play_royal_to_court",
+                  "attach_royal_support",
+                  "attach_heart",
+                  "attach_spade",
+                  "discard_heart_to_heal",
+                  "discard_spade_to_return",
+                  "apply_club",
+                  "play_joker",
+                  "declare_attack",
+                  "confirm_declare_blocks",
+                  "set_damage_order",
+                  "duel_pass",
+                  "resolve_combat",
+                  "end_turn",
+                  "discard_to_end_turn",
+                  "confirm_club_response",
+                  "interrupt_pass",
+                ]),
+                cardId: zod.string().optional(),
+                supportCardId: zod.string().optional(),
+                heartCardId: zod.string().optional(),
+                spadeCardId: zod.string().optional(),
+                clubCardId: zod.string().optional(),
+                targetRoyalId: zod.string().optional(),
+                targetPlayerId: zod.string().optional(),
+                royalCardIds: zod.array(zod.string()).optional(),
+                targets: zod
+                  .array(
+                    zod.object({
+                      targetPlayerId: zod.string(),
+                      royalCardIds: zod.array(zod.string()),
+                    }),
+                  )
+                  .optional()
+                  .describe(
+                    "For declare_attack: one or more target groups, each assigning a subset of the attacker's Royals to a single opponent. Multiple groups allow attacking different opponents in the same action.",
+                  ),
+                blocks: zod
+                  .record(zod.string(), zod.unknown())
+                  .optional()
+                  .describe(
+                    'Map of attacker cardId to either \"pass\" or an array of blocker cardIds',
+                  ),
+                assignments: zod
+                  .record(zod.string(), zod.array(zod.string()))
+                  .optional(),
+                attackerRoyalId: zod.string().optional(),
+                blockerRoyalId: zod.string().optional(),
+                attackerCardId: zod.string().optional(),
+                targetCardId: zod.string().optional(),
+                mode: zod.enum(["destroy_royal", "damage_player"]).optional(),
+              }),
+            }),
+          )
+          .describe(
+            "LIFO stack of pending interrupts; the last element is the top (resolves first)",
+          ),
+        returnPhase: zod.enum([
+          "draw",
+          "main",
+          "declare_attacks",
+          "declare_blocks",
+          "assign_damage_order",
+          "duel_attacker_turn",
+          "duel_blocker_turn",
+          "resolve_combat",
+          "end_turn",
+          "discard",
+          "respond_to_club",
+        ]),
+        priorityPlayerId: zod
+          .string()
+          .describe(
+            "Player who currently has priority to add another interrupt or pass",
+          ),
+        passedPlayerIds: zod.array(zod.string()),
+      })
+      .optional(),
   }),
 });

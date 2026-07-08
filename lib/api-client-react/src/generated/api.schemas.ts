@@ -224,6 +224,101 @@ export interface PendingClubDebuff {
   returnPhase?: PendingClubDebuffReturnPhase;
 }
 
+export type GameActionRequestType =
+  (typeof GameActionRequestType)[keyof typeof GameActionRequestType];
+
+export const GameActionRequestType = {
+  play_diamond_to_mine: "play_diamond_to_mine",
+  discard_diamond_to_draw: "discard_diamond_to_draw",
+  discard_diamond_for_boost: "discard_diamond_for_boost",
+  discard_to_abyss: "discard_to_abyss",
+  play_royal_to_court: "play_royal_to_court",
+  attach_royal_support: "attach_royal_support",
+  attach_heart: "attach_heart",
+  attach_spade: "attach_spade",
+  discard_heart_to_heal: "discard_heart_to_heal",
+  discard_spade_to_return: "discard_spade_to_return",
+  apply_club: "apply_club",
+  play_joker: "play_joker",
+  declare_attack: "declare_attack",
+  confirm_declare_blocks: "confirm_declare_blocks",
+  set_damage_order: "set_damage_order",
+  duel_pass: "duel_pass",
+  resolve_combat: "resolve_combat",
+  end_turn: "end_turn",
+  discard_to_end_turn: "discard_to_end_turn",
+  confirm_club_response: "confirm_club_response",
+  interrupt_pass: "interrupt_pass",
+} as const;
+
+export type GameActionRequestMode =
+  (typeof GameActionRequestMode)[keyof typeof GameActionRequestMode];
+
+export const GameActionRequestMode = {
+  destroy_royal: "destroy_royal",
+  damage_player: "damage_player",
+} as const;
+
+/**
+ * Map of attacker cardId to either "pass" or an array of blocker cardIds
+ */
+export type GameActionRequestBlocks = { [key: string]: unknown };
+
+export type GameActionRequestAssignments = { [key: string]: string[] };
+
+export interface GameActionRequest {
+  type: GameActionRequestType;
+  cardId?: string;
+  supportCardId?: string;
+  heartCardId?: string;
+  spadeCardId?: string;
+  clubCardId?: string;
+  targetRoyalId?: string;
+  targetPlayerId?: string;
+  royalCardIds?: string[];
+  /** For declare_attack: one or more target groups, each assigning a subset of the attacker's Royals to a single opponent. Multiple groups allow attacking different opponents in the same action. */
+  targets?: AttackTargetGroup[];
+  /** Map of attacker cardId to either "pass" or an array of blocker cardIds */
+  blocks?: GameActionRequestBlocks;
+  assignments?: GameActionRequestAssignments;
+  attackerRoyalId?: string;
+  blockerRoyalId?: string;
+  attackerCardId?: string;
+  targetCardId?: string;
+  mode?: GameActionRequestMode;
+}
+
+export interface InterruptEntry {
+  playerId: string;
+  action: GameActionRequest;
+}
+
+export type InterruptStackReturnPhase =
+  (typeof InterruptStackReturnPhase)[keyof typeof InterruptStackReturnPhase];
+
+export const InterruptStackReturnPhase = {
+  draw: "draw",
+  main: "main",
+  declare_attacks: "declare_attacks",
+  declare_blocks: "declare_blocks",
+  assign_damage_order: "assign_damage_order",
+  duel_attacker_turn: "duel_attacker_turn",
+  duel_blocker_turn: "duel_blocker_turn",
+  resolve_combat: "resolve_combat",
+  end_turn: "end_turn",
+  discard: "discard",
+  respond_to_club: "respond_to_club",
+} as const;
+
+export interface InterruptStack {
+  /** LIFO stack of pending interrupts; the last element is the top (resolves first) */
+  entries: InterruptEntry[];
+  returnPhase: InterruptStackReturnPhase;
+  /** Player who currently has priority to add another interrupt or pass */
+  priorityPlayerId: string;
+  passedPlayerIds: string[];
+}
+
 export type PlayerGameViewPhase =
   (typeof PlayerGameViewPhase)[keyof typeof PlayerGameViewPhase];
 
@@ -239,6 +334,7 @@ export const PlayerGameViewPhase = {
   end_turn: "end_turn",
   discard: "discard",
   respond_to_club: "respond_to_club",
+  interrupt_window: "interrupt_window",
 } as const;
 
 export type PlayerGameViewPlayers = { [key: string]: PublicPlayerState };
@@ -266,73 +362,11 @@ export interface PlayerGameView {
   pendingBlockDefenders?: string[];
   /** Remaining defender player IDs still waiting to fight their duel, in resolution order, after the current duel finishes. */
   duelQueue?: string[];
+  interruptStack?: InterruptStack;
 }
 
 export interface MatchStateResponse {
   state: PlayerGameView;
-}
-
-export type GameActionRequestType =
-  (typeof GameActionRequestType)[keyof typeof GameActionRequestType];
-
-export const GameActionRequestType = {
-  play_diamond_to_mine: "play_diamond_to_mine",
-  discard_diamond_to_draw: "discard_diamond_to_draw",
-  discard_diamond_for_boost: "discard_diamond_for_boost",
-  discard_to_abyss: "discard_to_abyss",
-  play_royal_to_court: "play_royal_to_court",
-  attach_royal_support: "attach_royal_support",
-  attach_heart: "attach_heart",
-  attach_spade: "attach_spade",
-  discard_heart_to_heal: "discard_heart_to_heal",
-  discard_spade_to_return: "discard_spade_to_return",
-  apply_club: "apply_club",
-  play_joker: "play_joker",
-  declare_attack: "declare_attack",
-  confirm_declare_blocks: "confirm_declare_blocks",
-  set_damage_order: "set_damage_order",
-  duel_pass: "duel_pass",
-  resolve_combat: "resolve_combat",
-  end_turn: "end_turn",
-  discard_to_end_turn: "discard_to_end_turn",
-  confirm_club_response: "confirm_club_response",
-} as const;
-
-/**
- * Map of attacker cardId to either "pass" or an array of blocker cardIds
- */
-export type GameActionRequestBlocks = { [key: string]: unknown };
-
-export type GameActionRequestAssignments = { [key: string]: string[] };
-
-export type GameActionRequestMode =
-  (typeof GameActionRequestMode)[keyof typeof GameActionRequestMode];
-
-export const GameActionRequestMode = {
-  destroy_royal: "destroy_royal",
-  damage_player: "damage_player",
-} as const;
-
-export interface GameActionRequest {
-  type: GameActionRequestType;
-  cardId?: string;
-  supportCardId?: string;
-  heartCardId?: string;
-  spadeCardId?: string;
-  clubCardId?: string;
-  targetRoyalId?: string;
-  targetPlayerId?: string;
-  royalCardIds?: string[];
-  /** For declare_attack: one or more target groups, each assigning a subset of the attacker's Royals to a single opponent. Multiple groups allow attacking different opponents in the same action. */
-  targets?: AttackTargetGroup[];
-  /** Map of attacker cardId to either "pass" or an array of blocker cardIds */
-  blocks?: GameActionRequestBlocks;
-  assignments?: GameActionRequestAssignments;
-  attackerRoyalId?: string;
-  blockerRoyalId?: string;
-  attackerCardId?: string;
-  targetCardId?: string;
-  mode?: GameActionRequestMode;
 }
 
 export interface ActionResponse {

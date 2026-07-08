@@ -12,7 +12,7 @@ version = "1.0.0"
 [[services]]
 name = "expo"
 paths = [ "/mobile/" ]
-localPort = 18115
+localPort = 8080
 
 [services.development]
 run = "pnpm --filter @workspace/mobile run dev"
@@ -22,5 +22,5 @@ build = [ "pnpm", "--filter", "@workspace/mobile", "run", "build" ]
 run = [ "pnpm", "--filter", "@workspace/mobile", "run", "serve" ]
 
 [services.env]
-PORT = "18115"
+PORT = "8080"
 BASE_PATH = "/mobile/"

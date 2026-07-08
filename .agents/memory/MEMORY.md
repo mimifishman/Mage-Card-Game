@@ -1,7 +1,10 @@
 - [Combat overhaul rules](combat-rules.md) — six mechanics rules implemented; key signatures changed in declareAttack, confirmDeclareBlocks, AttackDeclaration type.
+- [Interrupt design](interrupt-design.md) — opponent-turn interrupts resolve IMMEDIATELY (no LIFO stack, no priority pass); interrupt_window phase never persists/reaches clients.
 - [Clerk auth migration](clerk-auth.md) — Replit OIDC removed; API uses @clerk/express + populateUser middleware; mobile uses @clerk/clerk-expo with useOAuth.
 - [Clerk sign-in diagnostics](clerk-signin-diagnostics.md) — needs_client_trust=first-factor email code; published Expo bakes Clerk key at build time, so a dead baked instance = slow load + all logins fail (fix: re-publish, not rollback).
 - [openapi.yaml drift](openapi-spec-drift.md) — spec can silently drift from game/types.ts + actions.ts; codegen (orval) then regresses mobile types. Verify spec against real server types before trusting codegen output.
 - [Expo web + Playwright test harness](expo-playwright-harness.md) — runTest can render a blank page for this Expo web app even when the app works fine (confirmed via direct screenshot); don't assume a real regression from one failed e2e run alone.
 - [Mage card targeting architecture](mage-card-targeting.md) — two independent UI paths (modal + direct board tap) apply targeted card actions; update both when changing targeting rules.
 - [RN `window` global pitfall](rn-window-global-pitfall.md) — `typeof window !== "undefined"` is true on native too; gate web-only browser API usage on `Platform.OS === "web"` as well.
+- [orval codegen rebuild](api-client-codegen-rebuild.md) — after codegen, run `tsc -b lib/api-client-react lib/api-zod` or consumers read stale dist/*.d.ts (phantom type errors).
+- [Interrupt stack resolution](interrupt-stack.md) — use effectiveDuelPhase() for duel rules in interrupt_window; validate at push (dry-run) and fizzle (not error) at resolve to avoid deadlock.

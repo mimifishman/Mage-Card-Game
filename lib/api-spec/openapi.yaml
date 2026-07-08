@@ -855,6 +855,33 @@ components:
         returnPhase:
           type: string
           enum: [draw, main, declare_attacks, declare_blocks, assign_damage_order, duel_attacker_turn, duel_blocker_turn, resolve_combat, end_turn, discard, respond_to_club]
+    InterruptEntry:
+      type: object
+      required: [playerId, action]
+      properties:
+        playerId:
+          type: string
+        action:
+          $ref: "#/components/schemas/GameActionRequest"
+    InterruptStack:
+      type: object
+      required: [entries, returnPhase, priorityPlayerId, passedPlayerIds]
+      properties:
+        entries:
+          type: array
+          description: LIFO stack of pending interrupts; the last element is the top (resolves first)
+          items:
+            $ref: "#/components/schemas/InterruptEntry"
+        returnPhase:
+          type: string
+          enum: [draw, main, declare_attacks, declare_blocks, assign_damage_order, duel_attacker_turn, duel_blocker_turn, resolve_combat, end_turn, discard, respond_to_club]
+        priorityPlayerId:
+          type: string
+          description: Player who currently has priority to add another interrupt or pass
+        passedPlayerIds:
+          type: array
+          items:
+            type: string
     PlayerGameView:
       type: object
       required: [matchId, phase, turnNumber, activePlayerId, turnOrder, players, myHand, myDiamondPlayed, deck, mine, abyss, attacks, hasAttackedThisTurn]
@@ -863,7 +890,7 @@ components:
           type: string
         phase:
           type: string
-          enum: [draw, main, declare_attacks, declare_blocks, assign_damage_order, duel_attacker_turn, duel_blocker_turn, resolve_combat, end_turn, discard, respond_to_club]
+          enum: [draw, main, declare_attacks, declare_blocks, assign_damage_order, duel_attacker_turn, duel_blocker_turn, resolve_combat, end_turn, discard, respond_to_club, interrupt_window]
         turnNumber:
           type: integer
         activePlayerId:
@@ -920,6 +947,8 @@ components:
             in resolution order, after the current duel finishes.
           items:
             type: string
+        interruptStack:
+          $ref: "#/components/schemas/InterruptStack"
     MatchStateResponse:
       type: object
       required: [state]
@@ -953,6 +982,7 @@ components:
             - end_turn
             - discard_to_end_turn
             - confirm_club_response
+            - interrupt_pass
         cardId:
           type: string
         supportCardId:

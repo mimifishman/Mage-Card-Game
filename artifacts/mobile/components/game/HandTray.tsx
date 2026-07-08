@@ -17,8 +17,19 @@ interface HandTrayProps {
   isDefender?: boolean;
   isClubResponder?: boolean;
   isMyDuelTurn?: boolean;
+  isMyInterruptTurn?: boolean;
+  canInitiateInterrupt?: boolean;
   phase: string;
   onCardPress: (cardId: string) => void;
+}
+
+function isCardEligibleAsInterrupt(cardId: string): boolean {
+  try {
+    const card = parseCardId(cardId);
+    return !card.isRoyal;
+  } catch {
+    return false;
+  }
 }
 
 function isCardPlayableDuringClubResponse(cardId: string): boolean {
@@ -37,6 +48,8 @@ export default function HandTray({
   isDefender = false,
   isClubResponder = false,
   isMyDuelTurn = false,
+  isMyInterruptTurn = false,
+  canInitiateInterrupt = false,
   phase,
   onCardPress,
 }: HandTrayProps) {
@@ -44,13 +57,17 @@ export default function HandTray({
     (isMyTurn && (phase === "main" || phase === "discard")) ||
     (isDefender && phase === "declare_blocks") ||
     (isClubResponder && phase === "respond_to_club") ||
-    isMyDuelTurn;
+    isMyDuelTurn ||
+    isMyInterruptTurn ||
+    canInitiateInterrupt;
 
   const hintText = () => {
     if (phase === "discard") return "Tap a card to discard";
     if (phase === "declare_blocks") return "Tap a card to play while blocking";
     if (phase === "respond_to_club") return "Hearts, Spades, Clubs, Diamonds only";
+    if (isMyInterruptTurn) return "Tap a card to interrupt";
     if (isMyDuelTurn) return "Tap a card to play during duel";
+    if (canInitiateInterrupt) return "Tap a card to interrupt (no Royals)";
     return "Tap a card to play";
   };
 
@@ -80,7 +97,9 @@ export default function HandTray({
               globalCanPlay &&
               (isClubResponder
                 ? isCardPlayableDuringClubResponse(cardId)
-                : true);
+                : (canInitiateInterrupt && !isMyTurn && !isMyDuelTurn && !isMyInterruptTurn)
+                  ? isCardEligibleAsInterrupt(cardId)
+                  : true);
             const isSelected = selectedCardId === cardId;
 
             return (

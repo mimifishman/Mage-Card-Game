@@ -111,7 +111,30 @@ export type TurnPhase =
   | "resolve_combat"
   | "end_turn"
   | "discard"
-  | "respond_to_club";
+  | "respond_to_club"
+  | "interrupt_window";
+
+/**
+ * A single card play that has been placed on the LIFO interrupt stack,
+ * waiting to resolve. `action` is a raw GameAction (imported as `unknown`
+ * here to avoid a circular import between types.ts and actions.ts; the
+ * interrupt engine in dispatcher.ts narrows it back to GameAction).
+ */
+export interface InterruptEntry {
+  playerId: string;
+  action: unknown;
+}
+
+export interface InterruptStackState {
+  /** LIFO stack of pending interrupts; the last element is the top (resolves first). */
+  entries: InterruptEntry[];
+  /** The phase to restore once the stack is fully drained. */
+  returnPhase: TurnPhase;
+  /** Player who currently has priority to add another interrupt or pass. */
+  priorityPlayerId: string;
+  /** Players who have passed priority in a row since the last push/resolve. */
+  passedPlayerIds: string[];
+}
 
 export interface AttackTargetGroup {
   targetPlayerId: string;
@@ -141,6 +164,7 @@ export interface GameState {
   combatPairsAccumulator?: CombatPairOutcome[];
   /** Accumulates auto-passed player IDs across every opponent fought this combat. */
   combatAutoPassedAccum?: string[];
+  interruptStack?: InterruptStackState;
 }
 
 export type Result<T, E extends string = string> =

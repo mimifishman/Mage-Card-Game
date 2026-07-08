@@ -1,4 +1,4 @@
-import type { AttackDeclaration, CardId, CombatSummary, DuelContext, GameState, PendingClubDebuff, PlayerState, RoyalInCourt } from "./types";
+import type { AttackDeclaration, CardId, CombatSummary, DuelContext, GameState, InterruptStackState, PendingClubDebuff, PlayerState, RoyalInCourt } from "./types";
 import { availableVault } from "./vault";
 
 export interface PublicPlayerState {
@@ -34,6 +34,7 @@ export interface PlayerGameView {
   pendingClubDebuff?: PendingClubDebuff;
   pendingBlockDefenders?: string[];
   duelQueue?: string[];
+  interruptStack?: InterruptStackState;
 }
 
 function serializePlayer(player: PlayerState, mine: CardId[]): PublicPlayerState {
@@ -80,6 +81,7 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
     pendingClubDebuff: state.pendingClubDebuff,
     pendingBlockDefenders: state.pendingBlockDefenders,
     duelQueue: state.duelQueue,
+    interruptStack: state.interruptStack,
   };
 }
 

@@ -15,7 +15,7 @@ import { err, ok } from "./types";
 import { availableVault } from "./vault";
 
 
-function activePlayers(state: GameState): string[] {
+export function activePlayers(state: GameState): string[] {
   return state.turnOrder.filter((id) => !state.players[id]?.isEliminated);
 }
 

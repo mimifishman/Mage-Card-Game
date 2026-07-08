@@ -47,7 +47,7 @@ import BlockingModal from "@/components/game/BlockingModal";
 import DuelPhaseModal from "@/components/game/DuelPhaseModal";
 import DamageOrderModal from "@/components/game/DamageOrderModal";
 import CardView from "@/components/game/CardView";
-import { parseCardId, isDuelTurnPhase, effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
+import { parseCardId, isDuelTurnPhase, isInterruptPhase, effectiveAttack, effectiveHealth, canPlayerInitiateInterrupt } from "@/lib/gameUtils";
 import type { CardAction } from "@/lib/gameUtils";
 
 export default function MatchScreen() {
@@ -355,12 +355,28 @@ export default function MatchScreen() {
       const actingAsDuelParticipant =
         inDuel && duelCtx &&
         (myId === duelCtx.attackerPlayerId || myId === duelCtx.defenderPlayerId);
+      const actingAsInterrupter =
+        phase === "interrupt_window" &&
+        gameState?.interruptStack?.priorityPlayerId === myId;
+      // A non-active bystander may open a fresh interrupt window during any
+      // other player's turn/phase. The server validates the specific action
+      // (and rejects ineligible ones), so we only need a coarse gate here.
+      const actingAsInterruptInitiator =
+        !!gameState &&
+        gameState.activePlayerId !== myId &&
+        phase !== "interrupt_window" &&
+        !actingAsDefender &&
+        !actingAsClubResponder &&
+        !actingAsDuelParticipant &&
+        !gameState.players?.[myId]?.isEliminated;
 
       if (
         gameState?.activePlayerId !== myId &&
         !actingAsDefender &&
         !actingAsClubResponder &&
-        !actingAsDuelParticipant
+        !actingAsDuelParticipant &&
+        !actingAsInterrupter &&
+        !actingAsInterruptInitiator
       ) {
         Alert.alert("Not your turn", "The turn has moved on. Please wait.");
         setSelectedCardId(null);
@@ -514,6 +530,11 @@ export default function MatchScreen() {
     submitAction({ matchId, data: { type: "duel_pass" } });
   }, [matchId, submitAction]);
 
+  const handleInterruptPass = useCallback(() => {
+    if (!matchId) return;
+    submitAction({ matchId, data: { type: "interrupt_pass" } });
+  }, [matchId, submitAction]);
+
   const handleDismissAutoPass = useCallback(() => {
     setAutoPassMessage(null);
     lastDuelCtxRef.current = null;
@@ -572,9 +593,9 @@ export default function MatchScreen() {
     (phase === "duel_attacker_turn" && myId === duelCtx.attackerPlayerId) ||
     (phase === "duel_blocker_turn" && myId === duelCtx.defenderPlayerId)
   );
-  const isInDuel = inDuel && duelCtx && (
-    myId === duelCtx.attackerPlayerId || myId === duelCtx.defenderPlayerId
-  );
+  const inInterrupt = isInterruptPhase(phase);
+  const interruptStack = gameState.interruptStack;
+  const isMyInterruptTurn = inInterrupt && interruptStack?.priorityPlayerId === myId;
 
   const pendingClub = gameState.pendingClubDebuff;
   const isClubResponder = inRespondToClub && pendingClub?.targetPlayerId === myId;
@@ -586,6 +607,24 @@ export default function MatchScreen() {
     : undefined;
 
   const vault = myState?.vault.available ?? 0;
+
+  // A non-active, non-eliminated player who is not the current action-window
+  // holder may open a fresh interrupt during any other player's turn/phase —
+  // including duels. During a duel the game's activePlayerId stays the original
+  // attacker, so `isMyTurn` alone would wrongly block that attacker from
+  // interrupting on the *defender's* duel turn; while a duel is in progress the
+  // only player barred from initiating is the current duel turn-holder. The
+  // server enforces which specific cards/actions are eligible.
+  const amIEliminated = myState?.isEliminated ?? false;
+  const canInitiateInterrupt = canPlayerInitiateInterrupt({
+    inDuel,
+    isMyTurn,
+    isMyDuelTurn: !!isMyDuelTurn,
+    isDefender,
+    isClubResponder,
+    inInterrupt,
+    amIEliminated,
+  });
 
   const inDiscardPhase = isMyTurn && phase === "discard";
   const discardCount = inDiscardPhase ? Math.max(0, (gameState.myHand ?? []).length - 7) : 0;
@@ -702,7 +741,7 @@ export default function MatchScreen() {
       handleToggleAttackRoyal(royalId);
       return;
     }
-    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks) || isClubResponder || !!isMyDuelTurn;
+    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks) || isClubResponder || !!isMyDuelTurn || !!isMyInterruptTurn;
     if (!canPlay) return;
 
     if (selectedCardId) {
@@ -723,7 +762,7 @@ export default function MatchScreen() {
   };
 
   const handleOpponentRoyalPress = (royalId: string, targetPlayerId: string) => {
-    if (!isMyTurn && !isDefender && !isClubResponder && !isMyDuelTurn) return;
+    if (!isMyTurn && !isDefender && !isClubResponder && !isMyDuelTurn && !isMyInterruptTurn) return;
     if (!selectedCardId) return;
     const card = parseCardId(selectedCardId);
 
@@ -829,6 +868,11 @@ export default function MatchScreen() {
             <View style={styles.duelTurnBadge}>
               <Ionicons name="flash" size={13} color={Colors.bgDeep} />
               <Text style={styles.duelTurnText}>DUEL — YOUR MOVE</Text>
+            </View>
+          ) : isMyInterruptTurn ? (
+            <View style={styles.interruptTurnBadge}>
+              <Ionicons name="hand-left" size={13} color={Colors.bgDeep} />
+              <Text style={styles.interruptTurnText}>INTERRUPT — YOUR MOVE</Text>
             </View>
           ) : isClubResponder ? (
             <View style={styles.clubResponderBadge}>
@@ -1002,6 +1046,75 @@ export default function MatchScreen() {
               <Text style={styles.clubResponseHint}>
                 Play Hearts, Spades, Clubs, or Jokers to strengthen your Royal. You may also discard one Diamond to draw or gain Vault — but not add it to the Mine.
               </Text>
+            )}
+          </Animated.View>
+        )}
+
+        {/* Interrupt window banner: priority + pending LIFO stack */}
+        {inInterrupt && interruptStack && (
+          <Animated.View entering={FadeIn.duration(300)} style={styles.interruptBanner}>
+            <View style={styles.interruptHeader}>
+              <Ionicons name="hand-left" size={18} color="#5AB0FF" />
+              <Text style={styles.interruptTitle}>
+                {isMyInterruptTurn
+                  ? "You have priority — play an interrupt or pass"
+                  : `Interrupt window — waiting for ${
+                      displayNames[interruptStack.priorityPlayerId]
+                        ?? interruptStack.priorityPlayerId.slice(0, 8)
+                    }`}
+              </Text>
+            </View>
+            {interruptStack.entries.length > 0 && (
+              <View style={styles.interruptStackList}>
+                <Text style={styles.interruptStackLabel}>
+                  Pending stack (resolves top-first):
+                </Text>
+                {[...interruptStack.entries].reverse().map((entry, i) => {
+                  const entryName =
+                    displayNames[entry.playerId] ?? entry.playerId.slice(0, 8);
+                  const entryCardId =
+                    (entry.action as { cardId?: string; clubCardId?: string; heartCardId?: string; spadeCardId?: string; supportCardId?: string }).cardId
+                    ?? (entry.action as { clubCardId?: string }).clubCardId
+                    ?? (entry.action as { heartCardId?: string }).heartCardId
+                    ?? (entry.action as { spadeCardId?: string }).spadeCardId
+                    ?? (entry.action as { supportCardId?: string }).supportCardId;
+                  return (
+                    <View
+                      key={`${entry.playerId}-${i}`}
+                      style={styles.interruptStackEntry}
+                    >
+                      <Text style={styles.interruptStackIndex}>
+                        {i === 0 ? "▲" : i + 1}
+                      </Text>
+                      {entryCardId ? (
+                        <CardView cardId={entryCardId} size="sm" />
+                      ) : null}
+                      <View style={styles.interruptStackMeta}>
+                        <Text style={styles.interruptStackPlayer}>{entryName}</Text>
+                        <Text style={styles.interruptStackAction}>
+                          {String(entry.action.type).replace(/_/g, " ")}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            {isMyInterruptTurn && (
+              <Pressable
+                onPress={handleInterruptPass}
+                disabled={isSubmitting}
+                style={({ pressed }) => [styles.interruptPassBtn, pressed && { opacity: 0.8 }]}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color={Colors.bgDeep} />
+                ) : (
+                  <>
+                    <Ionicons name="arrow-forward-circle" size={16} color={Colors.bgDeep} />
+                    <Text style={styles.interruptPassText}>Pass Priority</Text>
+                  </>
+                )}
+              </Pressable>
             )}
           </Animated.View>
         )}
@@ -1358,13 +1471,15 @@ export default function MatchScreen() {
         isDefender={isDefender}
         isClubResponder={isClubResponder}
         isMyDuelTurn={!!isMyDuelTurn}
+        isMyInterruptTurn={!!isMyInterruptTurn}
+        canInitiateInterrupt={canInitiateInterrupt}
         phase={phase}
         onCardPress={handleCardPress}
       />
 
       <View style={{ height: bottomInset }} />
 
-      {(selectedCardId && (isMyTurn || isDefender || isClubResponder || isMyDuelTurn)) && (
+      {(selectedCardId && (isMyTurn || isDefender || isClubResponder || isMyDuelTurn || isMyInterruptTurn || canInitiateInterrupt)) && (
         <CardActionSheet
           cardId={selectedCardId}
           phase={phase}
@@ -1372,6 +1487,8 @@ export default function MatchScreen() {
           isDefender={isDefender}
           isClubResponder={isClubResponder}
           isMyDuelTurn={!!isMyDuelTurn}
+          isMyInterruptTurn={!!isMyInterruptTurn}
+          canInitiateInterrupt={canInitiateInterrupt}
           myCourt={myState?.court ?? []}
           allPlayers={gameState.players}
           myPlayerId={myId}
@@ -1557,6 +1674,93 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.bgDeep,
     letterSpacing: 1.2,
+  },
+  interruptTurnBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#5AB0FF",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  interruptTurnText: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    color: Colors.bgDeep,
+    letterSpacing: 1.2,
+  },
+  interruptBanner: {
+    marginHorizontal: 12,
+    backgroundColor: "rgba(90,176,255,0.12)",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#5AB0FF",
+    padding: 14,
+    gap: 10,
+  },
+  interruptHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  interruptTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "#5AB0FF",
+    flex: 1,
+  },
+  interruptStackList: {
+    gap: 8,
+  },
+  interruptStackLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  interruptStackEntry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: 10,
+    padding: 8,
+  },
+  interruptStackIndex: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: "#5AB0FF",
+    minWidth: 18,
+    textAlign: "center",
+  },
+  interruptStackMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  interruptStackPlayer: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+  },
+  interruptStackAction: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    textTransform: "capitalize",
+  },
+  interruptPassBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#5AB0FF",
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  interruptPassText: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.bgDeep,
   },
   clubResponderBadge: {
     backgroundColor: "rgba(200,155,60,0.25)",

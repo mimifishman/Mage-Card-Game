@@ -2,7 +2,7 @@ import { effectiveHealth, getCard } from "./cards";
 import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
-import { canPlayCard, isDuelPhase } from "./validation";
+import { canPlayCard, isDuelPhase, effectiveDuelPhase } from "./validation";
 import { checkAndApplyCancellation } from "./attachments";
 import { findPairAttackerIdForRoyal, markDuelPairResolved } from "./combat";
 
@@ -165,7 +165,49 @@ export function applyClub(
     return ok(withPending);
   }
 
+  if (state.phase === "interrupt_window" && state.pendingClubDebuff) {
+    // An interrupt Club played while a respond_to_club window is already open
+    // resolves immediately. applyDebuffToRoyal always clears pendingClubDebuff,
+    // so restore the underlying pending Club response that the window will
+    // return to — otherwise the game returns to respond_to_club with no
+    // pending payload and deadlocks confirmClubResponse.
+    const result = applyDebuffToRoyal(
+      { ...state, players: { ...state.players, [playerId]: afterSpend } },
+      playerId,
+      cardId,
+      targetPlayerId,
+      targetCardId,
+    );
+    if (!result.ok) return result;
+    return ok({ ...result.value, pendingClubDebuff: state.pendingClubDebuff });
+  }
+
+  if (state.phase === "interrupt_window") {
+    // A Club played as an interrupt targets a Royal: the Royal's owner gets
+    // the standard respond_to_club window to react (heal, counter, etc.)
+    // before the debuff lands. After they confirm, play returns to the phase
+    // that was interrupted.
+    const returnPhase = state.interruptStack?.returnPhase;
+    return ok({
+      ...state,
+      phase: "respond_to_club",
+      pendingClubDebuff: {
+        attackerPlayerId: playerId,
+        clubCardId: cardId,
+        targetPlayerId,
+        targetRoyalId: targetCardId,
+        defenderDiamondUsed: false,
+        returnPhase,
+      },
+      players: {
+        ...state.players,
+        [playerId]: afterSpend,
+      },
+    });
+  }
+
   if (state.phase === "declare_blocks") {
+    // Immediate resolution during block declaration preserves combat flow.
     return applyDebuffToRoyal(
       { ...state, players: { ...state.players, [playerId]: afterSpend } },
       playerId,
@@ -223,7 +265,17 @@ export function confirmClubResponse(
   if (!result.ok) return result;
 
   if (isDuelPhase(returnPhase)) {
-    return markDuelPairResolved(result.value, pending.targetRoyalId);
+    // Only a duel participant's Club play resolves the duel pair. A Club
+    // played as an interrupt by a third, uninvolved player debuffs the Royal
+    // without ending the duel between the two participants.
+    const ctx = state.duelContext;
+    const attackerIsDuelParticipant =
+      !!ctx &&
+      (pending.attackerPlayerId === ctx.attackerPlayerId ||
+        pending.attackerPlayerId === ctx.defenderPlayerId);
+    if (attackerIsDuelParticipant) {
+      return markDuelPairResolved(result.value, pending.targetRoyalId);
+    }
   }
 
   return result;

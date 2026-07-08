@@ -116,6 +116,10 @@ export const ConfirmClubResponseActionSchema = z.object({
   type: z.literal("confirm_club_response"),
 });
 
+export const InterruptPassActionSchema = z.object({
+  type: z.literal("interrupt_pass"),
+});
+
 export const GameActionSchema = z.discriminatedUnion("type", [
   PlayDiamondToMineActionSchema,
   DiscardDiamondToDrawActionSchema,
@@ -136,6 +140,7 @@ export const GameActionSchema = z.discriminatedUnion("type", [
   EndTurnActionSchema,
   DiscardToEndTurnActionSchema,
   ConfirmClubResponseActionSchema,
+  InterruptPassActionSchema,
 ]);
 
 export type GameAction = z.infer<typeof GameActionSchema>;

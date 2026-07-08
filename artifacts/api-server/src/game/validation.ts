@@ -10,11 +10,54 @@ export function isDuelPhase(phase: TurnPhase): boolean {
   return DUEL_PHASES.includes(phase);
 }
 
+/**
+ * Returns the phase whose duel/targeting restrictions should apply to the
+ * current action. Normally this is just `state.phase`, but while an interrupt
+ * is being played or resolved (`interrupt_window`), duel restrictions must be
+ * evaluated against the phase the window will return to, so that a
+ * duel-originated interrupt still respects duel-pair targeting rules.
+ */
+export function effectiveDuelPhase(state: GameState): TurnPhase {
+  if (state.phase === "interrupt_window" && state.interruptStack) {
+    return state.interruptStack.returnPhase;
+  }
+  return state.phase;
+}
+
 export function canPlayCard(
   state: GameState,
   playerId: string,
   cardId: CardId,
 ): Result<true> {
+  if (state.phase === "interrupt_window") {
+    const stack = state.interruptStack;
+    if (!stack) {
+      return err(`No interrupt stack found in interrupt_window phase`);
+    }
+    if (playerId !== stack.priorityPlayerId) {
+      return err(`Another player's interrupt is currently being resolved`);
+    }
+
+    const player = state.players[playerId];
+    if (!player) return err(`Player ${playerId} not found`);
+
+    if (!player.hand.includes(cardId)) {
+      return err(`Card ${cardId} is not in your hand`);
+    }
+
+    const card = getCard(cardId);
+    if (card.isRoyal) {
+      return err(`Cannot play Royals as an interrupt`);
+    }
+
+    const vault = availableVault(state.mine, player);
+    if (vault < card.vaultCost) {
+      return err(`Not enough vault: need ${card.vaultCost}, have ${vault}`);
+    }
+
+    return ok(true);
+  }
+
   if (state.phase === "respond_to_club") {
     const pending = state.pendingClubDebuff;
     if (!pending) {

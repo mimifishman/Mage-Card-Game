@@ -33,7 +33,7 @@ export { drawCard, drawCards } from "./draw";
 
 export { createInitialGameState, dealInitialHands, determineFirstPlayer } from "./setup";
 
-export { canPlayCard, isDuelPhase } from "./validation";
+export { canPlayCard, isDuelPhase, effectiveDuelPhase } from "./validation";
 
 export { playDiamondToMine, discardDiamondToDraw, discardDiamondForBoost, discardToAbyss } from "./diamonds";
 

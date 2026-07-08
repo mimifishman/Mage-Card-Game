@@ -23,6 +23,8 @@ interface CardActionSheetProps {
   isDefender?: boolean;
   isClubResponder?: boolean;
   isMyDuelTurn?: boolean;
+  isMyInterruptTurn?: boolean;
+  canInitiateInterrupt?: boolean;
   myCourt: RoyalInCourt[];
   allPlayers: Record<string, PublicPlayerState>;
   myPlayerId: string;
@@ -53,6 +55,8 @@ export default function CardActionSheet({
   isDefender = false,
   isClubResponder = false,
   isMyDuelTurn = false,
+  isMyInterruptTurn = false,
+  canInitiateInterrupt = false,
   myCourt,
   allPlayers,
   myPlayerId,
@@ -83,6 +87,8 @@ export default function CardActionSheet({
     isDefender,
     isClubResponder,
     isMyDuelTurn,
+    isMyInterruptTurn,
+    canInitiateInterrupt,
     anyCourtHasRoyals,
   );
 
@@ -200,12 +206,14 @@ export default function CardActionSheet({
             <ScrollView contentContainerStyle={styles.actionList}>
               {validActions.length === 0 ? (
                 <Text style={styles.noActions}>
-                  {!isMyTurn && !isDefender && !isClubResponder && !isMyDuelTurn
+                  {!isMyTurn && !isDefender && !isClubResponder && !isMyDuelTurn && !isMyInterruptTurn && !canInitiateInterrupt
                     ? "Wait for your turn to play cards."
                     : phase === "declare_blocks" && isDefender
                     ? "This card cannot be played while blocking (Diamonds and Royals are not allowed)."
                     : phase === "respond_to_club" && isClubResponder
                     ? "This card cannot be played during the Club response window (Royals are not allowed)."
+                    : isMyInterruptTurn || canInitiateInterrupt
+                    ? "This card cannot be played as an interrupt (Royals, attacks, and Diamonds-to-Mine are not allowed)."
                     : isMyDuelTurn
                     ? "No valid actions — this card cannot be played in the duel."
                     : phase !== "main"

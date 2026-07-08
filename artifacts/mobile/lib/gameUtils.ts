@@ -146,6 +146,36 @@ export function isDuelTurnPhase(phase: string): boolean {
   return phase === "duel_attacker_turn" || phase === "duel_blocker_turn";
 }
 
+export function isInterruptPhase(phase: string): boolean {
+  return phase === "interrupt_window";
+}
+
+export interface InterruptInitiationContext {
+  inDuel: boolean;
+  isMyTurn: boolean;
+  isMyDuelTurn: boolean;
+  isDefender: boolean;
+  isClubResponder: boolean;
+  inInterrupt: boolean;
+  amIEliminated: boolean;
+}
+
+/**
+ * Whether the local player may OPEN a fresh interrupt window during another
+ * player's turn/phase. Eliminated players and players already inside an
+ * interrupt window never qualify. During a duel the game's activePlayerId
+ * stays the original attacker, so `isMyTurn` alone cannot be used — the only
+ * player barred from initiating while a duel is in progress is the current
+ * duel turn-holder (so the *other* duel participant, and any bystander, may
+ * still interrupt). Outside a duel, only a pure bystander (not the active
+ * player, defender, or club responder) may initiate.
+ */
+export function canPlayerInitiateInterrupt(ctx: InterruptInitiationContext): boolean {
+  if (ctx.amIEliminated || ctx.inInterrupt) return false;
+  if (ctx.inDuel) return !ctx.isMyDuelTurn;
+  return !ctx.isMyTurn && !ctx.isDefender && !ctx.isClubResponder;
+}
+
 export function getValidActionsForCard(
   card: ParsedCard,
   phase: string,
@@ -156,12 +186,19 @@ export function getValidActionsForCard(
   isDefender = false,
   isClubResponder = false,
   isMyDuelTurn = false,
+  isMyInterruptTurn = false,
+  canInitiateInterrupt = false,
   anyCourtHasRoyals: boolean = myCourtSize > 0,
 ): ValidAction[] {
-  const inDuel = isDuelTurnPhase(phase);
+  // An interrupt window offers the same eligible card actions as a duel turn
+  // (no Royals, no Diamond-to-Mine, no attacks), so we reuse the duel branch.
+  // A non-active bystander may also *initiate* an interrupt during another
+  // player's turn/phase (canInitiateInterrupt), which opens an interrupt
+  // window server-side — the eligible action set is identical.
+  const inDuel = isDuelTurnPhase(phase) || isInterruptPhase(phase);
 
-  if (inDuel) {
-    if (!isMyDuelTurn) return [];
+  if (inDuel || canInitiateInterrupt) {
+    if (!isMyDuelTurn && !isMyInterruptTurn && !canInitiateInterrupt) return [];
 
     if (card.isRoyal) return [];
     if (card.isJoker) {
