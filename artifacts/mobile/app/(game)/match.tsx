@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -50,6 +51,31 @@ import CardView from "@/components/game/CardView";
 import { parseCardId, isDuelTurnPhase, isInterruptPhase, effectiveAttack, effectiveHealth, canPlayerInitiateInterrupt } from "@/lib/gameUtils";
 import type { CardAction } from "@/lib/gameUtils";
 
+// Player-facing names for engine phases — the raw ids ("duel_blocker_turn",
+// "assign_damage_order") read as jargon in the header tag.
+const PHASE_LABELS: Record<string, string> = {
+  draw: "DRAW",
+  main: "MAIN PHASE",
+  declare_attacks: "DECLARE ATTACKS",
+  declare_blocks: "BLOCKS",
+  assign_damage_order: "DAMAGE ORDER",
+  duel_attacker_turn: "DUEL — ATTACKER",
+  duel_blocker_turn: "DUEL — BLOCKER",
+  resolve_combat: "COMBAT",
+  end_turn: "END OF TURN",
+  discard: "DISCARD",
+  respond_to_club: "CLUB RESPONSE",
+  interrupt_window: "INTERRUPT",
+};
+
+// Light haptic feedback on the phone; no-op on web.
+function buzzSelect() {
+  if (Platform.OS !== "web") Haptics.selectionAsync();
+}
+function buzzAction() {
+  if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+}
+
 export default function MatchScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const { user } = useAuth();
@@ -71,6 +97,8 @@ export default function MatchScreen() {
   const [targetAssignments, setTargetAssignments] = useState<Record<string, string>>({});
   const [activeAssignRoyalId, setActiveAssignRoyalId] = useState<string | null>(null);
   const [blockingMinimized, setBlockingMinimized] = useState(false);
+  // Per-opponent collapse overrides for the 4-player board (id -> expanded).
+  const [expandedOverrides, setExpandedOverrides] = useState<Record<string, boolean>>({});
 
   const prevPhaseRef = useRef<string | null>(null);
   const prevPlayersRef = useRef<Record<string, { life: number; courtSize: number }>>({});
@@ -487,6 +515,7 @@ export default function MatchScreen() {
 
   const handleEndTurn = useCallback(() => {
     if (!matchId) return;
+    buzzAction();
     submitAction({ matchId, data: { type: "end_turn" } });
   }, [matchId, submitAction]);
 
@@ -497,6 +526,7 @@ export default function MatchScreen() {
 
   const handleAttack = useCallback((targets: { targetPlayerId: string; royalCardIds: string[] }[]) => {
     if (!matchId || targets.length === 0) return;
+    buzzAction();
     submitAction({
       matchId,
       data: { type: "declare_attack", targets },
@@ -528,11 +558,6 @@ export default function MatchScreen() {
   const handleDuelPass = useCallback(() => {
     if (!matchId) return;
     submitAction({ matchId, data: { type: "duel_pass" } });
-  }, [matchId, submitAction]);
-
-  const handleInterruptPass = useCallback(() => {
-    if (!matchId) return;
-    submitAction({ matchId, data: { type: "interrupt_pass" } });
   }, [matchId, submitAction]);
 
   const handleDismissAutoPass = useCallback(() => {
@@ -654,6 +679,7 @@ export default function MatchScreen() {
 
   const handleCardPress = (cardId: string) => {
     if (attackSelectMode) return;
+    buzzSelect();
     if (selectedCardId === cardId) {
       setSelectedCardId(null);
     } else {
@@ -741,7 +767,7 @@ export default function MatchScreen() {
       handleToggleAttackRoyal(royalId);
       return;
     }
-    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks) || isClubResponder || !!isMyDuelTurn || !!isMyInterruptTurn;
+    const canPlay = (isMyTurn && inMainPhase) || (isDefender && inDeclareBlocks) || isClubResponder || !!isMyDuelTurn || !!isMyInterruptTurn || canInitiateInterrupt;
     if (!canPlay) return;
 
     if (selectedCardId) {
@@ -756,13 +782,24 @@ export default function MatchScreen() {
         setSelectedCardId(null);
         return;
       }
+      if (card.isJoker && isMyTurn) {
+        handleAction({
+          cardId: selectedCardId,
+          action: "play_joker",
+          mode: "destroy_royal",
+          targetPlayerId: myId,
+          targetRoyalId: royalId,
+        });
+        setSelectedCardId(null);
+        return;
+      }
     }
 
     setSelectedTargetRoyalId(royalId === selectedTargetRoyalId ? null : royalId);
   };
 
   const handleOpponentRoyalPress = (royalId: string, targetPlayerId: string) => {
-    if (!isMyTurn && !isDefender && !isClubResponder && !isMyDuelTurn && !isMyInterruptTurn) return;
+    if (!isMyTurn && !isDefender && !isClubResponder && !isMyDuelTurn && !isMyInterruptTurn && !canInitiateInterrupt) return;
     if (!selectedCardId) return;
     const card = parseCardId(selectedCardId);
 
@@ -793,6 +830,15 @@ export default function MatchScreen() {
   };
 
   const isPickingAttackTarget = assigningTargets;
+
+  // Mobile-first sizing: with 3 opponents (4-player game) shrink opponent
+  // courts and default their panels to a collapsed summary strip so the
+  // player's own court and hand stay reachable without heavy scrolling.
+  const opponentCourtSize: "sm" | "md" = opponents.length >= 3 ? "sm" : "md";
+  const myCourtSize: "lg" | "xl" = opponents.length >= 2 ? "lg" : "xl";
+  const defaultOpponentExpanded = opponents.length <= 2;
+  const canTargetOpponentRoyals =
+    !!selectedCardId && ((isMyTurn && inMainPhase) || isClubResponder || !!isMyDuelTurn);
 
   const ineligibleRoyalIds = new Set(
     (myState?.court ?? [])
@@ -843,7 +889,7 @@ export default function MatchScreen() {
               attackSelectMode && styles.phaseTextAttack,
               inAssignDamageOrder && styles.phaseTextDuel,
             ]}>
-              {attackSelectMode ? "SELECT ROYALS" : phase.replace(/_/g, " ").toUpperCase()}
+              {attackSelectMode ? "SELECT ROYALS" : (PHASE_LABELS[phase] ?? phase.replace(/_/g, " ").toUpperCase())}
             </Text>
           </View>
           <Pressable
@@ -956,6 +1002,25 @@ export default function MatchScreen() {
               const targetedRoyalIds = Object.entries(targetAssignments)
                 .filter(([, targetId]) => targetId === opp.id)
                 .map(([royalId]) => royalId);
+              const isOppActive = gameState.activePlayerId === opp.id;
+              const oppAttackingYou =
+                (inDeclareBlocks || inDuel || inAssignDamageOrder)
+                  ? attacksTargetingMe
+                      .filter((a) => a.attackerPlayerId === opp.id)
+                      .map((a) => a.attackerCardId)
+                  : undefined;
+              // Force the court open whenever the player must see or tap it:
+              // targeting a Royal, picking an attack target, the opponent is
+              // active, they're attacking you, or they're in the live duel.
+              const forcedExpanded =
+                (canTargetOpponentRoyals && !opp.isEliminated) ||
+                isPickingAttackTarget ||
+                isOppActive ||
+                (!!oppAttackingYou && oppAttackingYou.length > 0) ||
+                !!duelRoyalIdsByPlayer[opp.id]?.size;
+              const isExpanded =
+                forcedExpanded || (expandedOverrides[opp.id] ?? defaultOpponentExpanded);
+              const canToggle = opponents.length > 1 && !forcedExpanded && !opp.isEliminated;
               return (
                 <Pressable
                   key={opp.id}
@@ -969,15 +1034,20 @@ export default function MatchScreen() {
                   <OpponentPanel
                     player={opp}
                     displayName={displayNames[opp.id] ?? opp.id.slice(0, 8)}
-                    isActive={gameState.activePlayerId === opp.id}
+                    isActive={isOppActive}
                     isEliminated={opp.isEliminated}
-                    attackingYouWith={
-                      (inDeclareBlocks || inDuel || inAssignDamageOrder)
-                        ? attacksTargetingMe
-                            .filter((a) => a.attackerPlayerId === opp.id)
-                            .map((a) => a.attackerCardId)
+                    courtCardSize={opponentCourtSize}
+                    expanded={isExpanded}
+                    onToggleExpand={
+                      canToggle
+                        ? () =>
+                            setExpandedOverrides((prev) => ({
+                              ...prev,
+                              [opp.id]: !isExpanded,
+                            }))
                         : undefined
                     }
+                    attackingYouWith={oppAttackingYou}
                     duelingIds={duelRoyalIdsByPlayer[opp.id]}
                     onRoyalPress={
                       ((isMyTurn && inMainPhase) || isClubResponder || !!isMyDuelTurn) && !opp.isEliminated && selectedCardId
@@ -1050,72 +1120,17 @@ export default function MatchScreen() {
           </Animated.View>
         )}
 
-        {/* Interrupt window banner: priority + pending LIFO stack */}
-        {inInterrupt && interruptStack && (
+        {/* Response affordance: on another player's turn you may still play a
+            spell, discard a Diamond, or play a Joker — it resolves immediately
+            (no stack / priority pass in this ruleset). */}
+        {canInitiateInterrupt && (
           <Animated.View entering={FadeIn.duration(300)} style={styles.interruptBanner}>
             <View style={styles.interruptHeader}>
               <Ionicons name="hand-left" size={18} color="#5AB0FF" />
               <Text style={styles.interruptTitle}>
-                {isMyInterruptTurn
-                  ? "You have priority — play an interrupt or pass"
-                  : `Interrupt window — waiting for ${
-                      displayNames[interruptStack.priorityPlayerId]
-                        ?? interruptStack.priorityPlayerId.slice(0, 8)
-                    }`}
+                You can respond now — play a spell, discard a Diamond, or play a Joker from your hand. It resolves right away.
               </Text>
             </View>
-            {interruptStack.entries.length > 0 && (
-              <View style={styles.interruptStackList}>
-                <Text style={styles.interruptStackLabel}>
-                  Pending stack (resolves top-first):
-                </Text>
-                {[...interruptStack.entries].reverse().map((entry, i) => {
-                  const entryName =
-                    displayNames[entry.playerId] ?? entry.playerId.slice(0, 8);
-                  const entryCardId =
-                    (entry.action as { cardId?: string; clubCardId?: string; heartCardId?: string; spadeCardId?: string; supportCardId?: string }).cardId
-                    ?? (entry.action as { clubCardId?: string }).clubCardId
-                    ?? (entry.action as { heartCardId?: string }).heartCardId
-                    ?? (entry.action as { spadeCardId?: string }).spadeCardId
-                    ?? (entry.action as { supportCardId?: string }).supportCardId;
-                  return (
-                    <View
-                      key={`${entry.playerId}-${i}`}
-                      style={styles.interruptStackEntry}
-                    >
-                      <Text style={styles.interruptStackIndex}>
-                        {i === 0 ? "▲" : i + 1}
-                      </Text>
-                      {entryCardId ? (
-                        <CardView cardId={entryCardId} size="sm" />
-                      ) : null}
-                      <View style={styles.interruptStackMeta}>
-                        <Text style={styles.interruptStackPlayer}>{entryName}</Text>
-                        <Text style={styles.interruptStackAction}>
-                          {String(entry.action.type).replace(/_/g, " ")}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-            {isMyInterruptTurn && (
-              <Pressable
-                onPress={handleInterruptPass}
-                disabled={isSubmitting}
-                style={({ pressed }) => [styles.interruptPassBtn, pressed && { opacity: 0.8 }]}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color={Colors.bgDeep} />
-                ) : (
-                  <>
-                    <Ionicons name="arrow-forward-circle" size={16} color={Colors.bgDeep} />
-                    <Text style={styles.interruptPassText}>Pass Priority</Text>
-                  </>
-                )}
-              </Pressable>
-            )}
           </Animated.View>
         )}
 
@@ -1158,7 +1173,7 @@ export default function MatchScreen() {
             court={myState?.court ?? []}
             isMyZone
             isMyTurn={isMyTurn}
-            size="xl"
+            size={myCourtSize}
             phase={phase}
             isDefender={isDefender}
             onRoyalPress={
@@ -1369,7 +1384,11 @@ export default function MatchScreen() {
         {!isMyTurn && inDeclareBlocks && attacksTargetingMe.length === 0 && (
           <View style={styles.waitingBanner}>
             <ActivityIndicator size="small" color={Colors.textMuted} />
-            <Text style={styles.waitingText}>Others declaring blocks...</Text>
+            <Text style={styles.waitingText}>
+              {pendingBlockDefenders?.length
+                ? `Waiting for ${pendingBlockDefenders.map((id) => nameFor(id)).join(", ")} to declare blocks…`
+                : "Others declaring blocks..."}
+            </Text>
           </View>
         )}
         {waitingOnOtherDefenders && (

@@ -63,6 +63,16 @@ export default function CardView({
         </View>
       )}
 
+      {/* Vault cost at a glance on hand-size cards — saves opening the action
+          sheet just to check affordability. Diamonds cost 0 and show nothing. */}
+      {(size === "lg" || size === "xl") && card.vaultCost > 0 && (
+        <View style={styles.costChip}>
+          <Text style={[styles.costChipText, { fontSize: size === "xl" ? 10 : 9 }]}>
+            ⚡{card.vaultCost}
+          </Text>
+        </View>
+      )}
+
     </View>
   );
 }
@@ -101,4 +111,17 @@ const styles = StyleSheet.create({
     right: 3,
   },
   hasteLockText: {},
+  costChip: {
+    position: "absolute",
+    bottom: 3,
+    right: 3,
+    backgroundColor: "rgba(138,105,20,0.14)",
+    borderRadius: 5,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+  },
+  costChipText: {
+    fontFamily: "Inter_700Bold",
+    color: "#8a6414",
+  },
 });

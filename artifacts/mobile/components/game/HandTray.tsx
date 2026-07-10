@@ -72,7 +72,7 @@ export default function HandTray({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, globalCanPlay && styles.containerActive]}>
       <View style={styles.header}>
         <Text style={styles.label}>HAND</Text>
         <View style={styles.countBadge}>
@@ -135,6 +135,10 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 6,
   },
+  // Gold edge when the player can act — answers "is it my move?" at a glance.
+  containerActive: {
+    borderTopColor: Colors.brand,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -163,10 +167,11 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   hint: {
-    fontSize: 10,
-    fontFamily: "Inter_400Regular",
-    color: Colors.textSecondary,
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.brand,
     marginLeft: 4,
+    flexShrink: 1,
   },
   scrollContent: {
     paddingHorizontal: 12,

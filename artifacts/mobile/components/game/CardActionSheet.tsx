@@ -46,7 +46,7 @@ export interface ActionParams {
   mode?: string;
 }
 
-type SheetStep = "actions" | "pick_player" | "joker_mode" | "pick_abyss";
+type SheetStep = "actions" | "pick_player" | "pick_abyss";
 
 export default function CardActionSheet({
   cardId,
@@ -95,7 +95,8 @@ export default function CardActionSheet({
   const handleActionPick = (action: ValidAction) => {
     setChosenAction(action);
     if (card.isJoker) {
-      setStep("joker_mode");
+      setJokerMode(action.targetType === "any_royal" ? "destroy_royal" : "damage_player");
+      setStep("pick_player");
     } else if (action.requiresTarget) {
       if (action.targetType === "pick_abyss") {
         setStep("pick_abyss");
@@ -105,11 +106,6 @@ export default function CardActionSheet({
     } else {
       onAction({ cardId, action: action.action });
     }
-  };
-
-  const handleJokerMode = (mode: "destroy_royal" | "damage_player") => {
-    setJokerMode(mode);
-    setStep("pick_player");
   };
 
   const handlePlayerTarget = (targetPlayerId: string, targetRoyalId?: string) => {
@@ -148,7 +144,27 @@ export default function CardActionSheet({
   const opponents = Object.values(allPlayers).filter((p) => p.id !== myPlayerId && !p.isEliminated);
   const me = allPlayers[myPlayerId];
   const showsRoyalPicker = chosenAction?.targetType === "any_royal";
-  const includeSelfAsTarget = !(card.isJoker && jokerMode === "damage_player");
+
+  // While playing a card mid-duel, the sheet covers the board's ⚔ badges, so
+  // surface a compact reminder of exactly which Royals are fighting.
+  const duelPairs = isMyDuelTurn && duelRoyalIdsByPlayer
+    ? Object.entries(duelRoyalIdsByPlayer)
+        .filter(([, ids]) => ids.size > 0)
+        .map(([pid, ids]) => {
+          const p = allPlayers[pid];
+          const name = pid === myPlayerId ? "Your" : `${p?.displayName || `Player ${pid.slice(0, 6)}`}'s`;
+          const cards = Array.from(ids)
+            .map((id) => {
+              const c = parseCardId(id);
+              return `${c.displayRank}${c.suitSymbol}`;
+            })
+            .join(", ");
+          return `${name} ${cards}`;
+        })
+    : [];
+  // Rule 2 — universal targeting: you are always a legal target, including for
+  // Joker damage (self-harm is a valid choice), so self appears in every picker.
+  const includeSelfAsTarget = true;
   const targetablePlayers = me && includeSelfAsTarget ? [me, ...opponents] : opponents;
 
   const eligibleAbyssCards = abyss.filter((c) => {
@@ -197,6 +213,15 @@ export default function CardActionSheet({
 
           <View style={styles.divider} />
 
+          {duelPairs.length > 0 && (
+            <View style={styles.duelBanner}>
+              <Ionicons name="flash" size={13} color="#C89B3C" />
+              <Text style={styles.duelBannerText}>
+                ⚔ Dueling: {duelPairs.join("  vs  ")}
+              </Text>
+            </View>
+          )}
+
           {isPending ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator color={Colors.brand} />
@@ -241,24 +266,6 @@ export default function CardActionSheet({
                   </Pressable>
                 ))
               )}
-            </ScrollView>
-          ) : step === "joker_mode" ? (
-            <ScrollView contentContainerStyle={styles.actionList}>
-              <Text style={styles.stepTitle}>Choose Joker Mode</Text>
-              <Pressable
-                onPress={() => handleJokerMode("destroy_royal")}
-                style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={styles.actionLabel}>Destroy a Royal (pick opponent)</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-              </Pressable>
-              <Pressable
-                onPress={() => handleJokerMode("damage_player")}
-                style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={styles.actionLabel}>Deal 10 damage to a player</Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-              </Pressable>
             </ScrollView>
           ) : step === "pick_abyss" ? (
             <ScrollView contentContainerStyle={styles.targetList}>
@@ -400,6 +407,25 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginHorizontal: 16,
     marginBottom: 8,
+  },
+  duelBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(200,155,60,0.14)",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#C89B3C",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  duelBannerText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: "#C89B3C",
   },
   actionList: {
     paddingHorizontal: 16,

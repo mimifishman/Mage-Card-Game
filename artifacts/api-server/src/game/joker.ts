@@ -52,9 +52,15 @@ export function playJokerDestroyRoyal(
   const withoutJoker = { ...player, hand: player.hand.filter((c) => c !== jokerCardId) };
   const afterSpend = spendVault(withoutJoker, JOKER_COST);
 
+  // Rule 2 — universal targeting: destroying your own Royal is a legal
+  // choice, so the target player may be the same as the caster. When that
+  // happens, `afterSpend` (not the stale `targetPlayer`) must be the basis
+  // for the court mutation, or the Vault spend / hand update would be lost.
+  const targetBase = targetPlayerId === playerId ? afterSpend : targetPlayer;
+
   let updatedAbyss = [...state.abyss, jokerCardId];
   const { player: destroyedTarget, abyss } = destroyRoyalToAbyss(
-    targetPlayer,
+    targetBase,
     targetCardId,
     updatedAbyss,
   );
@@ -90,16 +96,21 @@ export function playJokerDamagePlayer(
 
   const targetPlayer = state.players[targetPlayerId];
   if (!targetPlayer) return err(`Player ${targetPlayerId} not found`);
-  if (targetPlayerId === playerId) {
-    return err("Cannot target yourself with Joker damage");
-  }
+  // Rule 2 — universal targeting: self-damage is a legal choice, so a Joker may
+  // target its own controller. (Attacking yourself remains blocked in combat;
+  // that is a turn action, not a spell.)
 
   const withoutJoker = { ...player, hand: player.hand.filter((c) => c !== jokerCardId) };
   const afterSpend = spendVault(withoutJoker, JOKER_COST);
 
+  // Same self-target hazard as playJokerDestroyRoyal above: if the target is
+  // the caster, base the life update on `afterSpend`, not the stale
+  // `targetPlayer`, or the Vault spend / hand update would be lost.
+  const targetBase = targetPlayerId === playerId ? afterSpend : targetPlayer;
+
   const updatedTarget: PlayerState = {
-    ...targetPlayer,
-    life: targetPlayer.life - JOKER_COST,
+    ...targetBase,
+    life: targetBase.life - JOKER_COST,
   };
 
   return ok({

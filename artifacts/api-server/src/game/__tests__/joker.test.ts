@@ -98,6 +98,29 @@ describe("playJokerDestroyRoyal", () => {
     const result = playJokerDestroyRoyal(state, P1, "10H", P2, "KH");
     expect(result.ok).toBe(false);
   });
+
+  it("allows destroying your own Royal (universal targeting rule) and still spends Vault + removes the Joker", () => {
+    const state = makeState({
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, {
+          hand: ["JOKER1"],
+          court: [mkRoyal("KH", { attachedCards: ["4H"] })],
+          vault: { tempBoost: 0, spent: 0 },
+        }),
+        [P2]: makePlayer(P2),
+      },
+    });
+    const result = playJokerDestroyRoyal(state, P1, "JOKER1", P1, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P1]!.court).toHaveLength(0);
+    expect(result.value.players[P1]!.hand).not.toContain("JOKER1");
+    expect(result.value.players[P1]!.vault.spent).toBe(10);
+    expect(result.value.abyss).toContain("KH");
+    expect(result.value.abyss).toContain("4H");
+    expect(result.value.abyss).toContain("JOKER1");
+  });
 });
 
 describe("playJoker (unified entry point)", () => {
@@ -135,9 +158,14 @@ describe("playJokerDamagePlayer", () => {
     expect(result.value.players[P1]!.vault.spent).toBe(10);
   });
 
-  it("rejects targeting yourself", () => {
-    const state = richState("JOKER1");
+  it("allows targeting yourself (universal targeting rule) and still spends Vault + removes the Joker", () => {
+    const state = richState("JOKER1", { life: 20 });
     const result = playJokerDamagePlayer(state, P1, "JOKER1", P1);
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P1]!.life).toBe(10);
+    expect(result.value.players[P1]!.hand).not.toContain("JOKER1");
+    expect(result.value.players[P1]!.vault.spent).toBe(10);
+    expect(result.value.abyss).toContain("JOKER1");
   });
 });

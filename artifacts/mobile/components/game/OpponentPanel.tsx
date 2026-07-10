@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { PublicPlayerState } from "@workspace/api-client-react";
 import CourtZone from "./CourtZone";
+import CardView from "./CardView";
 import Colors from "@/constants/colors";
 import { parseCardId } from "@/lib/gameUtils";
 
@@ -14,7 +16,14 @@ interface OpponentPanelProps {
   selectedTargetId?: string | null;
   attackingYouWith?: string[];
   duelingIds?: Set<string>;
+  /** Card size for the opponent's court — shrinks in 4-player games. */
+  courtCardSize?: "sm" | "md";
+  /** Whether the full court is shown; when false a compact preview strip is used. */
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }
+
+const PREVIEW_MAX = 6;
 
 export default function OpponentPanel({
   player,
@@ -25,14 +34,29 @@ export default function OpponentPanel({
   selectedTargetId,
   attackingYouWith,
   duelingIds,
+  courtCardSize = "md",
+  expanded = true,
+  onToggleExpand,
 }: OpponentPanelProps) {
+  const courtCount = player.court.length;
+  const previewCourt = player.court.slice(0, PREVIEW_MAX);
+  const previewOverflow = courtCount - previewCourt.length;
+  const showAttacking = !!attackingYouWith && attackingYouWith.length > 0;
+
   return (
     <View style={[
       styles.container,
       isActive && styles.containerActive,
       isEliminated && styles.containerEliminated,
     ]}>
-      <View style={[styles.info, isEliminated && styles.infoEliminated]}>
+      <Pressable
+        onPress={onToggleExpand}
+        disabled={!onToggleExpand}
+        style={({ pressed }) => [
+          styles.headerRow,
+          pressed && onToggleExpand && { opacity: 0.7 },
+        ]}
+      >
         <View style={styles.nameRow}>
           {isActive && <View style={styles.activeDot} />}
           <Text
@@ -46,35 +70,45 @@ export default function OpponentPanel({
             {displayName}
           </Text>
         </View>
+
         {isEliminated ? (
           <View style={styles.eliminatedBadge}>
             <Text style={styles.eliminatedText}>ELIMINATED</Text>
           </View>
         ) : (
-          <>
-            <View style={styles.stats}>
-              <View style={[styles.statChip, styles.lifeChip]}>
-                <Text style={styles.statIcon}>♥</Text>
-                <Text style={[styles.statVal, styles.lifeVal]}>{player.life}</Text>
-              </View>
-              <View style={styles.statChip}>
-                <Text style={styles.statIcon}>🃏</Text>
-                <Text style={styles.statVal}>{player.handCount}</Text>
-              </View>
-              {player.vault.available > 0 && (
-                <View style={[styles.statChip, styles.vaultChip]}>
-                  <Text style={styles.statIcon}>⚡</Text>
-                  <Text style={[styles.statVal, { color: Colors.brand }]}>{player.vault.available}</Text>
-                </View>
-              )}
+          <View style={styles.stats}>
+            <View style={[styles.statChip, styles.lifeChip]}>
+              <Text style={styles.statIcon}>♥</Text>
+              <Text style={[styles.statVal, styles.lifeVal]}>{player.life}</Text>
             </View>
-          </>
+            <View style={styles.statChip}>
+              <Text style={styles.statIcon}>🃏</Text>
+              <Text style={styles.statVal}>{player.handCount}</Text>
+            </View>
+            <View style={[styles.statChip, styles.vaultChip]}>
+              <Text style={styles.statIcon}>⚡</Text>
+              <Text style={[styles.statVal, { color: Colors.brand }]}>{player.vault.available}</Text>
+            </View>
+            <View style={styles.statChip}>
+              <Text style={styles.statIcon}>👑</Text>
+              <Text style={styles.statVal}>{courtCount}</Text>
+            </View>
+          </View>
         )}
-      </View>
-      {attackingYouWith && attackingYouWith.length > 0 && (
+
+        {onToggleExpand && !isEliminated && (
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={Colors.textMuted}
+          />
+        )}
+      </Pressable>
+
+      {showAttacking && (
         <View style={styles.attackingBadge}>
           <Text style={styles.attackingBadgeTitle}>⚔ ATTACKING YOU</Text>
-          {attackingYouWith.map((cardId) => {
+          {attackingYouWith!.map((cardId) => {
             const card = parseCardId(cardId);
             return (
               <Text key={cardId} style={styles.attackingBadgeCard}>
@@ -87,33 +121,47 @@ export default function OpponentPanel({
           })}
         </View>
       )}
-      <View style={[styles.court, isEliminated && styles.courtEliminated]}>
-        <CourtZone
-          court={player.court}
-          size="md"
-          onRoyalPress={isEliminated ? undefined : onRoyalPress}
-          selectedTargetId={selectedTargetId}
-          highlightedIds={duelingIds}
-          highlightBadgeText={duelingIds && duelingIds.size > 0 ? "⚔ DUEL" : undefined}
-        />
-        {isEliminated && player.court.length === 0 && (
-          <Text style={styles.emptyEliminated}>No court</Text>
-        )}
-      </View>
+
+      {!isEliminated && expanded && (
+        <View style={styles.court}>
+          <CourtZone
+            court={player.court}
+            size={courtCardSize}
+            onRoyalPress={onRoyalPress}
+            selectedTargetId={selectedTargetId}
+            highlightedIds={duelingIds}
+            highlightBadgeText={duelingIds && duelingIds.size > 0 ? "⚔ DUEL" : undefined}
+          />
+        </View>
+      )}
+
+      {!isEliminated && !expanded && courtCount > 0 && (
+        <View style={styles.previewRow}>
+          {previewCourt.map((royal) => (
+            <CardView key={royal.cardId} cardId={royal.cardId} size="xs" />
+          ))}
+          {previewOverflow > 0 && (
+            <Text style={styles.previewOverflow}>+{previewOverflow}</Text>
+          )}
+        </View>
+      )}
+
+      {isEliminated && courtCount === 0 && (
+        <Text style={styles.emptyEliminated}>No court</Text>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: Colors.bgCard,
     borderRadius: 12,
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    gap: 10,
+    gap: 8,
   },
   containerActive: {
     borderColor: Colors.brand,
@@ -125,14 +173,18 @@ const styles = StyleSheet.create({
     opacity: 0.5,
     borderColor: Colors.border,
   },
-  info: {
-    width: 104,
-    gap: 5,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 32,
   },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
+    flex: 1,
+    minWidth: 0,
   },
   activeDot: {
     width: 8,
@@ -145,7 +197,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     color: Colors.textSecondary,
-    flex: 1,
+    flexShrink: 1,
   },
   nameActive: {
     color: Colors.textPrimary,
@@ -157,7 +209,7 @@ const styles = StyleSheet.create({
   stats: {
     flexDirection: "row",
     gap: 4,
-    flexWrap: "wrap",
+    flexShrink: 0,
   },
   statChip: {
     flexDirection: "row",
@@ -189,17 +241,19 @@ const styles = StyleSheet.create({
   lifeVal: {
     color: Colors.accentRed,
   },
-  court: {
-    flex: 1,
+  court: {},
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
-  infoEliminated: {
-    opacity: 0.7,
-  },
-  courtEliminated: {
-    opacity: 0.5,
+  previewOverflow: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textMuted,
+    marginLeft: 2,
   },
   eliminatedBadge: {
-    alignSelf: "flex-start",
     backgroundColor: "rgba(74,68,56,0.4)",
     borderRadius: 4,
     paddingHorizontal: 6,
@@ -221,7 +275,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 8,
     gap: 2,
-    alignSelf: "center",
+    alignSelf: "flex-start",
   },
   attackingBadgeTitle: {
     fontSize: 8,
