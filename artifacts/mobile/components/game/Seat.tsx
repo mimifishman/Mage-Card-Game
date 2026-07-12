@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeOut, FadeInUp } from "react-native-reanimated";
 import type { PublicPlayerState } from "@workspace/api-client-react";
 import CourtZone from "./CourtZone";
@@ -152,7 +153,11 @@ export default function Seat({
       {/* Secondary: Hand + Court, shown as counts (×N) so the icons read clearly. */}
       <View style={styles.statSecondaryGroup}>
         <View style={styles.statSecondary}>
-          <Text style={[styles.statSecondaryIcon, compact && styles.statSecondaryIconCompact]}>🂠</Text>
+          <MaterialCommunityIcons
+            name="cards"
+            size={compact ? 13 : 15}
+            color={Colors.textSecondary}
+          />
           <Text style={[styles.statSecondaryValue, compact && styles.statSecondaryValueCompact]}>×{player.handCount}</Text>
         </View>
         <View style={styles.statSecondary}>
