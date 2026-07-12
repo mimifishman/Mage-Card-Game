@@ -23,6 +23,11 @@ interface DuelStageProps {
   completedDuels?: { id: number; text: string }[];
   /** Duels still queued after this one — shown as ⏳ rows. */
   upcomingDuels?: { name: string; color: string; fights: number }[];
+  /** When a Royal-targeting spell is selected, the fighting cards become
+      tappable targets so you can buff/debuff right here in the duel window. */
+  targetingRoyals?: boolean;
+  targetGlowColor?: string;
+  onRoyalTarget?: (ownerPlayerId: string, royalCardId: string) => void;
   onPass: () => void;
 }
 
@@ -45,8 +50,28 @@ export default function DuelStage({
   isSubmitting,
   completedDuels = [],
   upcomingDuels = [],
+  targetingRoyals = false,
+  targetGlowColor,
+  onRoyalTarget,
   onPass,
 }: DuelStageProps) {
+  const targetable = targetingRoyals && !!onRoyalTarget;
+
+  // A duel fighter card: tappable (with a target ring) while a Royal-targeting
+  // spell is active, otherwise a plain glowing card.
+  const FighterCard = ({ cardId, ownerId, baseGlow }: { cardId: string; ownerId: string; baseGlow: string }) => {
+    if (targetable) {
+      return (
+        <Pressable
+          onPress={() => onRoyalTarget!(ownerId, cardId)}
+          style={({ pressed }) => [styles.targetRing, { borderColor: targetGlowColor ?? "#fff" }, pressed && { opacity: 0.7 }]}
+        >
+          <CardView cardId={cardId} size="sm" glowColor={targetGlowColor} />
+        </Pressable>
+      );
+    }
+    return <CardView cardId={cardId} size="sm" glowColor={baseGlow} />;
+  };
   const isMyDuelTurn =
     (phase === "duel_attacker_turn" && myId === duelContext.attackerPlayerId) ||
     (phase === "duel_blocker_turn" && myId === duelContext.defenderPlayerId);
@@ -102,6 +127,15 @@ export default function DuelStage({
         </Text>
       </View>
 
+      {targetable && (
+        <View style={styles.targetHintRow}>
+          <Ionicons name="locate" size={13} color={targetGlowColor ?? Colors.brand} />
+          <Text style={[styles.targetHintText, { color: targetGlowColor ?? Colors.brand }]}>
+            Tap a Royal below to target it
+          </Text>
+        </View>
+      )}
+
       {/* Duels already fought this combat */}
       {completedDuels.map((d) => (
         <View key={d.id} style={styles.doneRow}>
@@ -121,7 +155,7 @@ export default function DuelStage({
           livePairs.map(({ atk, atkRoyal, liveBlockers }) => (
             <View key={atk.attackerCardId} style={styles.pairRow}>
               <View style={styles.fighter}>
-                <CardView cardId={atk.attackerCardId} size="sm" glowColor={attackerColor} />
+                <FighterCard cardId={atk.attackerCardId} ownerId={duelContext.attackerPlayerId} baseGlow={attackerColor} />
                 <Text style={styles.fighterStats}>
                   <Text style={styles.statAtk}>⚔{effectiveAttack(atk.attackerCardId, atkRoyal!.buffAttack)}</Text>
                   {"  "}
@@ -140,7 +174,7 @@ export default function DuelStage({
                   const blk = defenderRoyal(blkId)!;
                   return (
                     <View key={blkId} style={styles.fighter}>
-                      <CardView cardId={blkId} size="sm" glowColor={defenderColor} />
+                      <FighterCard cardId={blkId} ownerId={duelContext.defenderPlayerId} baseGlow={defenderColor} />
                       <Text style={styles.fighterStats}>
                         <Text style={styles.statAtk}>⚔{effectiveAttack(blkId, blk.buffAttack)}</Text>
                         {"  "}
@@ -317,6 +351,20 @@ const styles = StyleSheet.create({
   fighter: {
     alignItems: "center",
     gap: 2,
+  },
+  targetRing: {
+    borderWidth: 2,
+    borderRadius: 10,
+    padding: 2,
+  },
+  targetHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  targetHintText: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
   },
   fighterStats: {
     fontSize: 12,

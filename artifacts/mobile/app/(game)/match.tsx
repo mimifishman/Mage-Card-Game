@@ -1390,6 +1390,9 @@ export default function MatchScreen() {
               attackerColor={colorOf(duelCtx.attackerPlayerId)}
               defenderColor={colorOf(duelCtx.defenderPlayerId)}
               isSubmitting={isSubmitting}
+              targetingRoyals={targetingRoyals}
+              targetGlowColor={colorOf(myId)}
+              onRoyalTarget={dispatchRoyalTarget}
               completedDuels={completedDuels}
               upcomingDuels={(gameState.duelQueue ?? []).map((qid) => ({
                 name: nameFor(qid),
