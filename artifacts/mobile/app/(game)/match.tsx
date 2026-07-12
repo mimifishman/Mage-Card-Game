@@ -1143,8 +1143,14 @@ export default function MatchScreen() {
         </View>
       )}
 
-      {/* ---- The table (fixed, non-scrolling) ---- */}
-      <View style={styles.board}>
+      {/* ---- The table. Fits the screen as a fixed layout; if a busy turn
+           (block panel + full courts) overflows, it becomes scrollable so
+           regions never overlap or hide each other. ---- */}
+      <ScrollView
+        style={styles.board}
+        contentContainerStyle={styles.boardContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Opponent region — redistributes per player count. */}
         {opponents.length === 1 && (
           <View style={styles.oppRegion}>
@@ -1358,7 +1364,7 @@ export default function MatchScreen() {
             />
           </View>
         )}
-      </View>
+      </ScrollView>
 
       {/* ---- Mode strips & action bar (pinned above the hand) ---- */}
       {attackSelectMode && !assigningTargets && (
@@ -1674,6 +1680,9 @@ const styles = StyleSheet.create({
   },
   board: {
     flex: 1,
+  },
+  boardContent: {
+    flexGrow: 1,
     paddingVertical: 6,
     gap: 6,
   },
@@ -1690,7 +1699,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   centerRegion: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "center",
     gap: 4,
   },
