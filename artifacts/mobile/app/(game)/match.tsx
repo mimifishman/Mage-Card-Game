@@ -776,6 +776,28 @@ export default function MatchScreen() {
     (myState?.court.length ?? 0) > 0 ||
     Object.values(gameState.players).some((p) => p.id !== myId && p.court.length > 0);
 
+  // Authoritative per-card playability for the hand's muting — a card is
+  // playable iff getValidActionsForCard yields at least one enabled action.
+  // Same logic that drives the action dock, so hand muting and the dock never
+  // disagree.
+  const canPlayHandCard = (cardId: string): boolean => {
+    const c = parseCardId(cardId);
+    return getValidActionsForCard(
+      c,
+      phase,
+      isMyTurn,
+      myState?.court.length ?? 0,
+      vault,
+      hasTakenDiamondAction,
+      isDefender,
+      isClubResponder,
+      !!isMyDuelTurn,
+      !!isMyInterruptTurn,
+      canInitiateInterrupt,
+      anyCourtHasRoyals,
+    ).some((a) => !a.disabled);
+  };
+
   const selectedCard = selectedCardId ? parseCardId(selectedCardId) : null;
   const selectedActions: ValidAction[] = selectedCard
     ? getValidActionsForCard(
@@ -1571,6 +1593,7 @@ export default function MatchScreen() {
         phase={phase}
         vault={vault}
         accentColor={colorOf(myId)}
+        canPlayCard={canPlayHandCard}
         onCardPress={handleCardPress}
       />
 

@@ -24,6 +24,10 @@ interface HandTrayProps {
   vault?: number;
   /** My seat color — used for the "can act" edge. */
   accentColor?: string;
+  /** Single source of truth for whether a card has any legal play right now;
+      when it returns false the card is muted. Supplied by the match screen
+      (which runs getValidActionsForCard with full game context). */
+  canPlayCard?: (cardId: string) => boolean;
   onCardPress: (cardId: string) => void;
 }
 
@@ -57,6 +61,7 @@ export default function HandTray({
   phase,
   vault = 0,
   accentColor = Colors.brand,
+  canPlayCard,
   onCardPress,
 }: HandTrayProps) {
   const globalCanPlay =
@@ -104,13 +109,16 @@ export default function HandTray({
         >
           {cards.map((cardId, idx) => {
             const card = parseCardId(cardId);
-            const cardPlayable =
-              globalCanPlay &&
-              (isClubResponder
-                ? isCardPlayableDuringClubResponse(cardId)
-                : respondOnly
-                  ? isCardEligibleAsInterrupt(cardId)
-                  : true);
+            // Prefer the authoritative check from the match screen; fall back
+            // to the local heuristic only if it wasn't supplied.
+            const cardPlayable = canPlayCard
+              ? canPlayCard(cardId)
+              : globalCanPlay &&
+                (isClubResponder
+                  ? isCardPlayableDuringClubResponse(cardId)
+                  : respondOnly
+                    ? isCardEligibleAsInterrupt(cardId)
+                    : true);
             const isSelected = selectedCardId === cardId;
             const unaffordable = card.vaultCost > vault && phase !== "discard";
 
