@@ -1113,7 +1113,11 @@ export default function MatchScreen() {
     setAbyssPickerAction(null);
     setArmedAction(null);
     setAttackSelectMode(true);
-    setSelectedAttackRoyalIds(new Set());
+    // With a single eligible attacker there's nothing to choose — pre-select
+    // it so the player goes straight to confirming/targeting.
+    setSelectedAttackRoyalIds(
+      eligibleAttackers.length === 1 ? new Set([eligibleAttackers[0]!.cardId]) : new Set(),
+    );
   };
 
   // ---- Board derived state ----
@@ -1545,8 +1549,9 @@ export default function MatchScreen() {
         <Animated.View entering={FadeInDown.duration(180)} style={styles.modeStrip}>
           <Ionicons name="flash" size={14} color={Colors.accentRed} />
           <Text style={styles.modeStripText}>
-            Tap your Royals to pick attackers
-            {selectedAttackRoyalIds.size > 0 ? ` — ${selectedAttackRoyalIds.size} chosen` : ""}
+            {eligibleAttackers.length === 1
+              ? "Your Royal is ready — confirm the attack below"
+              : `Tap your Royals to pick attackers${selectedAttackRoyalIds.size > 0 ? ` — ${selectedAttackRoyalIds.size} chosen` : ""}`}
           </Text>
         </Animated.View>
       )}
