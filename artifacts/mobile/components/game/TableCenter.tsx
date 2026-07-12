@@ -11,10 +11,12 @@ interface TableCenterProps {
 }
 
 /** Slim shared-table strip: deck count, my Mine (vault source) and the Abyss.
-    Tapping the Abyss opens a browsable view of the whole discard pile. */
+    Mine and Abyss each show only their top card; tapping either opens a
+    browsable view of the full pile. */
 export default function TableCenter({ mine, abyss, deckCount }: TableCenterProps) {
-  const [showAbyss, setShowAbyss] = useState(false);
+  const [openPile, setOpenPile] = useState<null | "mine" | "abyss">(null);
   const topAbyss = abyss.length > 0 ? abyss[abyss.length - 1] : null;
+  const topMine = mine.length > 0 ? mine[mine.length - 1] : null;
   const mineValue = mine.reduce((sum, id) => sum + parseCardId(id).pipValue, 0);
 
   return (
@@ -28,44 +30,39 @@ export default function TableCenter({ mine, abyss, deckCount }: TableCenterProps
 
       <View style={styles.divider} />
 
-      <View style={[styles.zone, styles.mineZone]}>
+      <Pressable
+        onPress={() => mine.length > 0 && setOpenPile("mine")}
+        style={({ pressed }) => [styles.zone, styles.mineZone, pressed && mine.length > 0 && { opacity: 0.7 }]}
+      >
         <View style={styles.labelRow}>
           <Text style={styles.zoneLabel}>MINE</Text>
           <View style={styles.mineBadge}>
             <Text style={styles.mineBadgeText}>⚡{mineValue}</Text>
           </View>
         </View>
-        {mine.length === 0 ? (
-          <Text style={styles.zoneEmpty}>—</Text>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.mineScroll}
-          >
-            {mine.map((cardId, i) => (
-              <CardView key={`${cardId}-${i}`} cardId={cardId} size="xs" />
-            ))}
-          </ScrollView>
-        )}
-      </View>
+        {topMine ? <CardView cardId={topMine} size="xs" /> : <Text style={styles.zoneEmpty}>—</Text>}
+      </Pressable>
 
       <View style={styles.divider} />
 
       <Pressable
-        onPress={() => abyss.length > 0 && setShowAbyss(true)}
+        onPress={() => abyss.length > 0 && setOpenPile("abyss")}
         style={({ pressed }) => [styles.zone, pressed && abyss.length > 0 && { opacity: 0.7 }]}
       >
         <Text style={styles.zoneLabel}>ABYSS · {abyss.length}</Text>
         {topAbyss ? <CardView cardId={topAbyss} size="xs" /> : <Text style={styles.zoneEmpty}>—</Text>}
       </Pressable>
 
-      <Modal visible={showAbyss} transparent animationType="fade" onRequestClose={() => setShowAbyss(false)}>
-        <Pressable style={styles.abyssOverlay} onPress={() => setShowAbyss(false)}>
+      <Modal visible={openPile !== null} transparent animationType="fade" onRequestClose={() => setOpenPile(null)}>
+        <Pressable style={styles.abyssOverlay} onPress={() => setOpenPile(null)}>
           <View style={styles.abyssSheet}>
-            <Text style={styles.abyssTitle}>The Abyss — {abyss.length} cards (newest last)</Text>
+            <Text style={styles.abyssTitle}>
+              {openPile === "mine"
+                ? `The Mine — ${mine.length} card${mine.length === 1 ? "" : "s"} · ⚡${mineValue}`
+                : `The Abyss — ${abyss.length} card${abyss.length === 1 ? "" : "s"} (newest last)`}
+            </Text>
             <ScrollView contentContainerStyle={styles.abyssGrid}>
-              {abyss.map((cardId, i) => (
+              {(openPile === "mine" ? mine : abyss).map((cardId, i) => (
                 <CardView key={`${cardId}-${i}`} cardId={cardId} size="sm" />
               ))}
             </ScrollView>
