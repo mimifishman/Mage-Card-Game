@@ -131,6 +131,7 @@ export default function BlockPanel({
           const atkCard = parseCardId(atk.attackerCardId);
           const atkRoyal = attackerCourt.find((r) => r.cardId === atk.attackerCardId);
           const atkVal = atkRoyal ? effectiveAttack(atk.attackerCardId, atkRoyal.buffAttack) : atkCard.pipValue;
+          const atkHp = atkRoyal ? effectiveHealth(atk.attackerCardId, atkRoyal.buffHealth, atkRoyal.damageTaken) : null;
           const assigned = (blocks[atk.attackerCardId] ?? []).length > 0;
           const passed = isPassed(atk.attackerCardId);
           const isActive = activeAttackerId === atk.attackerCardId;
@@ -145,8 +146,11 @@ export default function BlockPanel({
                 pressed && { opacity: 0.8 },
               ]}
             >
-              <CardView cardId={atk.attackerCardId} size="sm" />
-              <Text style={styles.attackerVal}>⚔{atkVal}</Text>
+              <CardView cardId={atk.attackerCardId} size="md" />
+              <Text style={styles.attackerVal}>
+                ⚔{atkVal}
+                {atkHp !== null && <Text style={styles.attackerHp}>  ♥{atkHp}</Text>}
+              </Text>
               {assigned ? (
                 <View style={styles.stateChipBlocked}>
                   <Text style={styles.stateChipBlockedText}>
@@ -291,6 +295,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_700Bold",
     color: Colors.accentRed,
+  },
+  attackerHp: {
+    color: "#66BB6A",
   },
   stateChipBlocked: {
     backgroundColor: "rgba(46,125,50,0.3)",

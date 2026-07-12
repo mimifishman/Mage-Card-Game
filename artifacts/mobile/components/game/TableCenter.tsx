@@ -78,21 +78,23 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-around",
     backgroundColor: Colors.bgZoneDeep,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: Colors.border,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
+  // Each pile is a compact inline cluster (label · badge · top card) — the
+  // full contents live in the tap-to-open popup, so the strip stays slim.
   zone: {
+    flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 6,
+    gap: 5,
+    paddingHorizontal: 4,
   },
-  mineZone: {
-    flex: 1,
-  },
+  mineZone: {},
   labelRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -142,9 +144,9 @@ const styles = StyleSheet.create({
   },
   divider: {
     width: 1,
-    height: 44,
+    height: 30,
     backgroundColor: Colors.border,
-    marginHorizontal: 4,
+    marginHorizontal: 2,
   },
   abyssOverlay: {
     flex: 1,

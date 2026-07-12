@@ -180,6 +180,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     gap: 6,
     paddingHorizontal: 4,
+    // Vertical room so a lifted/glowing (selected, duel, highlighted) card
+    // isn't clipped by the seat's rounded corners on Android.
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   emptySlot: {
     paddingHorizontal: 12,

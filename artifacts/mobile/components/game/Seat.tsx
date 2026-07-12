@@ -271,12 +271,12 @@ const styles = StyleSheet.create({
   containerEliminated: {
     opacity: 0.45,
   },
+  // Stack name over stats so the stat row always gets the seat's full width
+  // and never clips on narrow (side-by-side / multiplayer) seats.
   headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    flexWrap: "wrap",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 6,
   },
   crestRow: {
     flexDirection: "row",
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     alignItems: "center",
-    flexShrink: 0,
+    flexWrap: "wrap",
   },
   statsRowCompact: {
     gap: 6,

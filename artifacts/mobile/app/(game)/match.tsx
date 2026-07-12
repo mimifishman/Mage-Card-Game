@@ -124,6 +124,8 @@ export default function MatchScreen() {
   const [gameState, setGameState] = useState<PlayerGameView | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
+  // Scroll the board to the opponents when picking attack targets.
+  const boardScrollRef = useRef<ScrollView>(null);
 
   const [attackSelectMode, setAttackSelectMode] = useState(false);
   const [selectedAttackRoyalIds, setSelectedAttackRoyalIds] = useState<Set<string>>(new Set());
@@ -328,6 +330,10 @@ export default function MatchScreen() {
     const effectMyId = user?.id ?? "";
     const nameOf = (id: string) =>
       id === effectMyId ? "You" : (displayNames[id] ?? id.slice(0, 8));
+    // Possessive that reads naturally for "You": "your" vs "Bob's".
+    const possOf = (id: string) => (id === effectMyId ? "your" : `${nameOf(id)}'s`);
+    // Possessive when the owner is also the actor: "your own" / "Bob's own".
+    const ownPossOf = (id: string) => (id === effectMyId ? "your own" : `${nameOf(id)}'s own`);
 
     // Turn changes.
     if (prevActivePlayerRef.current && prevActivePlayerRef.current !== gameState.activePlayerId) {
@@ -350,7 +356,7 @@ export default function MatchScreen() {
         for (const [tgtId, n] of targets) {
           pushEvent(
             colorOf(atkId),
-            `${nameOf(atkId)} attacks ${nameOf(tgtId)} with ${n} Royal${n > 1 ? "s" : ""}`,
+            `${nameOf(atkId)} attacked ${nameOf(tgtId)} with ${n} Royal${n > 1 ? "s" : ""}`,
           );
         }
       }
@@ -362,9 +368,11 @@ export default function MatchScreen() {
       : null;
     if (pendingClubKey && pendingClubKey !== prevPendingClubRef.current && gameState.pendingClubDebuff) {
       const c = gameState.pendingClubDebuff;
+      const clubTargetPoss =
+        c.attackerPlayerId === c.targetPlayerId ? ownPossOf(c.attackerPlayerId) : possOf(c.targetPlayerId);
       pushEvent(
         colorOf(c.attackerPlayerId),
-        `${nameOf(c.attackerPlayerId)} plays a Club on ${nameOf(c.targetPlayerId)}'s Royal`,
+        `${nameOf(c.attackerPlayerId)} played a Club on ${clubTargetPoss} Royal`,
       );
     }
     prevPendingClubRef.current = pendingClubKey;
@@ -396,8 +404,8 @@ export default function MatchScreen() {
         damageParts.push(`${nameOf(id)} lost ${courtLost} Royal${courtLost > 1 ? "s" : ""}`);
       }
       if (!before.eliminated && p.isEliminated) {
-        pushEvent(colorOf(id), `☠ ${nameOf(id)} is eliminated!`);
-        showToast(`☠ ${nameOf(id)} has been eliminated`, "info");
+        pushEvent(colorOf(id), `☠ ${nameOf(id)} ${id === effectMyId ? "were" : "was"} eliminated!`);
+        showToast(`☠ ${nameOf(id)} ${id === effectMyId ? "were" : "was"} eliminated`, "info");
       }
     }
 
@@ -818,6 +826,7 @@ export default function MatchScreen() {
 
   const nameFor = (id: string) =>
     id === myId ? "You" : (displayNames[id] ?? id.slice(0, 8));
+  const possFor = (id: string) => (id === myId ? "your" : `${nameFor(id)}'s`);
   const activePlayerName = nameFor(gameState.activePlayerId);
   const clubAttackerName = pendingClub ? nameFor(pendingClub.attackerPlayerId) : "";
   const clubDefenderName = pendingClub ? nameFor(pendingClub.targetPlayerId) : "";
@@ -1066,6 +1075,8 @@ export default function MatchScreen() {
       setAssigningTargets(true);
       setTargetAssignments({});
       setActiveAssignRoyalId(royalCardIds[0] ?? null);
+      // Jump to the opponents — that's where you tap to assign.
+      requestAnimationFrame(() => boardScrollRef.current?.scrollTo({ y: 0, animated: true }));
     }
   };
 
@@ -1244,10 +1255,53 @@ export default function MatchScreen() {
            (block panel + full courts) overflows, it becomes scrollable so
            regions never overlap or hide each other. ---- */}
       <ScrollView
+        ref={boardScrollRef}
         style={styles.board}
         contentContainerStyle={styles.boardContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Attack-target assignment lives WITH the opponents (top) so you tap
+            a Royal chip here, then tap an opponent seat right below it. */}
+        {assigningTargets && (
+          <Animated.View entering={FadeInDown.duration(180)} style={styles.assignBanner}>
+            <View style={styles.assignBannerHead}>
+              <Ionicons name="flash" size={14} color={Colors.accentRed} />
+              <Text style={styles.assignBannerText}>
+                {activeAssignRoyalId
+                  ? `Tap an opponent below to send ${parseCardId(activeAssignRoyalId).displayRank}${parseCardId(activeAssignRoyalId).suitSymbol} (⚔${effectiveAttack(activeAssignRoyalId, myState?.court.find((r) => r.cardId === activeAssignRoyalId)?.buffAttack ?? 0)})`
+                  : "Every Royal has a target — declare below"}
+              </Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.assignChipRow}>
+              {Array.from(selectedAttackRoyalIds).map((royalId) => {
+                const card = parseCardId(royalId);
+                const royal = myState?.court.find((r) => r.cardId === royalId);
+                const atkV = effectiveAttack(royalId, royal?.buffAttack ?? 0);
+                const assignedTo = targetAssignments[royalId];
+                const isActive = activeAssignRoyalId === royalId;
+                return (
+                  <Pressable
+                    key={royalId}
+                    onPress={() => handleSelectRoyalForAssign(royalId)}
+                    style={({ pressed }) => [
+                      styles.assignChip,
+                      isActive && styles.assignChipActive,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <Text style={[styles.assignChipCard, { color: card.suitColor }]}>
+                      {card.displayRank}{card.suitSymbol} <Text style={styles.assignChipAtk}>⚔{atkV}</Text>
+                    </Text>
+                    <Text style={styles.assignChipTarget} numberOfLines={1}>
+                      {assignedTo ? `→ ${nameFor(assignedTo)}` : "no target"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        )}
+
         {/* Opponent region — redistributes per player count. */}
         {opponents.length === 1 && (
           <View style={styles.oppRegion}>
@@ -1351,8 +1405,8 @@ export default function MatchScreen() {
                 <Ionicons name="warning" size={16} color="#C89B3C" />
                 <Text style={styles.clubPanelTitle}>
                   {isClubResponder
-                    ? `${clubAttackerName} plays a Club on your Royal!`
-                    : `${clubAttackerName}'s Club → ${clubDefenderName}'s Royal`}
+                    ? `${clubAttackerName} is playing a Club on your Royal!`
+                    : `${possFor(pendingClub.attackerPlayerId)} Club → ${possFor(pendingClub.targetPlayerId)} Royal`}
                 </Text>
               </View>
               <View style={styles.clubPanelBody}>
@@ -1494,46 +1548,6 @@ export default function MatchScreen() {
             Tap your Royals to pick attackers
             {selectedAttackRoyalIds.size > 0 ? ` — ${selectedAttackRoyalIds.size} chosen` : ""}
           </Text>
-        </Animated.View>
-      )}
-
-      {assigningTargets && (
-        <Animated.View entering={FadeInDown.duration(180)} style={styles.modeStripColumn}>
-          <View style={styles.modeStripRow}>
-            <Ionicons name="flash" size={14} color={Colors.accentRed} />
-            <Text style={styles.modeStripText}>
-              {activeAssignRoyalId
-                ? `Send ${parseCardId(activeAssignRoyalId).displayRank}${parseCardId(activeAssignRoyalId).suitSymbol} — tap an opponent's name`
-                : "Every Royal has a target — declare below"}
-            </Text>
-          </View>
-          {selectedAttackRoyalIds.size > 1 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.assignChipRow}>
-              {Array.from(selectedAttackRoyalIds).map((royalId) => {
-                const card = parseCardId(royalId);
-                const assignedTo = targetAssignments[royalId];
-                const isActive = activeAssignRoyalId === royalId;
-                return (
-                  <Pressable
-                    key={royalId}
-                    onPress={() => handleSelectRoyalForAssign(royalId)}
-                    style={({ pressed }) => [
-                      styles.assignChip,
-                      isActive && styles.assignChipActive,
-                      pressed && { opacity: 0.8 },
-                    ]}
-                  >
-                    <Text style={[styles.assignChipCard, { color: card.suitColor }]}>
-                      {card.displayRank}{card.suitSymbol}
-                    </Text>
-                    <Text style={styles.assignChipTarget} numberOfLines={1}>
-                      {assignedTo ? `→ ${nameFor(assignedTo)}` : "no target"}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          )}
         </Animated.View>
       )}
 
@@ -1963,6 +1977,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
     color: Colors.textPrimary,
+  },
+  assignBanner: {
+    marginHorizontal: 8,
+    backgroundColor: "rgba(200,16,46,0.12)",
+    borderWidth: 1.5,
+    borderColor: "rgba(229,57,53,0.55)",
+    borderRadius: 12,
+    padding: 8,
+    gap: 6,
+  },
+  assignBannerHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  assignBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+  },
+  assignChipAtk: {
+    color: Colors.accentRed,
   },
   assignChipRow: {
     gap: 6,
