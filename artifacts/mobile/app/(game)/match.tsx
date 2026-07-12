@@ -135,6 +135,9 @@ export default function MatchScreen() {
   // 4-player board: which opponent seat is expanded ("in focus").
   const [focusedOpponentId, setFocusedOpponentId] = useState<string | null>(null);
   const [abyssPickerAction, setAbyssPickerAction] = useState<ValidAction | null>(null);
+  // A dock chip that needs a board target (e.g. Diamond boost) the player has
+  // tapped — the board then highlights legal targets to finish the play.
+  const [armedAction, setArmedAction] = useState<ValidAction | null>(null);
   const [showMenu, setShowMenu] = useState(false);
 
   // Non-blocking feedback + rolling match log.
@@ -356,6 +359,7 @@ export default function MatchScreen() {
     if (gameState.phase === "respond_to_club" || isDuelTurnPhase(gameState.phase)) {
       setSelectedCardId(null);
       setAbyssPickerAction(null);
+      setArmedAction(null);
     }
     if (gameState.phase !== "main") {
       setAttackSelectMode(false);
@@ -404,6 +408,7 @@ export default function MatchScreen() {
         setGameState(data.state);
         setSelectedCardId(null);
         setAbyssPickerAction(null);
+        setArmedAction(null);
         setAttackSelectMode(false);
         setSelectedAttackRoyalIds(new Set());
         setAssigningTargets(false);
@@ -791,13 +796,34 @@ export default function MatchScreen() {
 
   const royalTargetAction = selectedActions.find((a) => !a.disabled && a.targetType === "any_royal");
   const playerTargetAction = selectedActions.find((a) => !a.disabled && a.targetType === "any_player");
-  const dockChipActions = selectedActions.filter(
+
+  // Cards that also offer instant (no-target) options — Diamonds (Mine/Draw),
+  // Royals (to Court), or disabled info rows — surface EVERY option as a dock
+  // chip so nothing hides behind a tap-a-target hint. Tapping a targeted chip
+  // "arms" it (setArmedAction) and the board highlights its legal targets.
+  // Pure-target cards (Hearts/Spades/Clubs/Joker) keep the faster model: no
+  // chips, just tap a glowing target directly.
+  const hasInstantChips = selectedActions.some(
     (a) => a.disabled || !a.requiresTarget || a.targetType === "pick_abyss",
   );
-  const dockTargetHints = selectedActions
-    .filter((a) => !a.disabled && (a.targetType === "any_royal" || a.targetType === "any_player"))
-    .map((a) => targetHintFor(a, selectedCard?.pipValue ?? 0))
-    .filter((h): h is string => !!h);
+
+  const dockChipActions = armedAction ? [] : hasInstantChips ? selectedActions : [];
+
+  const dockTargetHints = armedAction
+    ? [targetHintFor(armedAction, selectedCard?.pipValue ?? 0) ?? "Tap a target on the board"]
+    : hasInstantChips
+      ? []
+      : selectedActions
+          .filter((a) => !a.disabled && (a.targetType === "any_royal" || a.targetType === "any_player"))
+          .map((a) => targetHintFor(a, selectedCard?.pipValue ?? 0))
+          .filter((h): h is string => !!h);
+
+  // Which action a board tap resolves to: the armed chip if present, otherwise
+  // the auto-derived target action (only for pure-target cards).
+  const activeRoyalAction =
+    armedAction?.targetType === "any_royal" ? armedAction : (hasInstantChips ? undefined : royalTargetAction);
+  const activePlayerAction =
+    armedAction?.targetType === "any_player" ? armedAction : (hasInstantChips ? undefined : playerTargetAction);
 
   const selectedCardBlockedReason = selectedCard && selectedActions.length === 0
     ? (amIEliminated
@@ -819,8 +845,8 @@ export default function MatchScreen() {
         : "This card has no legal play right now.")
     : null;
 
-  const targetingRoyals = !!royalTargetAction;
-  const targetingPlayers = !!playerTargetAction || (assigningTargets && !!activeAssignRoyalId);
+  const targetingRoyals = !!activeRoyalAction;
+  const targetingPlayers = !!activePlayerAction || (assigningTargets && !!activeAssignRoyalId);
 
   // ---- Interaction handlers (targeting model) ----
   const handleCardPress = (cardId: string) => {
@@ -831,11 +857,12 @@ export default function MatchScreen() {
       return;
     }
     setAbyssPickerAction(null);
+    setArmedAction(null);
     setSelectedCardId((prev) => (prev === cardId ? null : cardId));
   };
 
   const dispatchRoyalTarget = (targetPlayerId: string, targetRoyalId: string) => {
-    if (!selectedCardId || !royalTargetAction) return;
+    if (!selectedCardId || !activeRoyalAction) return;
     buzzAction();
     if (selectedCard?.isJoker) {
       handleAction({
@@ -848,7 +875,7 @@ export default function MatchScreen() {
     } else {
       handleAction({
         cardId: selectedCardId,
-        action: royalTargetAction.action,
+        action: activeRoyalAction.action,
         targetPlayerId,
         targetRoyalId,
       });
@@ -870,7 +897,7 @@ export default function MatchScreen() {
       });
       return;
     }
-    if (!selectedCardId || !playerTargetAction) return;
+    if (!selectedCardId || !activePlayerAction) return;
     buzzAction();
     if (selectedCard?.isJoker) {
       handleAction({
@@ -882,7 +909,7 @@ export default function MatchScreen() {
     } else {
       handleAction({
         cardId: selectedCardId,
-        action: playerTargetAction.action,
+        action: activePlayerAction.action,
         targetPlayerId,
       });
     }
@@ -890,9 +917,16 @@ export default function MatchScreen() {
   };
 
   const handleDockChip = (action: ValidAction) => {
-    if (!selectedCardId) return;
+    if (!selectedCardId || action.disabled) return;
     if (action.targetType === "pick_abyss") {
       setAbyssPickerAction(action);
+      return;
+    }
+    // Targeted chip (e.g. Diamond boost): arm it, then the player taps a
+    // glowing board target to finish.
+    if (action.requiresTarget && (action.targetType === "any_royal" || action.targetType === "any_player")) {
+      buzzSelect();
+      setArmedAction(action);
       return;
     }
     buzzAction();
@@ -969,6 +1003,7 @@ export default function MatchScreen() {
   const handleAttackButtonPress = () => {
     setSelectedCardId(null);
     setAbyssPickerAction(null);
+    setArmedAction(null);
     setAttackSelectMode(true);
     setSelectedAttackRoyalIds(new Set());
   };
@@ -1506,6 +1541,12 @@ export default function MatchScreen() {
           blockedReason={selectedCardBlockedReason}
           onChipPress={handleDockChip}
           onClose={() => {
+            // When a targeted chip is armed, closing backs out of targeting
+            // (shows the chips again) rather than dropping the card entirely.
+            if (armedAction) {
+              setArmedAction(null);
+              return;
+            }
             setSelectedCardId(null);
             setAbyssPickerAction(null);
           }}
