@@ -124,7 +124,6 @@ export default function MatchScreen() {
   const [gameState, setGameState] = useState<PlayerGameView | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
-  const [autoPassMessage, setAutoPassMessage] = useState<string | null>(null);
 
   const [attackSelectMode, setAttackSelectMode] = useState(false);
   const [selectedAttackRoyalIds, setSelectedAttackRoyalIds] = useState<Set<string>>(new Set());
@@ -160,9 +159,6 @@ export default function MatchScreen() {
   const prevPlayersRef = useRef<Record<string, { life: number; courtSize: number; eliminated: boolean }>>({});
   const prevActivePlayerRef = useRef<string | null>(null);
   const prevPendingClubRef = useRef<string | null>(null);
-  const lastDuelCtxRef = useRef<import("@workspace/api-client-react").DuelContext | null>(null);
-  const lastDuelAttacksRef = useRef<import("@workspace/api-client-react").AttackDeclaration[]>([]);
-  const pendingCombatDamageRef = useRef<string[]>([]);
   const hasNavigatedRef = useRef(false);
 
   const { data: stateData, isLoading } = useGetMatchState(matchId ?? "", {
@@ -207,16 +203,6 @@ export default function MatchScreen() {
       });
     }
   }, [matchData?.match?.status, matchData?.match?.winnerUserId, matchId]);
-
-  // Track the most recent duel context and attacks so we can keep the duel
-  // stage alive briefly after the phase returns to main (auto-resolve notice).
-  useEffect(() => {
-    if (!gameState) return;
-    if (isDuelTurnPhase(gameState.phase) && gameState.duelContext) {
-      lastDuelCtxRef.current = gameState.duelContext as import("@workspace/api-client-react").DuelContext;
-      lastDuelAttacksRef.current = gameState.attacks as import("@workspace/api-client-react").AttackDeclaration[];
-    }
-  }, [gameState]);
 
   // Seat colors: fixed per player for the whole match, by turn order.
   const seatColors = useMemo(() => {
@@ -331,13 +317,9 @@ export default function MatchScreen() {
             : `${displayNames[passedId] ?? passedId.slice(0, 8)} had no cards to play`;
         }
 
-        if (lastDuelCtxRef.current) {
-          // Keep the duel stage open with the notice until the player taps OK.
-          pendingCombatDamageRef.current = damageParts;
-          setAutoPassMessage(message);
-        } else {
-          showToast([message, ...damageParts].join(" · "), "info");
-        }
+        // The duel stage closes itself when the duel ends — the outcome goes
+        // to a toast + the match log instead of a screen you must dismiss.
+        showToast([message, ...damageParts].join(" · "), "info");
       } else if (damageParts.length > 0) {
         showToast(`⚔ ${damageParts.join(" · ")}`, "info");
       }
@@ -642,14 +624,6 @@ export default function MatchScreen() {
     submitAction({ matchId, data: { type: "duel_pass" } });
   }, [matchId, submitAction]);
 
-  const handleDismissAutoPass = useCallback(() => {
-    const parts = pendingCombatDamageRef.current;
-    if (parts.length > 0) showToast(parts.join(" · "), "info");
-    setAutoPassMessage(null);
-    lastDuelCtxRef.current = null;
-    pendingCombatDamageRef.current = [];
-  }, [showToast]);
-
   if (isLoading && !gameState) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -737,9 +711,7 @@ export default function MatchScreen() {
   const waitingOnOtherDefenders =
     inDeclareBlocks && attacksTargetingMe.length > 0 && !stillNeedToSubmitBlocks;
   const showDamageOrderModal = inAssignDamageOrder && duelCtx && myId === duelCtx.attackerPlayerId;
-  const showDuelStage = (inDuel && !!duelCtx) || !!autoPassMessage;
-  const effectiveDuelCtx = duelCtx ?? lastDuelCtxRef.current;
-  const effectiveDuelAttacks = inDuel ? gameState.attacks : lastDuelAttacksRef.current;
+  const showDuelStage = inDuel && !!duelCtx;
 
   const nameFor = (id: string) =>
     id === myId ? "You" : (displayNames[id] ?? id.slice(0, 8));
@@ -1224,28 +1196,26 @@ export default function MatchScreen() {
               isSubmitting={isSubmitting}
               onConfirm={handleConfirmBlocks}
             />
-          ) : showDuelStage && effectiveDuelCtx ? (
+          ) : showDuelStage && duelCtx ? (
             <DuelStage
               phase={phase}
-              attacks={effectiveDuelAttacks.filter(
+              attacks={gameState.attacks.filter(
                 (a) =>
                   a.blockerCardIds &&
                   a.blockerCardIds.length > 0 &&
-                  a.attackerPlayerId === effectiveDuelCtx.attackerPlayerId &&
-                  a.targetPlayerId === effectiveDuelCtx.defenderPlayerId,
+                  a.attackerPlayerId === duelCtx.attackerPlayerId &&
+                  a.targetPlayerId === duelCtx.defenderPlayerId,
               )}
-              duelContext={effectiveDuelCtx}
+              duelContext={duelCtx}
               myId={myId}
-              attackerCourt={gameState.players[effectiveDuelCtx.attackerPlayerId]?.court ?? []}
-              defenderCourt={gameState.players[effectiveDuelCtx.defenderPlayerId]?.court ?? []}
+              attackerCourt={gameState.players[duelCtx.attackerPlayerId]?.court ?? []}
+              defenderCourt={gameState.players[duelCtx.defenderPlayerId]?.court ?? []}
               displayNames={displayNames}
-              attackerColor={colorOf(effectiveDuelCtx.attackerPlayerId)}
-              defenderColor={colorOf(effectiveDuelCtx.defenderPlayerId)}
+              attackerColor={colorOf(duelCtx.attackerPlayerId)}
+              defenderColor={colorOf(duelCtx.defenderPlayerId)}
               isSubmitting={isSubmitting}
-              autoPassMessage={autoPassMessage}
               remainingOpponentIds={gameState.duelQueue ?? []}
               onPass={handleDuelPass}
-              onDismissAutoPass={handleDismissAutoPass}
             />
           ) : inRespondToClub && pendingClub ? (
             <Animated.View entering={FadeIn.duration(250)} style={styles.clubPanel}>
