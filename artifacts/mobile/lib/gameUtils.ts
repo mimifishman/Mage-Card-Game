@@ -140,6 +140,12 @@ export interface ValidAction {
   requiresTarget: boolean;
   disabled?: boolean;
   targetType?: "any_royal" | "any_player" | "pick_abyss";
+  /** Compact tile presentation for the action dock. */
+  icon?: string;
+  /** Short verb shown under the icon (e.g. "To Mine"). Falls back to label. */
+  short?: string;
+  /** Small detail line under the verb (e.g. "+10 ⚡", "own turn only"). */
+  detail?: string;
 }
 
 export function isDuelTurnPhase(phase: string): boolean {
@@ -227,16 +233,27 @@ export function getValidActionsForCard(
         // that as a visible disabled chip instead of silently hiding it.
         {
           action: "play_diamond_to_mine",
-          label: isMyDuelTurn
-            ? "Add to the Mine — not during a duel"
-            : "Add to the Mine — only on your own turn",
+          label: "Add to the Mine",
+          icon: "💎",
+          short: "To Mine",
+          detail: isMyDuelTurn ? "not in a duel" : "your turn only",
           requiresTarget: false,
           disabled: true,
         },
-        { action: "discard_diamond_to_draw", label: "Discard → draw a card", requiresTarget: false },
+        {
+          action: "discard_diamond_to_draw",
+          label: "Discard → draw a card",
+          icon: "🎴",
+          short: "Draw",
+          detail: "1 card",
+          requiresTarget: false,
+        },
         {
           action: "discard_diamond_for_boost",
           label: `Boost a player: +${card.pipValue} Vault this turn`,
+          icon: "⚡",
+          short: "Boost",
+          detail: `+${card.pipValue} ⚡`,
           requiresTarget: true,
           targetType: "any_player",
         },
@@ -388,11 +405,21 @@ export function getValidActionsForCard(
 
   if (card.isRoyal) {
     if (vault >= card.vaultCost) {
-      actions.push({ action: "play_royal_to_court", label: `Summon to your Court (⚡${card.vaultCost})`, requiresTarget: false });
+      actions.push({
+        action: "play_royal_to_court",
+        label: `Summon to your Court (⚡${card.vaultCost})`,
+        icon: "👑",
+        short: "Summon",
+        detail: `⚡${card.vaultCost}`,
+        requiresTarget: false,
+      });
     } else {
       actions.push({
         action: "play_royal_to_court",
         label: `Summoning needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+        icon: "👑",
+        short: "Summon",
+        detail: `need ⚡${card.vaultCost}`,
         requiresTarget: false,
         disabled: true,
       });
@@ -405,17 +432,47 @@ export function getValidActionsForCard(
       actions.push({
         action: "play_diamond_to_mine",
         label: "Diamond already used this turn (one per turn)",
+        icon: "💎",
+        short: "Diamond",
+        detail: "used this turn",
         requiresTarget: false,
         disabled: true,
       });
     } else {
       if (!inClubResponse) {
-        actions.push({ action: "play_diamond_to_mine", label: `Add to the Mine (+${card.pipValue} ⚡)`, requiresTarget: false });
+        actions.push({
+          action: "play_diamond_to_mine",
+          label: `Add to the Mine (+${card.pipValue} ⚡)`,
+          icon: "💎",
+          short: "To Mine",
+          detail: `+${card.pipValue} ⚡`,
+          requiresTarget: false,
+        });
+      } else {
+        actions.push({
+          action: "play_diamond_to_mine",
+          label: "Add to the Mine — not during a Club response",
+          icon: "💎",
+          short: "To Mine",
+          detail: "not right now",
+          requiresTarget: false,
+          disabled: true,
+        });
       }
-      actions.push({ action: "discard_diamond_to_draw", label: "Discard → draw a card", requiresTarget: false });
+      actions.push({
+        action: "discard_diamond_to_draw",
+        label: "Discard → draw a card",
+        icon: "🎴",
+        short: "Draw",
+        detail: "1 card",
+        requiresTarget: false,
+      });
       actions.push({
         action: "discard_diamond_for_boost",
         label: `Boost a player: +${card.pipValue} Vault this turn`,
+        icon: "⚡",
+        short: "Boost",
+        detail: `+${card.pipValue} ⚡`,
         requiresTarget: true,
         targetType: "any_player",
       });

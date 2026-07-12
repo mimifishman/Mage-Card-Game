@@ -59,22 +59,41 @@ export default function ActionDock({
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.chipRow}
               >
-                {chipActions.map((a, i) => (
-                  <Pressable
-                    key={`${a.action}-${i}`}
-                    onPress={() => !a.disabled && onChipPress(a)}
-                    disabled={a.disabled}
-                    style={({ pressed }) => [
-                      styles.chip,
-                      a.disabled && styles.chipDisabled,
-                      pressed && !a.disabled && { opacity: 0.75 },
-                    ]}
-                  >
-                    <Text style={[styles.chipText, a.disabled && styles.chipTextDisabled]}>
-                      {a.label}
-                    </Text>
-                  </Pressable>
-                ))}
+                {chipActions.map((a, i) => {
+                  // Icon tile when the action provides icon+short; otherwise a
+                  // clean wrapped text tile — never a horizontal run-on.
+                  const isTile = !!a.icon && !!a.short;
+                  return (
+                    <Pressable
+                      key={`${a.action}-${i}`}
+                      onPress={() => !a.disabled && onChipPress(a)}
+                      disabled={a.disabled}
+                      style={({ pressed }) => [
+                        isTile ? styles.tile : styles.textChip,
+                        a.disabled && styles.chipDisabled,
+                        pressed && !a.disabled && { opacity: 0.75 },
+                      ]}
+                    >
+                      {isTile ? (
+                        <>
+                          <Text style={[styles.tileIcon, a.disabled && styles.dim]}>{a.icon}</Text>
+                          <Text style={[styles.tileShort, a.disabled && styles.chipTextDisabled]}>
+                            {a.short}
+                          </Text>
+                          {a.detail && (
+                            <Text style={[styles.tileDetail, a.disabled && styles.chipTextDisabled]}>
+                              {a.detail}
+                            </Text>
+                          )}
+                        </>
+                      ) : (
+                        <Text style={[styles.chipText, a.disabled && styles.chipTextDisabled]}>
+                          {a.label}
+                        </Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
               </ScrollView>
             )}
           </>
@@ -125,14 +144,45 @@ const styles = StyleSheet.create({
   },
   chipRow: {
     gap: 8,
+    alignItems: "stretch",
   },
-  chip: {
+  tile: {
+    width: 86,
     backgroundColor: Colors.bgSurface,
     borderWidth: 1.5,
     borderColor: Colors.borderLight,
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderRadius: 12,
     paddingVertical: 7,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 1,
+  },
+  tileIcon: {
+    fontSize: 20,
+  },
+  tileShort: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textPrimary,
+  },
+  tileDetail: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.brand,
+  },
+  dim: {
+    opacity: 0.5,
+  },
+  textChip: {
+    maxWidth: 150,
+    justifyContent: "center",
+    backgroundColor: Colors.bgSurface,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
   },
   chipDisabled: {
     opacity: 0.55,
