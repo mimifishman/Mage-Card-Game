@@ -123,9 +123,10 @@ export default function Seat({
 
   const stats = !isEliminated && (
     <View style={[styles.statsRow, compact && styles.statsRowCompact]}>
-      <View style={styles.stat}>
-        <Text style={[styles.statIcon, compact && styles.statIconCompact]}>❤️</Text>
-        <Text style={[styles.statValue, compact && styles.statValueCompact, { color: "#FF6B6B" }]}>
+      {/* Prominent: Life + Vault — the two numbers that decide every choice. */}
+      <View style={[styles.statPrimary, styles.statLife, compact && styles.statPrimaryCompact]}>
+        <Text style={[styles.statPrimaryIcon, compact && styles.statPrimaryIconCompact]}>❤️</Text>
+        <Text style={[styles.statPrimaryValue, compact && styles.statPrimaryValueCompact, { color: "#FF6B6B" }]}>
           {player.life}
         </Text>
         {lifeDelta !== null && (
@@ -141,19 +142,23 @@ export default function Seat({
           </Animated.Text>
         )}
       </View>
-      <View style={styles.stat}>
-        <Text style={[styles.statIcon, compact && styles.statIconCompact]}>⚡</Text>
-        <Text style={[styles.statValue, compact && styles.statValueCompact, { color: Colors.brand }]}>
+      <View style={[styles.statPrimary, styles.statVault, compact && styles.statPrimaryCompact]}>
+        <Text style={[styles.statPrimaryIcon, compact && styles.statPrimaryIconCompact]}>⚡</Text>
+        <Text style={[styles.statPrimaryValue, compact && styles.statPrimaryValueCompact, { color: Colors.brand }]}>
           {player.vault.available}
         </Text>
       </View>
-      <View style={styles.stat}>
-        <Text style={[styles.statIcon, compact && styles.statIconCompact]}>🂠</Text>
-        <Text style={[styles.statValue, compact && styles.statValueCompact]}>{player.handCount}</Text>
-      </View>
-      <View style={styles.stat}>
-        <Text style={[styles.statIcon, compact && styles.statIconCompact]}>👑</Text>
-        <Text style={[styles.statValue, compact && styles.statValueCompact]}>{player.court.length}</Text>
+
+      {/* Secondary: Hand + Court, shown as counts (×N) so the icons read clearly. */}
+      <View style={styles.statSecondaryGroup}>
+        <View style={styles.statSecondary}>
+          <Text style={[styles.statSecondaryIcon, compact && styles.statSecondaryIconCompact]}>🂠</Text>
+          <Text style={[styles.statSecondaryValue, compact && styles.statSecondaryValueCompact]}>×{player.handCount}</Text>
+        </View>
+        <View style={styles.statSecondary}>
+          <Text style={[styles.statSecondaryIcon, compact && styles.statSecondaryIconCompact]}>👑</Text>
+          <Text style={[styles.statSecondaryValue, compact && styles.statSecondaryValueCompact]}>×{player.court.length}</Text>
+        </View>
       </View>
     </View>
   );
@@ -343,32 +348,70 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
     alignItems: "center",
     flexShrink: 0,
   },
   statsRowCompact: {
-    gap: 8,
+    gap: 6,
     flexWrap: "wrap",
   },
-  stat: {
+  statPrimary: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9,
   },
-  statIcon: {
-    fontSize: 14,
+  statPrimaryCompact: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  statIconCompact: {
-    fontSize: 11,
+  statLife: {
+    backgroundColor: "rgba(255,107,107,0.12)",
   },
-  statValue: {
-    fontSize: 17,
+  statVault: {
+    backgroundColor: "rgba(200,155,60,0.14)",
+  },
+  statPrimaryIcon: {
+    fontSize: 15,
+  },
+  statPrimaryIconCompact: {
+    fontSize: 12,
+  },
+  statPrimaryValue: {
+    fontSize: 21,
     fontFamily: "Inter_700Bold",
     color: Colors.textPrimary,
   },
-  statValueCompact: {
-    fontSize: 14,
+  statPrimaryValueCompact: {
+    fontSize: 16,
+  },
+  statSecondaryGroup: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    marginLeft: 2,
+  },
+  statSecondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+  },
+  statSecondaryIcon: {
+    fontSize: 12,
+  },
+  statSecondaryIconCompact: {
+    fontSize: 10,
+  },
+  statSecondaryValue: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textMuted,
+  },
+  statSecondaryValueCompact: {
+    fontSize: 11,
   },
   lifeDelta: {
     position: "absolute",
