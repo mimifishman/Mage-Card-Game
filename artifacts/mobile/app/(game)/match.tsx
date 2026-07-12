@@ -161,6 +161,25 @@ export default function MatchScreen() {
   const prevPendingClubRef = useRef<string | null>(null);
   const hasNavigatedRef = useRef(false);
 
+  // Duel tracking: snapshot each duel when it starts so we can diff courts +
+  // life when it ends and explain the outcome. completedDuels feeds the ✓
+  // rows in the duel stage; duelNotice is the after-combat result panel.
+  const duelSnapshotRef = useRef<{
+    attackerId: string;
+    defenderId: string;
+    pairs: { attackerCardId: string; blockerIds: string[] }[];
+    lives: Record<string, number>;
+  } | null>(null);
+  const [completedDuels, setCompletedDuels] = useState<{ id: number; text: string }[]>([]);
+  const [duelNotice, setDuelNotice] = useState<{ id: number; title: string; lines: string[] } | null>(null);
+
+  // The result panel informs without blocking: it auto-clears after ~9s.
+  useEffect(() => {
+    if (!duelNotice) return;
+    const t = setTimeout(() => setDuelNotice(null), 9000);
+    return () => clearTimeout(t);
+  }, [duelNotice?.id]);
+
   const { data: stateData, isLoading } = useGetMatchState(matchId ?? "", {
     query: {
       queryKey: getGetMatchStateQueryKey(matchId ?? ""),
@@ -218,6 +237,87 @@ export default function MatchScreen() {
     [seatColors],
   );
 
+  // Snapshot the duel when it starts; when it ends (or hands off to the next
+  // defender in the queue), diff courts + life against the snapshot to
+  // produce a human-readable outcome.
+  useEffect(() => {
+    if (!gameState) return;
+    const effectMyId = user?.id ?? "";
+    const nameOf = (id: string) =>
+      id === effectMyId ? "You" : (displayNames[id] ?? id.slice(0, 8));
+    const cardLabel = (id: string) => {
+      const c = parseCardId(id);
+      return `${c.displayRank}${c.suitSymbol}`;
+    };
+
+    const finalize = (snap: NonNullable<typeof duelSnapshotRef.current>) => {
+      const atkName = nameOf(snap.attackerId);
+      const defName = nameOf(snap.defenderId);
+      const atkCourt = gameState.players[snap.attackerId]?.court ?? [];
+      const defCourt = gameState.players[snap.defenderId]?.court ?? [];
+      const deadAtk: string[] = [];
+      const deadDef: string[] = [];
+      for (const p of snap.pairs) {
+        if (!atkCourt.some((r) => r.cardId === p.attackerCardId)) deadAtk.push(cardLabel(p.attackerCardId));
+        for (const b of p.blockerIds) {
+          if (!defCourt.some((r) => r.cardId === b)) deadDef.push(cardLabel(b));
+        }
+      }
+      const lines: string[] = [];
+      if (deadDef.length > 0) lines.push(`${defName} lost ${deadDef.join(", ")}`);
+      if (deadAtk.length > 0) lines.push(`${atkName} lost ${deadAtk.join(", ")}`);
+      for (const [pid, prevLife] of Object.entries(snap.lives)) {
+        const nowLife = gameState.players[pid]?.life ?? prevLife;
+        if (nowLife < prevLife) lines.push(`${nameOf(pid)} took ${prevLife - nowLife} damage (❤ ${nowLife})`);
+        else if (nowLife > prevLife) lines.push(`${nameOf(pid)} healed +${nowLife - prevLife} (❤ ${nowLife})`);
+      }
+      if (lines.length === 0) lines.push("Both sides survived — no losses");
+      return { title: `${atkName} vs ${defName}`, lines };
+    };
+
+    const snap = duelSnapshotRef.current;
+    const ctx = gameState.duelContext;
+
+    if (isDuelTurnPhase(gameState.phase) && ctx) {
+      const sameDuel =
+        snap && snap.attackerId === ctx.attackerPlayerId && snap.defenderId === ctx.defenderPlayerId;
+      if (!sameDuel) {
+        // Previous duel (if any) handed off to the next defender — record it.
+        if (snap) {
+          const res = finalize(snap);
+          const idn = idCounterRef.current++;
+          setCompletedDuels((prev) => [...prev.slice(-3), { id: idn, text: `${res.title}: ${res.lines.join(" · ")}` }]);
+          pushEvent(colorOf(snap.attackerId), `Duel over — ${res.title}: ${res.lines.join(" · ")}`);
+        }
+        duelSnapshotRef.current = {
+          attackerId: ctx.attackerPlayerId,
+          defenderId: ctx.defenderPlayerId,
+          pairs: gameState.attacks
+            .filter(
+              (a) =>
+                a.attackerPlayerId === ctx.attackerPlayerId &&
+                a.targetPlayerId === ctx.defenderPlayerId &&
+                (a.blockerCardIds?.length ?? 0) > 0,
+            )
+            .map((a) => ({ attackerCardId: a.attackerCardId, blockerIds: [...(a.blockerCardIds ?? [])] })),
+          lives: {
+            [ctx.attackerPlayerId]: gameState.players[ctx.attackerPlayerId]?.life ?? 0,
+            [ctx.defenderPlayerId]: gameState.players[ctx.defenderPlayerId]?.life ?? 0,
+          },
+        };
+      }
+    } else if (snap) {
+      // Combat left the duel phases — the last duel is over. Show the result
+      // panel (non-blocking, auto-clears) and log it permanently.
+      const res = finalize(snap);
+      duelSnapshotRef.current = null;
+      const idn = idCounterRef.current++;
+      setDuelNotice({ id: idn, title: res.title, lines: res.lines });
+      pushEvent(colorOf(snap.attackerId), `Duel over — ${res.title}: ${res.lines.join(" · ")}`);
+      setCompletedDuels([]);
+    }
+  }, [gameState]);
+
   // Diff-based match log + damage/combat notices. This replaces the old
   // fade-away combat banner: everything lands in the persistent ticker, and
   // big moments also toast.
@@ -235,8 +335,11 @@ export default function MatchScreen() {
     }
     prevActivePlayerRef.current = gameState.activePlayerId;
 
-    // Attack declarations (entering declare_blocks).
+    // Attack declarations (entering declare_blocks) — a fresh combat begins,
+    // so clear last combat's duel tracker and result panel.
     if (prev !== "declare_blocks" && gameState.phase === "declare_blocks") {
+      setCompletedDuels([]);
+      setDuelNotice(null);
       const byAttacker = new Map<string, Map<string, number>>();
       for (const a of gameState.attacks) {
         const inner = byAttacker.get(a.attackerPlayerId) ?? new Map<string, number>();
@@ -317,10 +420,10 @@ export default function MatchScreen() {
             : `${displayNames[passedId] ?? passedId.slice(0, 8)} had no cards to play`;
         }
 
-        // The duel stage closes itself when the duel ends — the outcome goes
-        // to a toast + the match log instead of a screen you must dismiss.
-        showToast([message, ...damageParts].join(" · "), "info");
-      } else if (damageParts.length > 0) {
+        // After a duel the result panel carries the details — toast only the
+        // auto-pass reason. Unblocked-only combat still toasts its damage.
+        showToast(wasDuel ? message : [message, ...damageParts].join(" · "), "info");
+      } else if (damageParts.length > 0 && !wasDuel) {
         showToast(`⚔ ${damageParts.join(" · ")}`, "info");
       }
     }
@@ -1185,6 +1288,21 @@ export default function MatchScreen() {
 
         {/* Center region: shared table, or the current confrontation. */}
         <View style={styles.centerRegion}>
+          {/* How the last duel ended — informational, auto-clears, never blocks. */}
+          {duelNotice && !showDuelStage && (
+            <Animated.View entering={FadeInDown.duration(250)} style={styles.duelResultPanel}>
+              <View style={styles.duelResultHeader}>
+                <Ionicons name="flash" size={13} color="#C89B3C" />
+                <Text style={styles.duelResultTitle}>DUEL OVER — {duelNotice.title}</Text>
+                <Pressable onPress={() => setDuelNotice(null)} hitSlop={8}>
+                  <Ionicons name="close" size={16} color={Colors.textMuted} />
+                </Pressable>
+              </View>
+              {duelNotice.lines.map((line) => (
+                <Text key={line} style={styles.duelResultLine}>• {line}</Text>
+              ))}
+            </Animated.View>
+          )}
           {showBlockPanel && attacksTargetingMe[0] ? (
             <BlockPanel
               attacks={gameState.attacks}
@@ -1214,7 +1332,17 @@ export default function MatchScreen() {
               attackerColor={colorOf(duelCtx.attackerPlayerId)}
               defenderColor={colorOf(duelCtx.defenderPlayerId)}
               isSubmitting={isSubmitting}
-              remainingOpponentIds={gameState.duelQueue ?? []}
+              completedDuels={completedDuels}
+              upcomingDuels={(gameState.duelQueue ?? []).map((qid) => ({
+                name: nameFor(qid),
+                color: colorOf(qid),
+                fights: gameState.attacks.filter(
+                  (a) =>
+                    a.attackerPlayerId === duelCtx.attackerPlayerId &&
+                    a.targetPlayerId === qid &&
+                    (a.blockerCardIds?.length ?? 0) > 0,
+                ).length,
+              }))}
               onPass={handleDuelPass}
             />
           ) : inRespondToClub && pendingClub ? (
@@ -1698,6 +1826,33 @@ const styles = StyleSheet.create({
   },
   myRegion: {
     paddingHorizontal: 8,
+  },
+  duelResultPanel: {
+    marginHorizontal: 8,
+    backgroundColor: "rgba(200,155,60,0.10)",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#C89B3C",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 3,
+  },
+  duelResultHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  duelResultTitle: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    color: "#C89B3C",
+    letterSpacing: 0.5,
+  },
+  duelResultLine: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: Colors.textPrimary,
   },
   clubPanel: {
     marginHorizontal: 8,

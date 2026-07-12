@@ -18,7 +18,11 @@ interface DuelStageProps {
   attackerColor: string;
   defenderColor: string;
   isSubmitting: boolean;
-  remainingOpponentIds?: string[];
+  /** Duels already resolved this combat — shown as ✓ rows so the whole
+      sequence stays visible. */
+  completedDuels?: { id: number; text: string }[];
+  /** Duels still queued after this one — shown as ⏳ rows. */
+  upcomingDuels?: { name: string; color: string; fights: number }[];
   onPass: () => void;
 }
 
@@ -39,7 +43,8 @@ export default function DuelStage({
   attackerColor,
   defenderColor,
   isSubmitting,
-  remainingOpponentIds = [],
+  completedDuels = [],
+  upcomingDuels = [],
   onPass,
 }: DuelStageProps) {
   const isMyDuelTurn =
@@ -95,12 +100,15 @@ export default function DuelStage({
         <Text style={[styles.turnText, { color: turnHolderColor }]}>
           {isMyDuelTurn ? "Your move" : `${turnHolderName} to act`}
         </Text>
-        {remainingOpponentIds.length > 0 && (
-          <Text style={styles.queueText}>
-            · then {attackerName} duels {remainingOpponentIds.map((id) => nameFor(id)).join(", ")}
-          </Text>
-        )}
       </View>
+
+      {/* Duels already fought this combat */}
+      {completedDuels.map((d) => (
+        <View key={d.id} style={styles.doneRow}>
+          <Text style={styles.doneCheck}>✓</Text>
+          <Text style={styles.doneText} numberOfLines={2}>{d.text}</Text>
+        </View>
+      ))}
 
       {/* Every live fight, one row each */}
       <View style={styles.pairList}>
@@ -148,6 +156,18 @@ export default function DuelStage({
           ))
         )}
       </View>
+
+      {/* Duels still to come after this one */}
+      {upcomingDuels.map((u, i) => (
+        <View key={`${u.name}-${i}`} style={styles.upcomingRow}>
+          <Text style={styles.upcomingHourglass}>⏳</Text>
+          <Text style={styles.upcomingText}>
+            then <Text style={{ color: attackerColor }}>{attackerName}</Text> duels{" "}
+            <Text style={{ color: u.color }}>{u.name}</Text>
+            {u.fights > 0 ? ` — ${u.fights} fight${u.fights > 1 ? "s" : ""} waiting` : ""}
+          </Text>
+        </View>
+      ))}
 
       {/* Footer: only the duelist whose move it is gets a button */}
       {isMyDuelTurn ? (
@@ -234,9 +254,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_700Bold",
   },
-  queueText: {
-    fontSize: 10,
+  doneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(46,125,50,0.10)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  doneCheck: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    color: "#8FDF9A",
+  },
+  doneText: {
+    flex: 1,
+    fontSize: 11,
     fontFamily: "Inter_500Medium",
+    color: Colors.textSecondary,
+  },
+  upcomingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  upcomingHourglass: {
+    fontSize: 11,
+  },
+  upcomingText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
     color: Colors.textMuted,
   },
   pairList: {
