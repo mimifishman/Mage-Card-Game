@@ -20,6 +20,15 @@ const ACCENT_GREEN = "#2E7D32";
 const BORDER = "#1E4A2A";
 const BORDER_LIGHT = "#2D6040";
 
+// Per-seat accent colors, assigned by turn order for the whole match.
+// Used on seat borders, name tags, attack arrows and event-ticker entries so
+// "who did that?" is always answerable by color alone.
+export const SEAT_COLORS = ["#E8B54D", "#5AB0FF", "#C86BD4", "#58C878"] as const;
+
+export function seatColorFor(index: number): string {
+  return SEAT_COLORS[((index % SEAT_COLORS.length) + SEAT_COLORS.length) % SEAT_COLORS.length]!;
+}
+
 const Colors = {
   brand: BRAND,
   brandDim: BRAND_DIM,

@@ -268,9 +268,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   arrowBtn: {
-    padding: 4,
-    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     backgroundColor: Colors.bgSurface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
   },
   arrowDisabled: {
     opacity: 0.3,

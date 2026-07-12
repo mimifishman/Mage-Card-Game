@@ -28,7 +28,7 @@ import {
   useAbandonMatch,
   getGetMatchQueryKey,
 } from "@workspace/api-client-react";
-import Colors from "@/constants/colors";
+import Colors, { seatColorFor } from "@/constants/colors";
 import { useAuth } from "@/lib/auth";
 
 export default function WaitingRoomScreen() {
@@ -207,59 +207,52 @@ export default function WaitingRoomScreen() {
             <ActivityIndicator color={Colors.brand} style={{ marginTop: 20 }} />
           ) : (
             <View style={styles.playersGrid}>
-              {Array.from({ length: 4 }).map((_, idx) => {
-                const player = players[idx];
-                const isMe = player?.userId === user?.id;
-                const isPlayerHost = player?.userId === matchData?.match?.createdBy;
-                const displayName = player?.displayName ?? null;
+              {players.map((player, idx) => {
+                const isMe = player.userId === user?.id;
+                const isPlayerHost = player.userId === matchData?.match?.createdBy;
+                const color = seatColorFor(idx);
 
                 return (
                   <Animated.View
-                    key={idx}
+                    key={player.userId}
                     entering={FadeInDown.delay(300 + idx * 80).duration(500)}
-                    style={[
-                      styles.playerSlot,
-                      player ? styles.playerSlotFilled : styles.playerSlotEmpty,
-                    ]}
+                    style={[styles.playerSlot, styles.playerSlotFilled, { borderColor: color }]}
                   >
-                    {player ? (
-                      <>
-                        <View style={[styles.playerAvatar, isMe && styles.playerAvatarMe]}>
-                          <MaterialCommunityIcons
-                            name="account-circle"
-                            size={28}
-                            color={isMe ? Colors.brand : Colors.textSecondary}
-                          />
-                        </View>
-                        <Text
-                          style={[styles.playerName, isMe && { color: Colors.brand }]}
-                          numberOfLines={1}
-                        >
-                          {displayName}
-                        </Text>
-                        <View style={styles.badgeRow}>
-                          {isMe && <Text style={styles.youBadge}>You</Text>}
-                          {isPlayerHost && <Text style={styles.hostBadge}>Host</Text>}
-                        </View>
-                      </>
-                    ) : (
-                      <>
-                        <View style={styles.emptySlot}>
-                          <Ionicons name="add" size={24} color={Colors.textMuted} />
-                        </View>
-                        <Text style={styles.emptySlotText}>Waiting...</Text>
-                      </>
-                    )}
+                    <View style={[styles.playerAvatar, { borderWidth: 2, borderColor: color }]}>
+                      <MaterialCommunityIcons
+                        name="account-circle"
+                        size={28}
+                        color={color}
+                      />
+                    </View>
+                    <Text style={[styles.playerName, { color }]} numberOfLines={1}>
+                      {player.displayName}
+                    </Text>
+                    <View style={styles.badgeRow}>
+                      {isMe && <Text style={styles.youBadge}>You</Text>}
+                      {isPlayerHost && <Text style={styles.hostBadge}>Host</Text>}
+                    </View>
                   </Animated.View>
                 );
               })}
-            </View>
-          )}
-
-          {players.length < 2 && (
-            <View style={styles.waitingRow}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.waitingText}>Waiting for more players...</Text>
+              {players.length < 4 && (
+                <Animated.View
+                  entering={FadeInDown.delay(300 + players.length * 80).duration(500)}
+                  style={[styles.playerSlot, styles.playerSlotEmpty]}
+                >
+                  <Pressable onPress={handleCopyCode} style={styles.inviteTile}>
+                    <View style={styles.emptySlot}>
+                      <Ionicons name="person-add" size={22} color={Colors.brand} />
+                    </View>
+                    <Text style={styles.emptySlotText}>
+                      {players.length < 2 ? "Invite a friend to start" : "Room for more"}
+                    </Text>
+                    <Text style={styles.inviteTileCode}>
+                      {copied ? "✓ copied" : `tap to copy ${inviteCode ?? ""}`}
+                    </Text>
+                  </Pressable>
+                </Animated.View>
+              )}
             </View>
           )}
         </Animated.View>
@@ -292,7 +285,7 @@ export default function WaitingRoomScreen() {
                   <Ionicons name="flash" size={22} color={canStart ? Colors.bgDeep : Colors.textMuted} />
                   <Text style={[styles.startBtnText, !canStart && { color: Colors.textMuted }]}>
                     {canStart
-                      ? "Start Game"
+                      ? `Start with ${players.length} players`
                       : `Need ${Math.max(0, 2 - players.length)} more player${players.length === 1 ? "" : "s"}`}
                   </Text>
                 </LinearGradient>
@@ -509,6 +502,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
+  },
+  inviteTile: {
+    alignItems: "center",
+    gap: 8,
+  },
+  inviteTileCode: {
+    fontSize: 11,
+    fontFamily: "Inter_700Bold",
+    color: Colors.brand,
+    letterSpacing: 1,
   },
   waitingRow: {
     flexDirection: "row",

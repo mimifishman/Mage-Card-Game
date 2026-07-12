@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useAuth } from "@/lib/auth";
 import { useGetMatch, getGetMatchQueryKey, useRematchMatch } from "@workspace/api-client-react";
-import Colors from "@/constants/colors";
+import Colors, { seatColorFor } from "@/constants/colors";
 
 export default function GameOverScreen() {
   const { matchId, winnerUserId } = useLocalSearchParams<{
@@ -131,6 +131,25 @@ export default function GameOverScreen() {
             </View>
           )}
 
+          {(matchData?.players?.length ?? 0) > 0 && (
+            <View style={styles.playersList}>
+              {matchData!.players!.map((p, idx) => {
+                const isWinner = p.userId === winnerUserId;
+                const color = seatColorFor(idx);
+                return (
+                  <View key={p.userId} style={[styles.playerRow, isWinner && styles.playerRowWinner]}>
+                    <View style={[styles.playerDot, { backgroundColor: color }]} />
+                    <Text style={[styles.playerRowName, { color }]} numberOfLines={1}>
+                      {p.displayName}
+                      {p.userId === user?.id ? " (you)" : ""}
+                    </Text>
+                    {isWinner && <Ionicons name="trophy" size={14} color={Colors.brand} />}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
           <Text style={styles.matchIdText}>Match: {matchId}</Text>
         </Animated.View>
 
@@ -238,6 +257,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
     color: Colors.brand,
+  },
+  playersList: {
+    width: "100%",
+    gap: 6,
+    marginTop: 4,
+  },
+  playerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  playerRowWinner: {
+    borderColor: Colors.brand,
+    backgroundColor: "rgba(200,155,60,0.08)",
+  },
+  playerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  playerRowName: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
   matchIdText: {
     fontSize: 11,

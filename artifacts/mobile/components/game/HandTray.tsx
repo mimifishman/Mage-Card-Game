@@ -20,6 +20,10 @@ interface HandTrayProps {
   isMyInterruptTurn?: boolean;
   canInitiateInterrupt?: boolean;
   phase: string;
+  /** My available Vault — cards I can't pay for show a red cost chip. */
+  vault?: number;
+  /** My seat color — used for the "can act" edge. */
+  accentColor?: string;
   onCardPress: (cardId: string) => void;
 }
 
@@ -51,6 +55,8 @@ export default function HandTray({
   isMyInterruptTurn = false,
   canInitiateInterrupt = false,
   phase,
+  vault = 0,
+  accentColor = Colors.brand,
   onCardPress,
 }: HandTrayProps) {
   const globalCanPlay =
@@ -61,25 +67,29 @@ export default function HandTray({
     isMyInterruptTurn ||
     canInitiateInterrupt;
 
+  const respondOnly =
+    canInitiateInterrupt && !isMyTurn && !isMyDuelTurn && !isMyInterruptTurn && !isDefender && !isClubResponder;
+
   const hintText = () => {
-    if (phase === "discard") return "Tap a card to discard";
-    if (phase === "declare_blocks") return "Tap a card to play while blocking";
-    if (phase === "respond_to_club") return "Hearts, Spades, Clubs, Diamonds only";
-    if (isMyInterruptTurn) return "Tap a card to interrupt";
-    if (isMyDuelTurn) return "Tap a card to play during duel";
-    if (canInitiateInterrupt) return "Tap a card to interrupt (no Royals)";
-    return "Tap a card to play";
+    if (phase === "discard") return "Tap a card to discard it";
+    if (isDefender && phase === "declare_blocks") return "You can still play cards while blocking";
+    if (isClubResponder) return "Protect your Royal — Royals themselves can't be played now";
+    if (isMyInterruptTurn) return "Play a card or pass";
+    if (isMyDuelTurn) return "Play a card to swing the duel — or pass";
+    if (respondOnly) return null;
+    return "Tap a card, then tap a glowing target";
   };
+  const hint = globalCanPlay ? hintText() : null;
 
   return (
-    <View style={[styles.container, globalCanPlay && styles.containerActive]}>
+    <View style={[styles.container, globalCanPlay && !respondOnly && { borderTopColor: accentColor }]}>
       <View style={styles.header}>
-        <Text style={styles.label}>HAND</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.count}>{cards.length}</Text>
-        </View>
-        {globalCanPlay && (
-          <Text style={styles.hint}>{hintText()}</Text>
+        <Text style={styles.label}>HAND · {cards.length}</Text>
+        {hint && <Text style={[styles.hint, { color: accentColor }]}>{hint}</Text>}
+        {respondOnly && (
+          <View style={styles.respondPill}>
+            <Text style={styles.respondPillText}>⚡ You may respond</Text>
+          </View>
         )}
       </View>
       {cards.length === 0 ? (
@@ -92,23 +102,26 @@ export default function HandTray({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {cards.map((cardId) => {
+          {cards.map((cardId, idx) => {
+            const card = parseCardId(cardId);
             const cardPlayable =
               globalCanPlay &&
               (isClubResponder
                 ? isCardPlayableDuringClubResponse(cardId)
-                : (canInitiateInterrupt && !isMyTurn && !isMyDuelTurn && !isMyInterruptTurn)
+                : respondOnly
                   ? isCardEligibleAsInterrupt(cardId)
                   : true);
             const isSelected = selectedCardId === cardId;
+            const unaffordable = card.vaultCost > vault && phase !== "discard";
 
             return (
               <Pressable
                 key={cardId}
-                onPress={() => cardPlayable && onCardPress(cardId)}
+                onPress={() => onCardPress(cardId)}
                 style={({ pressed }) => [
                   styles.cardWrapper,
-                  pressed && cardPlayable && { opacity: 0.75 },
+                  idx > 0 && styles.cardOverlap,
+                  pressed && { opacity: 0.75 },
                   isSelected && styles.cardWrapperSelected,
                 ]}
               >
@@ -117,6 +130,7 @@ export default function HandTray({
                   size="lg"
                   selected={isSelected}
                   dimmed={!cardPlayable}
+                  unaffordable={unaffordable}
                 />
               </Pressable>
             );
@@ -130,59 +144,57 @@ export default function HandTray({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.bgHandTray,
-    borderTopWidth: 2,
+    borderTopWidth: 2.5,
     borderTopColor: Colors.borderLight,
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: 6,
-  },
-  // Gold edge when the player can act — answers "is it my move?" at a glance.
-  containerActive: {
-    borderTopColor: Colors.brand,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_700Bold",
     color: Colors.textSecondary,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  countBadge: {
-    backgroundColor: Colors.bgSurface,
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  count: {
-    fontSize: 12,
-    fontFamily: "Inter_700Bold",
-    color: Colors.textPrimary,
+    letterSpacing: 1.5,
   },
   hint: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    color: Colors.brand,
-    marginLeft: 4,
     flexShrink: 1,
   },
+  respondPill: {
+    marginLeft: "auto",
+    backgroundColor: "rgba(90,176,255,0.15)",
+    borderWidth: 1,
+    borderColor: "#5AB0FF",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  respondPillText: {
+    fontSize: 10,
+    fontFamily: "Inter_700Bold",
+    color: "#5AB0FF",
+  },
   scrollContent: {
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingHorizontal: 14,
+    paddingTop: 8,
     paddingBottom: 4,
   },
   cardWrapper: {
     borderRadius: 10,
   },
+  cardOverlap: {
+    marginLeft: -14,
+  },
   cardWrapperSelected: {
-    transform: [{ translateY: -8 }],
+    transform: [{ translateY: -10 }],
+    zIndex: 10,
   },
   empty: {
     paddingHorizontal: 16,
