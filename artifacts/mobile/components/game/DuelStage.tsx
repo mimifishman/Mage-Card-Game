@@ -57,16 +57,20 @@ export default function DuelStage({
 }: DuelStageProps) {
   const targetable = targetingRoyals && !!onRoyalTarget;
 
-  // A duel fighter card: tappable (with a target ring) while a Royal-targeting
-  // spell is active, otherwise a plain glowing card.
+  // A duel fighter card. The card ALWAYS keeps its owner's colour (identity),
+  // so tappability is shown by a neutral gold dashed ring + 🎯 badge rather
+  // than recolouring the card (which would falsely change who owns it).
   const FighterCard = ({ cardId, ownerId, baseGlow }: { cardId: string; ownerId: string; baseGlow: string }) => {
     if (targetable) {
       return (
         <Pressable
           onPress={() => onRoyalTarget!(ownerId, cardId)}
-          style={({ pressed }) => [styles.targetRing, { borderColor: targetGlowColor ?? "#fff" }, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.targetRing, pressed && { opacity: 0.7 }]}
         >
-          <CardView cardId={cardId} size="sm" glowColor={targetGlowColor} />
+          <CardView cardId={cardId} size="sm" glowColor={baseGlow} />
+          <View style={styles.targetBadge}>
+            <Text style={styles.targetBadgeText}>🎯</Text>
+          </View>
         </Pressable>
       );
     }
@@ -129,9 +133,9 @@ export default function DuelStage({
 
       {targetable && (
         <View style={styles.targetHintRow}>
-          <Ionicons name="locate" size={13} color={targetGlowColor ?? Colors.brand} />
-          <Text style={[styles.targetHintText, { color: targetGlowColor ?? Colors.brand }]}>
-            Tap a Royal below to target it
+          <Ionicons name="locate" size={13} color={Colors.brand} />
+          <Text style={[styles.targetHintText, { color: Colors.brand }]}>
+            Tap a 🎯 Royal to target it
           </Text>
         </View>
       )}
@@ -354,8 +358,22 @@ const styles = StyleSheet.create({
   },
   targetRing: {
     borderWidth: 2,
+    borderColor: "#C89B3C",
+    borderStyle: "dashed",
     borderRadius: 10,
     padding: 2,
+  },
+  targetBadge: {
+    position: "absolute",
+    top: -7,
+    right: -7,
+    backgroundColor: "#C89B3C",
+    borderRadius: 9,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+  },
+  targetBadgeText: {
+    fontSize: 10,
   },
   targetHintRow: {
     flexDirection: "row",

@@ -1434,13 +1434,12 @@ export default function MatchScreen() {
                   {isClubResponder && targetingRoyals ? (
                     <Pressable
                       onPress={() => dispatchRoyalTarget(pendingClub.targetPlayerId, pendingClub.targetRoyalId)}
-                      style={({ pressed }) => [
-                        styles.clubTargetRing,
-                        { borderColor: colorOf(myId) },
-                        pressed && { opacity: 0.7 },
-                      ]}
+                      style={({ pressed }) => [styles.clubTargetRing, pressed && { opacity: 0.7 }]}
                     >
                       <CardView cardId={pendingClub.targetRoyalId} size="sm" glowColor={colorOf(myId)} />
+                      <View style={styles.clubTargetBadge}>
+                        <Text style={styles.clubTargetBadgeText}>🎯</Text>
+                      </View>
                     </Pressable>
                   ) : (
                     <CardView cardId={pendingClub.targetRoyalId} size="sm" />
@@ -1940,8 +1939,22 @@ const styles = StyleSheet.create({
   },
   clubTargetRing: {
     borderWidth: 2,
+    borderColor: "#C89B3C",
+    borderStyle: "dashed",
     borderRadius: 10,
     padding: 2,
+  },
+  clubTargetBadge: {
+    position: "absolute",
+    top: -7,
+    right: -7,
+    backgroundColor: "#C89B3C",
+    borderRadius: 9,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+  },
+  clubTargetBadgeText: {
+    fontSize: 10,
   },
   clubPanelRight: {
     flex: 1,
