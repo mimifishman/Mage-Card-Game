@@ -104,14 +104,31 @@ export default function CourtZone({
                 ]}
                 disabled={!canInteract}
               >
-                <CardView
-                  cardId={royal.cardId}
-                  royal={royal}
-                  size={size}
-                  hasAttacked={royal.hasAttackedThisTurn}
-                  selected={isSelected}
-                  glowColor={isGlowTarget ? glowColor : undefined}
-                />
+                {isGlowTarget ? (
+                  // Consistent "tappable target" affordance across the whole
+                  // board: keep the card's own colors, add a gold dashed ring
+                  // + 🎯 badge (same as the duel and club-response windows).
+                  <View style={styles.royalTargetRing}>
+                    <CardView
+                      cardId={royal.cardId}
+                      royal={royal}
+                      size={size}
+                      hasAttacked={royal.hasAttackedThisTurn}
+                      selected={isSelected}
+                    />
+                    <View style={styles.targetBadge}>
+                      <Text style={styles.targetBadgeText}>🎯</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <CardView
+                    cardId={royal.cardId}
+                    royal={royal}
+                    size={size}
+                    hasAttacked={royal.hasAttackedThisTurn}
+                    selected={isSelected}
+                  />
+                )}
 
                 <View style={styles.statRow}>
                   <View style={styles.atkPill}>
@@ -232,6 +249,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "rgba(200,155,60,0.12)",
     padding: 3,
+  },
+  royalTargetRing: {
+    borderWidth: 2,
+    borderColor: "#C89B3C",
+    borderStyle: "dashed",
+    borderRadius: 10,
+    padding: 2,
+  },
+  targetBadge: {
+    position: "absolute",
+    top: -7,
+    right: -7,
+    backgroundColor: "#C89B3C",
+    borderRadius: 9,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+  },
+  targetBadgeText: {
+    fontSize: 10,
   },
   duelBadge: {
     backgroundColor: "#C89B3C",
