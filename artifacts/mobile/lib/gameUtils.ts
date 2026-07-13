@@ -265,6 +265,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "attach_heart",
           label: `Attach: +${card.pipValue} health (⚡${card.vaultCost})`,
+          icon: "❤️", short: "Add HP", detail: `+${card.pipValue} ♥`,
           requiresTarget: true,
           targetType: "any_royal",
         });
@@ -272,6 +273,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "attach_heart",
           label: `Attach needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+          icon: "❤️", short: "Add HP", detail: `need ⚡${card.vaultCost}`,
           requiresTarget: false,
           disabled: true,
         });
@@ -280,6 +282,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "discard_heart_to_heal",
           label: `Heal a player: +${card.pipValue} life (⚡${card.vaultCost})`,
+          icon: "🩹", short: "Heal", detail: `+${card.pipValue} life`,
           requiresTarget: true,
           targetType: "any_player",
         });
@@ -287,6 +290,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "discard_heart_to_heal",
           label: `Needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+          icon: "🩹", short: "Heal", detail: `need ⚡${card.vaultCost}`,
           requiresTarget: false,
           disabled: true,
         });
@@ -299,6 +303,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "attach_spade",
           label: `Attach: +${card.pipValue} attack & defense (⚡${card.vaultCost})`,
+          icon: "🗡️", short: "Attach", detail: `+${card.pipValue} ⚔`,
           requiresTarget: true,
           targetType: "any_royal",
         });
@@ -306,6 +311,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "attach_spade",
           label: `Attach needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+          icon: "🗡️", short: "Attach", detail: `need ⚡${card.vaultCost}`,
           requiresTarget: false,
           disabled: true,
         });
@@ -314,6 +320,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "discard_spade_to_return",
           label: `Reclaim from the Abyss (value ≤ ${card.pipValue}) (⚡${card.vaultCost})`,
+          icon: "♻️", short: "Reclaim", detail: `≤${card.pipValue} · ⚡${card.vaultCost}`,
           requiresTarget: true,
           targetType: "pick_abyss",
         });
@@ -321,6 +328,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "discard_spade_to_return",
           label: `Needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+          icon: "♻️", short: "Reclaim", detail: `need ⚡${card.vaultCost}`,
           requiresTarget: false,
           disabled: true,
         });
@@ -333,12 +341,14 @@ export function getValidActionsForCard(
         actions.push({
           action: "apply_club",
           label: `Weaken a Royal: −${card.pipValue} attack & health (⚡${card.vaultCost})`,
+          icon: "🔨", short: "Weaken", detail: `−${card.pipValue} ⚡${card.vaultCost}`,
           requiresTarget: true,
           targetType: "any_royal",
         });
         actions.push({
           action: "apply_club_damage",
           label: `Strike a player: ${card.pipValue} damage (⚡${card.vaultCost})`,
+          icon: "💥", short: "Strike", detail: `${card.pipValue} dmg`,
           requiresTarget: true,
           targetType: "any_player",
         });
@@ -346,6 +356,7 @@ export function getValidActionsForCard(
         actions.push({
           action: "apply_club",
           label: `Needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+          icon: "🔨", short: "Club", detail: `need ⚡${card.vaultCost}`,
           requiresTarget: false,
           disabled: true,
         });
@@ -485,6 +496,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "attach_heart",
         label: `Attach: +${card.pipValue} health (⚡${card.vaultCost})`,
+        icon: "❤️", short: "Add HP", detail: `+${card.pipValue} ♥`,
         requiresTarget: true,
         targetType: "any_royal",
       });
@@ -492,6 +504,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "attach_heart",
         label: `Attach needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+        icon: "❤️", short: "Add HP", detail: `need ⚡${card.vaultCost}`,
         requiresTarget: false,
         disabled: true,
       });
@@ -500,6 +513,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "discard_heart_to_heal",
         label: `Heal a player: +${card.pipValue} life (⚡${card.vaultCost})`,
+        icon: "🩹", short: "Heal", detail: `+${card.pipValue} life`,
         requiresTarget: true,
         targetType: "any_player",
       });
@@ -507,6 +521,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "discard_heart_to_heal",
         label: `Needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+        icon: "🩹", short: "Heal", detail: `need ⚡${card.vaultCost}`,
         requiresTarget: false,
         disabled: true,
       });
@@ -519,6 +534,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "attach_spade",
         label: `Attach: +${card.pipValue} attack & defense (⚡${card.vaultCost})`,
+        icon: "🗡️", short: "Attach", detail: `+${card.pipValue} ⚔`,
         requiresTarget: true,
         targetType: "any_royal",
       });
@@ -526,6 +542,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "attach_spade",
         label: `Attach needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+        icon: "🗡️", short: "Attach", detail: `need ⚡${card.vaultCost}`,
         requiresTarget: false,
         disabled: true,
       });
@@ -534,6 +551,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "discard_spade_to_return",
         label: `Reclaim from the Abyss (value ≤ ${card.pipValue}) (⚡${card.vaultCost})`,
+        icon: "♻️", short: "Reclaim", detail: `≤${card.pipValue} · ⚡${card.vaultCost}`,
         requiresTarget: true,
         targetType: "pick_abyss",
       });
@@ -541,6 +559,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "discard_spade_to_return",
         label: `Needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+        icon: "♻️", short: "Reclaim", detail: `need ⚡${card.vaultCost}`,
         requiresTarget: false,
         disabled: true,
       });
@@ -553,12 +572,14 @@ export function getValidActionsForCard(
       actions.push({
         action: "apply_club",
         label: `Weaken a Royal: −${card.pipValue} attack & health (⚡${card.vaultCost})`,
+        icon: "🔨", short: "Weaken", detail: `−${card.pipValue} ⚡${card.vaultCost}`,
         requiresTarget: true,
         targetType: "any_royal",
       });
       actions.push({
         action: "apply_club_damage",
         label: `Strike a player: ${card.pipValue} damage (⚡${card.vaultCost})`,
+        icon: "💥", short: "Strike", detail: `${card.pipValue} dmg`,
         requiresTarget: true,
         targetType: "any_player",
       });
@@ -566,6 +587,7 @@ export function getValidActionsForCard(
       actions.push({
         action: "apply_club",
         label: `Needs ⚡${card.vaultCost} — you have ⚡${vault}`,
+        icon: "🔨", short: "Club", detail: `need ⚡${card.vaultCost}`,
         requiresTarget: false,
         disabled: true,
       });
