@@ -189,6 +189,22 @@ export default function Seat({
             <Text style={styles.attackingBadgeTitle}>⚔ ATTACKING YOU</Text>
           </View>
         )}
+        {/* Show the court in compact seats too — small — so every opponent's
+            Royals are visible without tapping to focus. */}
+        {!isEliminated && player.court.length > 0 && (
+          <CourtZone
+            court={player.court}
+            size="sm"
+            phase={phase}
+            onRoyalPress={onRoyalPress}
+            selectedTargetId={selectedTargetId}
+            highlightedIds={highlightedIds}
+            dimmedIds={dimmedIds}
+            highlightBadgeText={highlightBadgeText}
+            glowIds={royalGlowIds}
+            glowColor={glowColor ?? color}
+          />
+        )}
       </Pressable>
     );
   }
