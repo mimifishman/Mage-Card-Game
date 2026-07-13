@@ -332,20 +332,6 @@ export default function LobbyScreen() {
           </Animated.View>
         )}
 
-        <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.statsRow}>
-          {[
-            { label: "Cards", value: "54", icon: "layers-outline" as const },
-            { label: "Players", value: "2–4", icon: "people-outline" as const },
-            { label: "Rounds", value: "Varied", icon: "refresh-outline" as const },
-          ].map(({ label, value, icon }) => (
-            <View key={label} style={styles.statItem}>
-              <Ionicons name={icon} size={18} color={Colors.brand} />
-              <Text style={styles.statValue}>{value}</Text>
-              <Text style={styles.statLabel}>{label}</Text>
-            </View>
-          ))}
-        </Animated.View>
-
         <View style={[styles.footer, { paddingBottom: bottomInset + 16 }]}>
           <View style={styles.footerDivider} />
           <Text style={styles.footerText}>Command the arcane · Claim the throne</Text>

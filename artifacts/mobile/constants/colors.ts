@@ -20,6 +20,17 @@ const ACCENT_GREEN = "#2E7D32";
 const BORDER = "#1E4A2A";
 const BORDER_LIGHT = "#2D6040";
 
+// Per-seat accent colors, assigned by turn order for the whole match.
+// Used on seat borders, name tags, attack arrows and event-ticker entries so
+// "who did that?" is always answerable by color alone.
+// Deliberately NO yellow/gold here — that hue is reserved for UI accents
+// (brand, active rings, Vault) and a yellow player would be confusing.
+export const SEAT_COLORS = ["#5AB0FF", "#C86BD4", "#FF8A5B", "#2DD4BF"] as const;
+
+export function seatColorFor(index: number): string {
+  return SEAT_COLORS[((index % SEAT_COLORS.length) + SEAT_COLORS.length) % SEAT_COLORS.length]!;
+}
+
 const Colors = {
   brand: BRAND,
   brandDim: BRAND_DIM,

@@ -38,6 +38,17 @@ export interface RoyalInCourt {
 export interface VaultState {
   tempBoost: number;
   spent: number;
+  /**
+   * Snapshot of the Mine's total taken when this player's turn last ended.
+   * While it is set, the player's available Vault is frozen at this value
+   * (plus/minus their own boosts and spends) so that other players adding to
+   * the shared Mine does NOT raise their Vault until their own next turn.
+   * The ACTIVE player leaves this undefined and uses the live Mine total, so
+   * Diamonds they bank this turn benefit them immediately. It is cleared when
+   * a player's turn begins (resetVaultForTurn) and re-set when their turn ends
+   * (advanceTurn).
+   */
+  frozenMineTotal?: number;
 }
 
 export interface PlayerState {

@@ -24,6 +24,10 @@ interface CourtZoneProps {
   highlightedIds?: Set<string>;
   dimmedIds?: Set<string>;
   highlightBadgeText?: string;
+  /** Royals that are legal targets for the selected card right now — they get
+      a seat-colored glow and everything else dims. */
+  glowIds?: Set<string>;
+  glowColor?: string;
 }
 
 const ATTACHED_SIZE: Record<"sm" | "md" | "lg" | "xl", "xs" | "sm" | "md" | "lg" | "xl"> = {
@@ -46,8 +50,11 @@ export default function CourtZone({
   highlightedIds,
   dimmedIds,
   highlightBadgeText,
+  glowIds,
+  glowColor,
 }: CourtZoneProps) {
-  const statFontSize = size === "xl" ? 14 : size === "lg" ? 13 : 11;
+  const statFontSize = size === "xl" ? 15 : size === "lg" ? 14 : 12;
+  const targeting = !!glowIds;
 
   return (
     <View style={styles.container}>
@@ -67,7 +74,11 @@ export default function CourtZone({
           {court.map((royal) => {
             const isTapped = royal.hasAttackedThisTurn;
             const isBlockerIneligible = isDefender && phase === "declare_blocks" && isTapped;
-            const isDimmed = dimmedIds?.has(royal.cardId) || isBlockerIneligible;
+            const isGlowTarget = targeting && glowIds!.has(royal.cardId);
+            const isDimmed =
+              dimmedIds?.has(royal.cardId) ||
+              isBlockerIneligible ||
+              (targeting && !isGlowTarget);
             const isHighlighted = highlightedIds?.has(royal.cardId);
             const canInteract = !!onRoyalPress && !isDimmed;
             const isSelected = selectedTargetId === royal.cardId;
@@ -93,13 +104,31 @@ export default function CourtZone({
                 ]}
                 disabled={!canInteract}
               >
-                <CardView
-                  cardId={royal.cardId}
-                  royal={royal}
-                  size={size}
-                  hasAttacked={royal.hasAttackedThisTurn}
-                  selected={isSelected}
-                />
+                {isGlowTarget ? (
+                  // Consistent "tappable target" affordance across the whole
+                  // board: keep the card's own colors, add a gold dashed ring
+                  // + 🎯 badge (same as the duel and club-response windows).
+                  <View style={styles.royalTargetRing}>
+                    <CardView
+                      cardId={royal.cardId}
+                      royal={royal}
+                      size={size}
+                      hasAttacked={royal.hasAttackedThisTurn}
+                      selected={isSelected}
+                    />
+                    <View style={styles.targetBadge}>
+                      <Text style={styles.targetBadgeText}>🎯</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <CardView
+                    cardId={royal.cardId}
+                    royal={royal}
+                    size={size}
+                    hasAttacked={royal.hasAttackedThisTurn}
+                    selected={isSelected}
+                  />
+                )}
 
                 <View style={styles.statRow}>
                   <View style={styles.atkPill}>
@@ -138,7 +167,7 @@ export default function CourtZone({
 
                 {isTapped && (
                   <View style={styles.tappedBadge}>
-                    <Text style={styles.tappedText}>TAPPED</Text>
+                    <Text style={styles.tappedText}>💤 USED</Text>
                   </View>
                 )}
               </Pressable>
@@ -168,6 +197,10 @@ const styles = StyleSheet.create({
   scrollContent: {
     gap: 6,
     paddingHorizontal: 4,
+    // Vertical room so a lifted/glowing (selected, duel, highlighted) card
+    // isn't clipped by the seat's rounded corners on Android.
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   emptySlot: {
     paddingHorizontal: 12,
@@ -201,8 +234,8 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -4 }],
   },
   royalTapped: {
-    opacity: 0.65,
-    transform: [{ rotate: "8deg" }],
+    opacity: 0.55,
+    transform: [{ rotate: "4deg" }],
   },
   royalDimmed: {
     opacity: 0.35,
@@ -216,6 +249,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "rgba(200,155,60,0.12)",
     padding: 3,
+  },
+  royalTargetRing: {
+    borderWidth: 2,
+    borderColor: "#C89B3C",
+    borderStyle: "dashed",
+    borderRadius: 10,
+    padding: 2,
+  },
+  targetBadge: {
+    position: "absolute",
+    top: -7,
+    right: -7,
+    backgroundColor: "#C89B3C",
+    borderRadius: 9,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+  },
+  targetBadgeText: {
+    fontSize: 10,
   },
   duelBadge: {
     backgroundColor: "#C89B3C",
@@ -280,9 +332,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(200,155,60,0.4)",
   },
   tappedText: {
-    fontSize: 7,
+    fontSize: 9,
     color: Colors.brand,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_700Bold",
     letterSpacing: 0.5,
   },
 });
