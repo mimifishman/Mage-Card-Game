@@ -1412,7 +1412,7 @@ export default function MatchScreen() {
                 <Ionicons name="warning" size={16} color="#C89B3C" />
                 <Text style={styles.clubPanelTitle}>
                   {isClubResponder
-                    ? `${clubAttackerName} is playing a Club on your Royal!`
+                    ? `${clubAttackerName === "You" ? "You're" : `${clubAttackerName} is`} playing a Club on your Royal!`
                     : `${possFor(pendingClub.attackerPlayerId)} Club → ${possFor(pendingClub.targetPlayerId)} Royal`}
                 </Text>
               </View>
@@ -1424,7 +1424,20 @@ export default function MatchScreen() {
                 <Ionicons name="arrow-forward" size={18} color={Colors.textMuted} />
                 <View style={styles.clubCardPreview}>
                   <Text style={styles.clubPanelLabel}>Target</Text>
-                  <CardView cardId={pendingClub.targetRoyalId} size="sm" />
+                  {isClubResponder && targetingRoyals ? (
+                    <Pressable
+                      onPress={() => dispatchRoyalTarget(pendingClub.targetPlayerId, pendingClub.targetRoyalId)}
+                      style={({ pressed }) => [
+                        styles.clubTargetRing,
+                        { borderColor: colorOf(myId) },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                    >
+                      <CardView cardId={pendingClub.targetRoyalId} size="sm" glowColor={colorOf(myId)} />
+                    </Pressable>
+                  ) : (
+                    <CardView cardId={pendingClub.targetRoyalId} size="sm" />
+                  )}
                   {targetedClubRoyal && (
                     <Text style={styles.clubRoyalStats}>
                       ⚔{effectiveAttack(targetedClubRoyal.cardId, targetedClubRoyal.buffAttack)}{"  "}
@@ -1436,7 +1449,9 @@ export default function MatchScreen() {
                   {isClubResponder ? (
                     <>
                       <Text style={styles.clubPanelHint}>
-                        Strengthen your Royal with Hearts, Spades, Clubs or a Joker — or accept it.
+                        {targetingRoyals
+                          ? "Tap your Royal to apply the spell, or accept the Club."
+                          : "Strengthen your Royal with Hearts, Spades, Clubs or a Joker — or accept it."}
                       </Text>
                       <Pressable
                         onPress={handleConfirmClubResponse}
@@ -1915,6 +1930,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_700Bold",
     color: Colors.textSecondary,
+  },
+  clubTargetRing: {
+    borderWidth: 2,
+    borderRadius: 10,
+    padding: 2,
   },
   clubPanelRight: {
     flex: 1,
