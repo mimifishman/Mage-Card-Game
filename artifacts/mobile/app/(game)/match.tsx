@@ -28,6 +28,7 @@ import type {
   PublicPlayerState,
   GameActionRequest,
 } from "@workspace/api-client-react";
+import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useAuth } from "@/lib/auth";
 import Colors, { seatColorFor } from "@/constants/colors";
 import HandTray from "@/components/game/HandTray";
@@ -114,6 +115,7 @@ function targetHintFor(a: ValidAction, pip: number): string | null {
 export default function MatchScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const { user } = useAuth();
+  const { getToken } = useClerkAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   // Web preview renders inside a simulated phone frame that doesn't expose
@@ -126,6 +128,10 @@ export default function MatchScreen() {
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   // Scroll the board to the opponents when picking attack targets.
   const boardScrollRef = useRef<ScrollView>(null);
+  // Real-time state comes over the WebSocket; when it's up, HTTP polling drops
+  // to a slow safety-net interval. When it's down we poll fast (as before).
+  const wsRef = useRef<WebSocket | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
 
   const [attackSelectMode, setAttackSelectMode] = useState(false);
   const [selectedAttackRoyalIds, setSelectedAttackRoyalIds] = useState<Set<string>>(new Set());
@@ -186,7 +192,7 @@ export default function MatchScreen() {
     query: {
       queryKey: getGetMatchStateQueryKey(matchId ?? ""),
       enabled: !!matchId,
-      refetchInterval: 2000,
+      refetchInterval: wsConnected ? 15000 : 2000,
     },
   });
 
@@ -194,15 +200,18 @@ export default function MatchScreen() {
     query: {
       queryKey: getGetMatchQueryKey(matchId ?? ""),
       enabled: !!matchId,
-      refetchInterval: 2000,
+      refetchInterval: wsConnected ? 15000 : 2000,
     },
   });
 
   useEffect(() => {
+    // When the socket is live it's the source of truth; ignore the slow-poll
+    // snapshots so an in-flight poll can't clobber newer realtime state.
+    if (wsConnected) return;
     if (stateData?.state) {
       setGameState(stateData.state);
     }
-  }, [stateData]);
+  }, [stateData, wsConnected]);
 
   useEffect(() => {
     if (matchData?.players) {
@@ -224,6 +233,107 @@ export default function MatchScreen() {
       });
     }
   }, [matchData?.match?.status, matchData?.match?.winnerUserId, matchId]);
+
+  // Real-time state over WebSocket. The server already pushes a per-player
+  // view on every action (state_update / game_started / game_over) plus a
+  // reconnect snapshot; we apply those directly instead of waiting on the
+  // 2s poll. Polling stays on as a slow fallback (see refetchInterval above)
+  // and takes over immediately if the socket drops.
+  useEffect(() => {
+    if (!matchId) return;
+    let mounted = true;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    async function connect() {
+      const domain = process.env.EXPO_PUBLIC_DOMAIN ?? "";
+      if (!domain) return; // no realtime endpoint configured — polling covers it
+      let token: string | null = null;
+      try {
+        token = await getToken();
+      } catch {
+        // fall through; server will reject an unauthenticated socket and we
+        // keep polling
+      }
+      if (!mounted) return;
+
+      const wsUrl = `wss://${domain}/ws?matchId=${matchId}`;
+      const protocols = token ? [`bearer-${token}`] : undefined;
+      const ws = new WebSocket(wsUrl, protocols);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (!mounted) return;
+        setWsConnected(true);
+        ws.send(JSON.stringify({ type: "join_match", matchId }));
+      };
+
+      ws.onmessage = (event) => {
+        if (!mounted) return;
+        try {
+          const msg = JSON.parse(event.data as string) as {
+            type: string;
+            state?: PlayerGameView;
+            winnerUserId?: string | null;
+          };
+          if (
+            (msg.type === "state_update" ||
+              msg.type === "game_started" ||
+              msg.type === "reconnect_state" ||
+              msg.type === "game_over") &&
+            msg.state
+          ) {
+            setGameState(msg.state);
+          }
+          if (msg.type === "game_over" && !hasNavigatedRef.current && matchId) {
+            hasNavigatedRef.current = true;
+            router.replace({
+              pathname: "/(game)/game-over",
+              params: { matchId, winnerUserId: msg.winnerUserId ?? "" },
+            });
+          }
+        } catch {
+          // ignore malformed frames
+        }
+      };
+
+      ws.onclose = () => {
+        if (!mounted) return;
+        setWsConnected(false);
+        wsRef.current = null;
+        // Reconnect shortly; until then the fast poll fallback keeps the game live.
+        reconnectTimer = setTimeout(connect, 2500);
+      };
+
+      ws.onerror = () => {
+        try {
+          ws.close();
+        } catch {
+          // onclose handles retry
+        }
+      };
+    }
+
+    connect();
+
+    return () => {
+      mounted = false;
+      setWsConnected(false);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      const ws = wsRef.current;
+      wsRef.current = null;
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        try {
+          ws.close();
+        } catch {
+          // already closed
+        }
+      }
+    };
+  }, [matchId]);
 
   // Seat colors: fixed per player for the whole match, by turn order.
   const seatColors = useMemo(() => {
