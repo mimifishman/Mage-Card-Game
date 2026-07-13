@@ -1272,7 +1272,11 @@ export default function MatchScreen() {
               <Ionicons name="flash" size={14} color={Colors.accentRed} />
               <Text style={styles.assignBannerText}>
                 {activeAssignRoyalId
-                  ? `Tap an opponent below to send ${parseCardId(activeAssignRoyalId).displayRank}${parseCardId(activeAssignRoyalId).suitSymbol} (⚔${effectiveAttack(activeAssignRoyalId, myState?.court.find((r) => r.cardId === activeAssignRoyalId)?.buffAttack ?? 0)})`
+                  ? (() => {
+                      const r = myState?.court.find((x) => x.cardId === activeAssignRoyalId);
+                      const c = parseCardId(activeAssignRoyalId);
+                      return `Tap an opponent below to send ${c.displayRank}${c.suitSymbol} (⚔${effectiveAttack(activeAssignRoyalId, r?.buffAttack ?? 0)} ♥${effectiveHealth(activeAssignRoyalId, r?.buffHealth ?? 0, r?.damageTaken ?? 0)})`;
+                    })()
                   : "Every Royal has a target — declare below"}
               </Text>
             </View>
@@ -1281,6 +1285,7 @@ export default function MatchScreen() {
                 const card = parseCardId(royalId);
                 const royal = myState?.court.find((r) => r.cardId === royalId);
                 const atkV = effectiveAttack(royalId, royal?.buffAttack ?? 0);
+                const hpV = effectiveHealth(royalId, royal?.buffHealth ?? 0, royal?.damageTaken ?? 0);
                 const assignedTo = targetAssignments[royalId];
                 const isActive = activeAssignRoyalId === royalId;
                 return (
@@ -1294,7 +1299,9 @@ export default function MatchScreen() {
                     ]}
                   >
                     <Text style={[styles.assignChipCard, { color: card.suitColor }]}>
-                      {card.displayRank}{card.suitSymbol} <Text style={styles.assignChipAtk}>⚔{atkV}</Text>
+                      {card.displayRank}{card.suitSymbol}{" "}
+                      <Text style={styles.assignChipAtk}>⚔{atkV}</Text>{" "}
+                      <Text style={styles.assignChipHp}>♥{hpV}</Text>
                     </Text>
                     <Text style={styles.assignChipTarget} numberOfLines={1}>
                       {assignedTo ? `→ ${nameFor(assignedTo)}` : "no target"}
@@ -2028,6 +2035,9 @@ const styles = StyleSheet.create({
   },
   assignChipAtk: {
     color: Colors.accentRed,
+  },
+  assignChipHp: {
+    color: "#66BB6A",
   },
   assignChipRow: {
     gap: 6,
