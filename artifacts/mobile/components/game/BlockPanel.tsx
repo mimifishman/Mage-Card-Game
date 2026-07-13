@@ -182,52 +182,54 @@ export default function BlockPanel({
             Block {parseCardId(activeAttackerId).displayRank}
             {parseCardId(activeAttackerId).suitSymbol} with:
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockerRow}>
-            {eligibleCourt.map((royal) => {
-              const card = parseCardId(royal.cardId);
-              const usedHere = (blocks[activeAttackerId] ?? []).includes(royal.cardId);
-              const usedElsewhere = Object.entries(blocks).some(
-                ([atkId, ids]) => atkId !== activeAttackerId && ids.includes(royal.cardId),
-              );
-              const atkV = effectiveAttack(royal.cardId, royal.buffAttack);
-              const hpV = effectiveHealth(royal.cardId, royal.buffHealth, royal.damageTaken);
-              return (
-                <Pressable
-                  key={royal.cardId}
-                  onPress={() => toggleBlock(activeAttackerId, royal.cardId)}
-                  style={({ pressed }) => [
-                    styles.blockerChip,
-                    usedHere && styles.blockerChipSelected,
-                    usedElsewhere && styles.blockerChipUsedElsewhere,
-                    pressed && { opacity: 0.75 },
-                  ]}
-                >
-                  <Text style={[styles.blockerChipCard, { color: usedHere ? Colors.bgDeep : card.suitColor }]}>
-                    {card.displayRank}{card.suitSymbol}
-                  </Text>
-                  <Text style={[styles.blockerChipStats, usedHere && { color: Colors.bgDeep }]}>
-                    ⚔{atkV} ♥{hpV}
-                  </Text>
-                  {usedElsewhere && <Text style={styles.movedLabel}>↺ move</Text>}
-                </Pressable>
-              );
-            })}
-            {eligibleCourt.length === 0 && (
-              <Text style={styles.noBlockers}>No Royals able to block — let the attacks through</Text>
-            )}
-            <Pressable
-              onPress={() => passAttack(activeAttackerId)}
-              style={({ pressed }) => [
-                styles.passChip,
-                isPassed(activeAttackerId) && styles.passChipSelected,
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              <Text style={[styles.passChipText, isPassed(activeAttackerId) && { color: "#FFD9D9" }]}>
-                🔻 Let through
-              </Text>
-            </Pressable>
-          </ScrollView>
+          {eligibleCourt.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockerRow}>
+              {eligibleCourt.map((royal) => {
+                const card = parseCardId(royal.cardId);
+                const usedHere = (blocks[activeAttackerId] ?? []).includes(royal.cardId);
+                const usedElsewhere = Object.entries(blocks).some(
+                  ([atkId, ids]) => atkId !== activeAttackerId && ids.includes(royal.cardId),
+                );
+                const atkV = effectiveAttack(royal.cardId, royal.buffAttack);
+                const hpV = effectiveHealth(royal.cardId, royal.buffHealth, royal.damageTaken);
+                return (
+                  <Pressable
+                    key={royal.cardId}
+                    onPress={() => toggleBlock(activeAttackerId, royal.cardId)}
+                    style={({ pressed }) => [
+                      styles.blockerChip,
+                      usedHere && styles.blockerChipSelected,
+                      usedElsewhere && styles.blockerChipUsedElsewhere,
+                      pressed && { opacity: 0.75 },
+                    ]}
+                  >
+                    <Text style={[styles.blockerChipCard, { color: usedHere ? Colors.bgDeep : card.suitColor }]}>
+                      {card.displayRank}{card.suitSymbol}
+                    </Text>
+                    <Text style={[styles.blockerChipStats, usedHere && { color: Colors.bgDeep }]}>
+                      ⚔{atkV} ♥{hpV}
+                    </Text>
+                    {usedElsewhere && <Text style={styles.movedLabel}>↺ move</Text>}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <Text style={styles.noBlockers}>No Royals can block this one — let it through.</Text>
+          )}
+          {/* Always-visible below the chips so it can't be pushed off-screen. */}
+          <Pressable
+            onPress={() => passAttack(activeAttackerId)}
+            style={({ pressed }) => [
+              styles.passChip,
+              isPassed(activeAttackerId) && styles.passChipSelected,
+              pressed && { opacity: 0.8 },
+            ]}
+          >
+            <Text style={[styles.passChipText, isPassed(activeAttackerId) && { color: "#FFD9D9" }]}>
+              🔻 Let through
+            </Text>
+          </Pressable>
         </View>
       )}
 
@@ -382,11 +384,12 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   passChip: {
+    alignSelf: "flex-start",
     backgroundColor: "rgba(200,16,46,0.12)",
     borderWidth: 1.5,
     borderColor: "rgba(229,57,53,0.5)",
     borderRadius: 9,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 9,
   },
   passChipSelected: {
