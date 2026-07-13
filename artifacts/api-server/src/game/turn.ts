@@ -1,7 +1,7 @@
 import type { GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { drawCard } from "./draw";
-import { resetVaultForTurn } from "./vault";
+import { resetVaultForTurn, calculateVaultFromMine } from "./vault";
 
 const MAX_HAND_SIZE = 7;
 
@@ -43,6 +43,15 @@ export function advanceTurn(state: GameState): Result<GameState> {
   const nextIdx = (currentIdx + 1) % active.length;
   const nextPlayerId = active[nextIdx]!;
 
+  // Freeze the outgoing player's Vault at the current Mine total so later Mine
+  // additions by others don't raise it before their next turn.
+  const outgoingId = state.activePlayerId;
+  const outgoing = state.players[outgoingId]!;
+  const frozenOutgoing: PlayerState = {
+    ...outgoing,
+    vault: { ...outgoing.vault, frozenMineTotal: calculateVaultFromMine(state.mine) },
+  };
+
   const nextPlayerBase = resetVaultForTurn(state.players[nextPlayerId]!);
   const isFirstTurn = !nextPlayerBase.hasHadFirstTurn;
 
@@ -65,6 +74,7 @@ export function advanceTurn(state: GameState): Result<GameState> {
     activePlayerId: nextPlayerId,
     players: {
       ...state.players,
+      [outgoingId]: frozenOutgoing,
       [nextPlayerId]: nextPlayer,
     },
   };

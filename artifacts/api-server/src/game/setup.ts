@@ -1,5 +1,6 @@
 import { fullDeck, getCard, shuffle } from "./cards";
 import { drawCards } from "./draw";
+import { calculateVaultFromMine } from "./vault";
 import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 
@@ -54,16 +55,20 @@ export function dealInitialHands(state: GameState): Result<GameState> {
     if (!result.ok) return result;
     current = result.value;
   }
-  const firstPlayer = current.players[current.activePlayerId];
-  if (firstPlayer) {
-    current = {
-      ...current,
-      players: {
-        ...current.players,
-        [current.activePlayerId]: { ...firstPlayer, hasHadFirstTurn: true },
-      },
-    };
+  // Mark the first player and freeze every OTHER player's Vault at the
+  // starting Mine total (0), so Diamonds the first player banks this turn
+  // don't raise the others' Vaults before their own first turn. The active
+  // player leaves frozenMineTotal undefined and tracks the live Mine.
+  const activeId = current.activePlayerId;
+  const startMineTotal = calculateVaultFromMine(current.mine);
+  const updatedPlayers: Record<string, PlayerState> = { ...current.players };
+  for (const [id, p] of Object.entries(updatedPlayers)) {
+    updatedPlayers[id] =
+      id === activeId
+        ? { ...p, hasHadFirstTurn: true }
+        : { ...p, vault: { ...p.vault, frozenMineTotal: startMineTotal } };
   }
+  current = { ...current, players: updatedPlayers };
   return ok(current);
 }
 

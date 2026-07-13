@@ -9,11 +9,10 @@ export function calculateVaultFromMine(mine: CardId[]): number {
 }
 
 export function availableVault(mine: CardId[], player: PlayerState): number {
-  return (
-    calculateVaultFromMine(mine) +
-    player.vault.tempBoost -
-    player.vault.spent
-  );
+  // Non-active players are frozen at the Mine total captured when their turn
+  // ended; the active player (frozenMineTotal undefined) tracks the live Mine.
+  const base = player.vault.frozenMineTotal ?? calculateVaultFromMine(mine);
+  return base + player.vault.tempBoost - player.vault.spent;
 }
 
 export function spendVault(player: PlayerState, amount: number): PlayerState {
