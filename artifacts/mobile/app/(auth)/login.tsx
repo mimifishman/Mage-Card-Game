@@ -31,7 +31,7 @@ import { useAuth } from "@/lib/auth";
 
 WebBrowser.maybeCompleteAuthSession();
 
-type EmailScreen = "form" | "verify";
+type EmailScreen = "form" | "verify" | "reset";
 
 function PulsingOrb({ delay = 0, size = 80 }: { delay?: number; size?: number }) {
   const scale = useSharedValue(1);
@@ -93,6 +93,8 @@ export default function LoginScreen() {
   const [oauthLoading, setOauthLoading] = useState<"google" | "apple" | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [verifyIsFirstFactor, setVerifyIsFirstFactor] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? 67 : insets.top;
@@ -236,6 +238,54 @@ export default function LoginScreen() {
     }
   }
 
+  async function handleForgotPassword() {
+    if (!signIn) return;
+    if (!email.trim()) {
+      setErrorMsg("Enter your email address first, then tap Forgot password.");
+      return;
+    }
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await signIn.create({ strategy: "reset_password_email_code", identifier: email.trim() });
+      setEmailScreen("reset");
+    } catch (err: unknown) {
+      const e = err as { errors?: Array<{ message: string }> };
+      setErrorMsg(e.errors?.[0]?.message ?? "Couldn't send reset email. Try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleResetPassword() {
+    if (!signIn) return;
+    if (!code.trim() || !newPassword.trim()) {
+      setErrorMsg("Enter both the code and your new password.");
+      return;
+    }
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const result = await signIn.attemptFirstFactor({
+        strategy: "reset_password_email_code",
+        code: code.trim(),
+        password: newPassword,
+      });
+      if (result.status === "complete") {
+        await setActiveSignIn({ session: result.createdSessionId });
+      } else {
+        setErrorMsg("Reset could not be completed. Please try again.");
+      }
+    } catch (err: unknown) {
+      const e = err as { errors?: Array<{ message: string }> };
+      setErrorMsg(e.errors?.[0]?.message ?? "Reset failed. Check the code and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   function resetEmailFlow() {
     setShowEmailForm(false);
     setEmailScreen("form");
@@ -246,6 +296,8 @@ export default function LoginScreen() {
     setShowPassword(false);
     setVerifyMode("signup");
     setVerifyIsFirstFactor(false);
+    setNewPassword("");
+    setShowNewPassword(false);
   }
 
   return (
@@ -399,6 +451,14 @@ export default function LoginScreen() {
                     </Pressable>
                   </View>
 
+                  <Pressable
+                    onPress={handleForgotPassword}
+                    disabled={isSubmitting}
+                    style={({ pressed }) => [styles.forgotBtn, pressed && { opacity: 0.6 }]}
+                  >
+                    <Text style={styles.forgotBtnText}>Forgot password?</Text>
+                  </Pressable>
+
                   {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
                   <Pressable
@@ -424,6 +484,82 @@ export default function LoginScreen() {
                   <Text style={styles.emailHint}>
                     New here? Enter your details and we'll create your account.
                   </Text>
+                </View>
+              ) : emailScreen === "reset" ? (
+                <View style={styles.emailForm}>
+                  <Pressable
+                    onPress={() => { setEmailScreen("form"); setCode(""); setNewPassword(""); setErrorMsg(null); }}
+                    style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+                  >
+                    <Ionicons name="arrow-back" size={18} color={Colors.textSecondary} />
+                    <Text style={styles.backBtnText}>Back</Text>
+                  </Pressable>
+
+                  <Text style={styles.verifyTitle}>Reset your password</Text>
+                  <Text style={styles.verifySubtitle}>
+                    We sent a reset code to{"\n"}{email}
+                  </Text>
+
+                  <TextInput
+                    style={[styles.input, styles.codeInput]}
+                    value={code}
+                    onChangeText={setCode}
+                    placeholder="Reset code"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                    editable={!isSubmitting}
+                    returnKeyType="next"
+                  />
+
+                  <View style={styles.passwordRow}>
+                    <TextInput
+                      style={[styles.input, styles.passwordInput]}
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      placeholder="New password"
+                      placeholderTextColor={Colors.textMuted}
+                      secureTextEntry={!showNewPassword}
+                      autoCapitalize="none"
+                      editable={!isSubmitting}
+                      onSubmitEditing={handleResetPassword}
+                      returnKeyType="go"
+                      textContentType="newPassword"
+                    />
+                    <Pressable
+                      onPress={() => setShowNewPassword((v) => !v)}
+                      style={styles.eyeBtn}
+                      hitSlop={12}
+                    >
+                      <Ionicons
+                        name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                        size={20}
+                        color={Colors.textMuted}
+                      />
+                    </Pressable>
+                  </View>
+
+                  {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+                  <Pressable
+                    onPress={handleResetPassword}
+                    disabled={isSubmitting}
+                    style={({ pressed }) => [styles.submitBtn, pressed && { opacity: 0.85 }]}
+                  >
+                    <LinearGradient
+                      colors={[Colors.brand, Colors.brandDim]}
+                      style={styles.submitBtnGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator size="small" color="#0A0A0F" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>Set New Password</Text>
+                      )}
+                    </LinearGradient>
+                  </Pressable>
                 </View>
               ) : (
                 <View style={styles.emailForm}>
@@ -773,6 +909,17 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: "center",
     lineHeight: 18,
+  },
+  forgotBtn: {
+    alignSelf: "flex-end",
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  forgotBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    textDecorationLine: "underline",
   },
   verifyTitle: {
     fontSize: 20,
