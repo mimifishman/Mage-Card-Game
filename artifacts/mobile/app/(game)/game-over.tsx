@@ -25,6 +25,7 @@ import {
 import Colors, { seatColorFor } from "@/constants/colors";
 import { Gradients, Type } from "@/constants/theme";
 import { Easings, useReduceMotion } from "@/lib/motion";
+import { playGameSfx } from "@/lib/sfx";
 import SanctumBackground from "@/components/game/SanctumBackground";
 
 export default function GameOverScreen() {
@@ -159,6 +160,12 @@ export default function GameOverScreen() {
   const winnerName = winnerUserId
     ? (displayNames[winnerUserId] ?? winnerUserId.slice(0, 8))
     : null;
+
+  // One musical sting as the screen lands — triumphant or somber. Respects
+  // the persisted mute setting inside playGameSfx.
+  useEffect(() => {
+    playGameSfx(didWin ? "fanfare" : "defeat");
+  }, []);
 
   return (
     <View style={styles.container}>

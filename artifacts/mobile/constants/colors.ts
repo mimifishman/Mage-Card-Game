@@ -32,9 +32,11 @@ const BORDER_LIGHT = "#3A3A72";
 // Per-seat accent colors, assigned by turn order for the whole match.
 // Used on seat borders, name tags, attack arrows and event-ticker entries so
 // "who did that?" is always answerable by color alone.
-// Deliberately NO yellow/gold here — that hue is reserved for UI accents
-// (brand, active rings, Vault) and a yellow player would be confusing.
-export const SEAT_COLORS = ["#5AB0FF", "#C86BD4", "#FF8A5B", "#2DD4BF"] as const;
+// Chosen to POP against the obsidian/indigo sanctum: bright cyan, pink,
+// orange and mint. Deliberately NO gold (reserved for brand/Vault accents)
+// and NO violet (reserved for the arcane rune glow) — a player in either hue
+// would blend into the UI chrome.
+export const SEAT_COLORS = ["#6FD3FF", "#FF6FAE", "#FFA149", "#3DF0C0"] as const;
 
 export function seatColorFor(index: number): string {
   return SEAT_COLORS[((index % SEAT_COLORS.length) + SEAT_COLORS.length) % SEAT_COLORS.length]!;

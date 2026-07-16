@@ -10,7 +10,7 @@ import {
   type HitEffectsView,
   type PrevSlice,
 } from "@/lib/hitEffectsDiff";
-import { playSuitSfx } from "@/lib/sfx";
+import { playGameSfx, playSuitSfx } from "@/lib/sfx";
 
 // React side of the suit hit effects: feeds each incoming GameState snapshot
 // through the pure diff (lib/hitEffectsDiff.ts), keeps the currently-alive
@@ -19,6 +19,41 @@ import { playSuitSfx } from "@/lib/sfx";
 // (`prevPlayersRef`) — don't entangle the two.
 
 export * from "@/lib/hitEffectsDiff";
+
+// ── Recent-cast registry ─────────────────────────────────────────────────
+// The snapshot can't always name the caster (attachments and burns only
+// carry the card id), so the match screen registers every card the local
+// player submits. If an event's source card was cast here recently, this
+// device caused it — and should hear it.
+const RECENT_CAST_TTL_MS = 6000;
+const recentCasts = new Map<string, number>();
+
+/** Called by the match screen whenever the local player plays a card. */
+export function markLocalCast(cardId: string): void {
+  const now = Date.now();
+  recentCasts.set(cardId, now);
+  // Opportunistic cleanup — the map stays tiny.
+  for (const [id, at] of recentCasts) {
+    if (now - at > RECENT_CAST_TTL_MS) recentCasts.delete(id);
+  }
+}
+
+function wasRecentlyCastByMe(cardId: string | undefined): boolean {
+  if (!cardId) return false;
+  const at = recentCasts.get(cardId);
+  return at !== undefined && Date.now() - at <= RECENT_CAST_TTL_MS;
+}
+
+// Audio rule: this device only plays a hit sound when its player is involved
+// — their stuff was affected, or they caused the hit. Visuals and the ticker
+// still show everything; sound stays personal.
+function isAudibleToMe(e: HitEffectEvent, myId: string): boolean {
+  return (
+    e.playerId === myId ||
+    e.sourcePlayerId === myId ||
+    wasRecentlyCastByMe(e.sourceCardId)
+  );
+}
 
 const KIND_RANK: Record<EffectKind, number> = {
   destroy: 3,
@@ -105,7 +140,15 @@ export function useHitEffects(
       timersRef.current.push(
         setTimeout(() => setFor((cur) => dropEvent(cur, key, e.id)), e.delayMs + EFFECT_TTL_MS),
       );
-      timersRef.current.push(setTimeout(() => playSuitSfx(e.suit, e.kind), e.delayMs));
+      if (isAudibleToMe(e, myId)) {
+        timersRef.current.push(
+          setTimeout(
+            () =>
+              e.kind === "destroy" ? playGameSfx("doom") : playSuitSfx(e.suit, e.kind),
+            e.delayMs,
+          ),
+        );
+      }
     }
 
     buzzForBatch(events, myId);

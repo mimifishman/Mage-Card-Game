@@ -56,13 +56,15 @@ import {
   canPlayerInitiateInterrupt,
 } from "@/lib/gameUtils";
 import type { CardAction, ValidAction } from "@/lib/gameUtils";
-import { useHitEffects } from "@/lib/hitEffects";
+import { markLocalCast, useHitEffects } from "@/lib/hitEffects";
+import { getSfxMuted, playGameSfx, setSfxMuted } from "@/lib/sfx";
 import {
   CardFlightHost,
   CARD_FLIGHT_TTL_MS,
   type CardFlightEvent,
 } from "@/components/game/effects/CardFlight";
 import TurnFlare from "@/components/game/effects/TurnFlare";
+import YourTurnBanner from "@/components/game/effects/YourTurnBanner";
 
 export interface ActionParams {
   cardId: string;
@@ -459,21 +461,58 @@ export default function MatchScreen() {
   // Arcane sweep when the turn passes to a new player.
   const [turnFlare, setTurnFlare] = useState<{ key: number; color: string } | null>(null);
 
+  // Sound toggle (persisted in lib/sfx.ts; this state just drives the menu row).
+  const [sfxMuted, setSfxMutedState] = useState(getSfxMuted());
+
+  // "YOUR TURN" proclamation, keyed so each of my turns replays it once.
+  const [yourTurnKey, setYourTurnKey] = useState<number | null>(null);
+
   // Incoming-attack lunge: when a fresh combat opens against me, dive the
-  // attacker cards toward my seat (visual only; capped at 3).
+  // attacker cards toward my seat (visual only; capped at 3). The same
+  // phase-watcher also cues the duel start/end sounds for the two duelists.
   const prevAttackPhaseRef = useRef<string>("");
+  const prevDuelDefenderRef = useRef<string | null>(null);
+  const wasDuelParticipantRef = useRef(false);
   useEffect(() => {
     if (!gameState) return;
     const localMyId = user?.id ?? "";
-    if (
-      gameState.phase === "declare_blocks" &&
-      prevAttackPhaseRef.current !== "declare_blocks"
-    ) {
+    const prevPhase = prevAttackPhaseRef.current;
+    if (gameState.phase === "declare_blocks" && prevPhase !== "declare_blocks") {
       const incoming = gameState.attacks
         .filter((a) => a.targetPlayerId === localMyId)
         .slice(0, 3);
       incoming.forEach((a) => launchFlight(a.attackerCardId, "incoming"));
     }
+
+    // Duel start/end sounds — participants only, and only on the natural
+    // transitions: interrupt/club-response windows that interpose mid-duel
+    // must not re-trigger either sound.
+    const inDuelPhase =
+      gameState.phase === "duel_attacker_turn" || gameState.phase === "duel_blocker_turn";
+    const duelSoundCtx = gameState.duelContext;
+    const amDuelist =
+      !!duelSoundCtx &&
+      (localMyId === duelSoundCtx.attackerPlayerId || localMyId === duelSoundCtx.defenderPlayerId);
+    if (inDuelPhase && duelSoundCtx) {
+      const enteredNaturally =
+        prevPhase === "declare_blocks" || prevPhase === "assign_damage_order";
+      const nextDuelInQueue =
+        prevDuelDefenderRef.current !== null &&
+        prevDuelDefenderRef.current !== duelSoundCtx.defenderPlayerId;
+      if ((enteredNaturally || nextDuelInQueue) && amDuelist) {
+        playGameSfx("duelStart");
+      }
+      prevDuelDefenderRef.current = duelSoundCtx.defenderPlayerId;
+      wasDuelParticipantRef.current = amDuelist;
+    } else if (
+      (gameState.phase === "main" || gameState.phase === "draw") &&
+      (prevPhase === "duel_attacker_turn" || prevPhase === "duel_blocker_turn")
+    ) {
+      if (wasDuelParticipantRef.current) playGameSfx("duelEnd");
+      prevDuelDefenderRef.current = null;
+      wasDuelParticipantRef.current = false;
+    }
+
     prevAttackPhaseRef.current = gameState.phase;
   }, [gameState, user, launchFlight]);
 
@@ -495,7 +534,16 @@ export default function MatchScreen() {
     // Turn changes.
     if (prevActivePlayerRef.current && prevActivePlayerRef.current !== gameState.activePlayerId) {
       pushEvent(colorOf(gameState.activePlayerId), `${nameOf(gameState.activePlayerId)} — turn ${gameState.turnNumber}`);
-      setTurnFlare({ key: gameState.turnNumber * 100 + gameState.turnOrder.indexOf(gameState.activePlayerId), color: colorOf(gameState.activePlayerId) });
+      const flareKey = gameState.turnNumber * 100 + gameState.turnOrder.indexOf(gameState.activePlayerId);
+      setTurnFlare({ key: flareKey, color: colorOf(gameState.activePlayerId) });
+      if (gameState.activePlayerId === effectMyId) {
+        // The pass-of-turn should be unmissable: banner + chime + buzz.
+        setYourTurnKey(flareKey);
+        playGameSfx("turn");
+        if (Platform.OS !== "web") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        }
+      }
     }
     prevActivePlayerRef.current = gameState.activePlayerId;
 
@@ -843,6 +891,9 @@ export default function MatchScreen() {
       }
       // Visual-only: the played card arcs from the hand onto the board.
       launchFlight(params.cardId, "cast");
+      // Remember that WE cast this card so the resulting hit effect is
+      // audible on this device (see isAudibleToMe in lib/hitEffects.ts).
+      markLocalCast(params.cardId);
       submitAction({ matchId, data: body });
     },
     [matchId, gameState, user, submitAction, showToast, launchFlight],
@@ -1408,6 +1459,20 @@ export default function MatchScreen() {
       {showMenu && (
         <View style={[styles.menuDropdown, { top: topInset + 40 }]}>
           <Pressable
+            onPress={() => {
+              setSfxMuted(!sfxMuted);
+              setSfxMutedState(!sfxMuted);
+            }}
+            style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons
+              name={sfxMuted ? "volume-mute" : "volume-high"}
+              size={16}
+              color={Colors.textSecondary}
+            />
+            <Text style={styles.menuItemLabel}>{sfxMuted ? "Sound: Off" : "Sound: On"}</Text>
+          </Pressable>
+          <Pressable
             onPress={handleAbandon}
             style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
           >
@@ -1918,6 +1983,7 @@ export default function MatchScreen() {
       {/* Cinematic overlays — decorative only, never intercept touches. */}
       <CardFlightHost flights={flights} />
       {turnFlare && <TurnFlare key={turnFlare.key} color={turnFlare.color} />}
+      {yourTurnKey !== null && <YourTurnBanner key={yourTurnKey} color={colorOf(myId)} />}
 
       <ToastHost toasts={toasts} />
     </View>
@@ -2009,6 +2075,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     color: Colors.accentRed,
+  },
+  menuItemLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
   },
   board: {
     flex: 1,

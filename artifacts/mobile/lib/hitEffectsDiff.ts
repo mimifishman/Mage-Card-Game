@@ -24,6 +24,15 @@ export interface HitEffectEvent {
   amount?: number;
   /** Stagger within a batch so simultaneous hits read as distinct. */
   delayMs: number;
+  /**
+   * Who caused the event, when derivable from the snapshot (combat hits,
+   * heals). Attachments/burns carry only sourceCardId — the local caster is
+   * recognized via the recent-cast registry in lib/hitEffects.ts. Used to
+   * decide whether THIS device should hear the sound.
+   */
+  sourcePlayerId?: string;
+  /** The card that caused the event (attacker / attachment / burn source). */
+  sourceCardId?: string;
 }
 
 /** How long a mounted effect lives before the hook drops it (past the longest choreography). */
@@ -144,6 +153,8 @@ export function diffHitEffects(
         kind: "damage",
         playerId: h.targetPlayerId,
         amount: h.directDamage,
+        sourcePlayerId: prev.attackOwners[h.attackerCardId],
+        sourceCardId: h.attackerCardId,
       });
     }
   }
@@ -160,7 +171,13 @@ export function diffHitEffects(
       if (blockers.length === 0) continue;
       const attackerSuit = toEffectSuit(parseCardId(pair.attackerCardId).suit);
       if (pair.blockerDestroyed) {
-        raw.push({ suit: attackerSuit, kind: "destroy", playerId: pair.targetPlayerId });
+        raw.push({
+          suit: attackerSuit,
+          kind: "destroy",
+          playerId: pair.targetPlayerId,
+          sourcePlayerId: prev.attackOwners[pair.attackerCardId],
+          sourceCardId: pair.attackerCardId,
+        });
       }
       if (pair.attackerDestroyed) {
         const attackerOwner = prev.attackOwners[pair.attackerCardId];
@@ -169,6 +186,8 @@ export function diffHitEffects(
             suit: toEffectSuit(parseCardId(blockers[0]!).suit),
             kind: "destroy",
             playerId: attackerOwner,
+            sourcePlayerId: pair.targetPlayerId,
+            sourceCardId: blockers[0]!,
           });
         }
       }
@@ -183,7 +202,7 @@ export function diffHitEffects(
 
     const lifeDelta = p.life - before.life;
     if (lifeDelta > 0) {
-      raw.push({ suit: "H", kind: "heal", playerId: pid, amount: lifeDelta });
+      raw.push({ suit: "H", kind: "heal", playerId: pid, amount: lifeDelta, sourcePlayerId: pid });
     }
 
     for (const royal of p.court) {
@@ -197,6 +216,7 @@ export function diffHitEffects(
           kind: suit === "C" ? "debuff" : "buff",
           playerId: pid,
           royalId: royal.cardId,
+          sourceCardId: cid,
         });
       }
     }
@@ -211,6 +231,7 @@ export function diffHitEffects(
       kind: "damage",
       playerId: dh.targetPlayerId,
       amount: dh.amount,
+      sourceCardId: dh.sourceCardId,
     });
   }
 

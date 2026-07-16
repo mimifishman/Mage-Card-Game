@@ -43,6 +43,7 @@ describe("diffHitEffects", () => {
     const before = view({
       phase: "declare_blocks",
       players: { a: player(20), b: player(20) },
+      attacks: [{ attackerPlayerId: "a", attackerCardId: "QC" }],
     });
     const after = view({
       phase: "main",
@@ -55,10 +56,18 @@ describe("diffHitEffects", () => {
       },
     });
     const events = diff(before, after);
-    // One club damage effect on b, not doubled by the pairs list.
+    // One club damage effect on b, not doubled by the pairs list, with the
+    // hit attributed back to the attacking player and card (for audio gating).
     const combat = events.filter((e) => e.kind === "damage");
     expect(combat).toHaveLength(1);
-    expect(combat[0]).toMatchObject({ suit: "C", kind: "damage", playerId: "b", amount: 3 });
+    expect(combat[0]).toMatchObject({
+      suit: "C",
+      kind: "damage",
+      playerId: "b",
+      amount: 3,
+      sourcePlayerId: "a",
+      sourceCardId: "QC",
+    });
   });
 
   it("does not re-fire the same immediateHits on the next snapshot", () => {
@@ -102,7 +111,13 @@ describe("diffHitEffects", () => {
     const events = diff(before, after);
     const destroy = events.filter((e) => e.kind === "destroy");
     expect(destroy).toHaveLength(1);
-    expect(destroy[0]).toMatchObject({ suit: "S", kind: "destroy", playerId: "b" });
+    expect(destroy[0]).toMatchObject({
+      suit: "S",
+      kind: "destroy",
+      playerId: "b",
+      sourcePlayerId: "a",
+      sourceCardId: "KS",
+    });
   });
 
   it("attributes a dead attacker's destroy to the blocker's suit on the attacker's seat", () => {
@@ -130,8 +145,15 @@ describe("diffHitEffects", () => {
     const events = diff(before, after);
     const destroy = events.filter((e) => e.kind === "destroy");
     expect(destroy).toHaveLength(1);
-    // Blocker was a Heart; effect lands on the attacker's own seat "a".
-    expect(destroy[0]).toMatchObject({ suit: "H", kind: "destroy", playerId: "a" });
+    // Blocker was a Heart; effect lands on the attacker's own seat "a",
+    // caused by the defender "b" whose blocker won the trade.
+    expect(destroy[0]).toMatchObject({
+      suit: "H",
+      kind: "destroy",
+      playerId: "a",
+      sourcePlayerId: "b",
+      sourceCardId: "KH",
+    });
   });
 
   it("treats any life gain as a Hearts heal", () => {
@@ -139,7 +161,13 @@ describe("diffHitEffects", () => {
     const after = view({ players: { a: player(18) } });
     const events = diff(before, after);
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ suit: "H", kind: "heal", playerId: "a", amount: 4 });
+    expect(events[0]).toMatchObject({
+      suit: "H",
+      kind: "heal",
+      playerId: "a",
+      amount: 4,
+      sourcePlayerId: "a",
+    });
   });
 
   it("fires a buff on the royal when a spade attaches", () => {
@@ -147,7 +175,13 @@ describe("diffHitEffects", () => {
     const after = view({ players: { a: player(20, [{ cardId: "KD", attachedCards: ["7S"] }]) } });
     const events = diff(before, after);
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ suit: "S", kind: "buff", playerId: "a", royalId: "KD" });
+    expect(events[0]).toMatchObject({
+      suit: "S",
+      kind: "buff",
+      playerId: "a",
+      royalId: "KD",
+      sourceCardId: "7S",
+    });
   });
 
   it("fires a debuff on the royal when a club attaches", () => {

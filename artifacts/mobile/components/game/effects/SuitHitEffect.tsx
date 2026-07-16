@@ -58,7 +58,12 @@ export default function SuitHitEffect({ suit, kind, delayMs = 0, size = BASE }: 
         ]}
       >
         {kind === "destroy" && <DestroyFlash delayMs={delayMs} />}
-        {suit === "C" && <ClubBolt delayMs={delayMs} fx={fx} />}
+        {suit === "C" &&
+          (kind === "debuff" || kind === "buff" ? (
+            <ClubMace delayMs={delayMs} fx={fx} />
+          ) : (
+            <ClubBolt delayMs={delayMs} fx={fx} />
+          ))}
         {suit === "H" && (kind === "damage" ? <HeartRing delayMs={delayMs} fx={fx} /> : <HeartBloom delayMs={delayMs} fx={fx} />)}
         {suit === "D" && <ShardBurst delayMs={delayMs} fx={fx} gem="diamond" />}
         {suit === "S" && <SpadeSword delayMs={delayMs} fx={fx} withShield={kind === "buff"} />}
@@ -137,6 +142,79 @@ function ClubBolt({ delayMs, fx }: { delayMs: number; fx: Fx }) {
         style={[styles.centered, impactStyle]}
       >
         <View style={[styles.impactCircle, { backgroundColor: fx.accent }]} />
+      </Animated.View>
+    </>
+  );
+}
+
+/**
+ * Clubs as an attachment — a heavy cudgel drops onto the royal, the club-suit
+ * counterpart to the Spade sword: fall, thud, recoil, dust. Lightning stays
+ * the club DAMAGE effect; this is the "a club just landed on you" beat.
+ */
+function ClubMace({ delayMs, fx }: { delayMs: number; fx: Fx }) {
+  const maceOpacity = useSharedValue(0);
+  const maceDrop = useSharedValue(-64);
+  const maceTilt = useSharedValue(-14);
+  const dustOpacity = useSharedValue(0);
+  const dustScale = useSharedValue(0.6);
+
+  useEffect(() => {
+    maceOpacity.value = withDelay(
+      delayMs,
+      withSequence(
+        withTiming(1, { duration: 60 }),
+        withTiming(1, { duration: 540 }),
+        withTiming(0, { duration: 200 }),
+      ),
+    );
+    maceDrop.value = withDelay(
+      delayMs + 60,
+      withSequence(
+        withTiming(0, { duration: 170, easing: Easing.in(Easing.quad) }),
+        withTiming(4, { duration: 70 }),
+        withTiming(0, { duration: 70 }),
+      ),
+    );
+    maceTilt.value = withDelay(delayMs + 60, withTiming(0, { duration: 170 }));
+    dustOpacity.value = withDelay(
+      delayMs + 230,
+      withSequence(withTiming(0.9, { duration: 100 }), withTiming(0, { duration: 150 })),
+    );
+    dustScale.value = withDelay(delayMs + 230, withTiming(1.2, { duration: 250, easing: Easing.out(Easing.quad) }));
+  }, []);
+
+  const maceStyle = useAnimatedStyle(() => ({
+    opacity: maceOpacity.value,
+    transform: [{ translateY: maceDrop.value }, { rotate: `${maceTilt.value}deg` }],
+  }));
+  const dustStyle = useAnimatedStyle(() => ({
+    opacity: dustOpacity.value,
+    transform: [{ scale: dustScale.value }],
+  }));
+
+  return (
+    <>
+      <Animated.View style={[StyleSheet.absoluteFill, maceStyle]}>
+        <Svg width={BASE} height={BASE} viewBox="0 0 60 60">
+          {/* pommel, wooden shaft, banded grip, studded head (tip down) */}
+          <Circle cx={30} cy={5} r={2.5} fill="#C89B3C" />
+          <Rect x={28} y={6} width={4} height={26} rx={1.5} fill="#6B4A2A" stroke={fx.core} strokeWidth={1} />
+          <Rect x={26.5} y={26} width={7} height={3} rx={1} fill="#C89B3C" />
+          <Circle cx={30} cy={41} r={9} fill={fx.accent} stroke={fx.core} strokeWidth={1.5} />
+          {/* studs */}
+          <Circle cx={30} cy={33} r={1.6} fill={fx.flash} />
+          <Circle cx={37} cy={39} r={1.6} fill={fx.flash} />
+          <Circle cx={34} cy={47} r={1.6} fill={fx.flash} />
+          <Circle cx={26} cy={47} r={1.6} fill={fx.flash} />
+          <Circle cx={23} cy={39} r={1.6} fill={fx.flash} />
+        </Svg>
+      </Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, dustStyle]}>
+        <Svg width={BASE} height={BASE} viewBox="0 0 60 60">
+          <Path d="M18 52 Q12 48 10 42" stroke={fx.accent} strokeWidth={2} fill="none" strokeLinecap="round" />
+          <Path d="M42 52 Q48 48 50 42" stroke={fx.accent} strokeWidth={2} fill="none" strokeLinecap="round" />
+        </Svg>
       </Animated.View>
     </>
   );
