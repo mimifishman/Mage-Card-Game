@@ -75,6 +75,24 @@ export interface ActionParams {
   mode?: string;
 }
 
+// Just the Royal fields the match log needs to name a card with its totals.
+type RoyalStats = { cardId: string; buffAttack: number; buffHealth: number; damageTaken: number };
+
+// e.g. "8♣" — rank + suit symbol only.
+function cardLabel(id: string): string {
+  const c = parseCardId(id);
+  return `${c.displayRank}${c.suitSymbol}`;
+}
+
+// A Royal named with its effective totals, e.g. "K♥ (⚔10 ♥4)". Used everywhere
+// the log mentions a Royal so a card is never shown without its value — for a
+// destroyed Royal, pass its last-known stats from a snapshot.
+function royalStatLabel(r: RoyalStats): string {
+  const atk = effectiveAttack(r.cardId, r.buffAttack);
+  const hp = effectiveHealth(r.cardId, r.buffHealth, r.damageTaken);
+  return `${cardLabel(r.cardId)} (⚔${atk} ♥${hp})`;
+}
+
 // Plain-language names for engine phases — raw ids read as jargon.
 const PHASE_LABELS: Record<string, string> = {
   draw: "Draw",
@@ -175,7 +193,7 @@ export default function MatchScreen() {
   }, []);
 
   const prevPhaseRef = useRef<string | null>(null);
-  const prevPlayersRef = useRef<Record<string, { life: number; courtIds: string[]; eliminated: boolean }>>({});
+  const prevPlayersRef = useRef<Record<string, { life: number; court: RoyalStats[]; eliminated: boolean }>>({});
   const prevActivePlayerRef = useRef<string | null>(null);
   const prevPendingClubRef = useRef<string | null>(null);
   const hasNavigatedRef = useRef(false);
@@ -188,6 +206,9 @@ export default function MatchScreen() {
     defenderId: string;
     pairs: { attackerCardId: string; blockerIds: string[] }[];
     lives: Record<string, number>;
+    // Last-known stats of every Royal in the duel, so a destroyed Royal can
+    // still be named with its totals in the outcome.
+    stats: Record<string, RoyalStats>;
   } | null>(null);
   const [completedDuels, setCompletedDuels] = useState<{ id: number; text: string }[]>([]);
   const [duelNotice, setDuelNotice] = useState<{ id: number; title: string; lines: string[] } | null>(null);
@@ -368,22 +389,23 @@ export default function MatchScreen() {
     const effectMyId = user?.id ?? "";
     const nameOf = (id: string) =>
       id === effectMyId ? "You" : (displayNames[id] ?? id.slice(0, 8));
-    const cardLabel = (id: string) => {
-      const c = parseCardId(id);
-      return `${c.displayRank}${c.suitSymbol}`;
-    };
 
     const finalize = (snap: NonNullable<typeof duelSnapshotRef.current>) => {
       const atkName = nameOf(snap.attackerId);
       const defName = nameOf(snap.defenderId);
       const atkCourt = gameState.players[snap.attackerId]?.court ?? [];
       const defCourt = gameState.players[snap.defenderId]?.court ?? [];
+      // Name a destroyed Royal with its totals from the duel-start snapshot.
+      const deadLabel = (id: string) => {
+        const s = snap.stats[id];
+        return s ? royalStatLabel(s) : cardLabel(id);
+      };
       const deadAtk: string[] = [];
       const deadDef: string[] = [];
       for (const p of snap.pairs) {
-        if (!atkCourt.some((r) => r.cardId === p.attackerCardId)) deadAtk.push(cardLabel(p.attackerCardId));
+        if (!atkCourt.some((r) => r.cardId === p.attackerCardId)) deadAtk.push(deadLabel(p.attackerCardId));
         for (const b of p.blockerIds) {
-          if (!defCourt.some((r) => r.cardId === b)) deadDef.push(cardLabel(b));
+          if (!defCourt.some((r) => r.cardId === b)) deadDef.push(deadLabel(b));
         }
       }
       const lines: string[] = [];
@@ -427,6 +449,15 @@ export default function MatchScreen() {
             [ctx.attackerPlayerId]: gameState.players[ctx.attackerPlayerId]?.life ?? 0,
             [ctx.defenderPlayerId]: gameState.players[ctx.defenderPlayerId]?.life ?? 0,
           },
+          stats: Object.fromEntries(
+            [
+              ...(gameState.players[ctx.attackerPlayerId]?.court ?? []),
+              ...(gameState.players[ctx.defenderPlayerId]?.court ?? []),
+            ].map((r) => [
+              r.cardId,
+              { cardId: r.cardId, buffAttack: r.buffAttack, buffHealth: r.buffHealth, damageTaken: r.damageTaken },
+            ]),
+          ),
         };
       }
     } else if (snap) {
@@ -530,17 +561,14 @@ export default function MatchScreen() {
     const possOf = (id: string) => (id === effectMyId ? "your" : `${nameOf(id)}'s`);
     // Possessive when the owner is also the actor: "your own" / "Bob's own".
     const ownPossOf = (id: string) => (id === effectMyId ? "your own" : `${nameOf(id)}'s own`);
-    const cardLabel = (id: string) => {
-      const c = parseCardId(id);
-      return `${c.displayRank}${c.suitSymbol}`;
-    };
-    // A Royal named with its current effective totals, e.g. "K♥ (⚔10 ♥4)".
+    // A Royal named with its effective totals, e.g. "K♥ (⚔10 ♥4)". Falls back to
+    // the previous snapshot when the Royal has already left the court, so a card
+    // is never logged without its value.
     const royalLabel = (playerId: string, royalCardId: string) => {
-      const royal = gameState.players[playerId]?.court.find((r) => r.cardId === royalCardId);
-      if (!royal) return cardLabel(royalCardId);
-      const atk = effectiveAttack(royalCardId, royal.buffAttack);
-      const hp = effectiveHealth(royalCardId, royal.buffHealth, royal.damageTaken);
-      return `${cardLabel(royalCardId)} (⚔${atk} ♥${hp})`;
+      const royal =
+        gameState.players[playerId]?.court.find((r) => r.cardId === royalCardId) ??
+        prevPlayers[playerId]?.court.find((r) => r.cardId === royalCardId);
+      return royal ? royalStatLabel(royal) : cardLabel(royalCardId);
     };
 
     // Turn changes.
@@ -620,10 +648,10 @@ export default function MatchScreen() {
         pushEvent(colorOf(id), `${nameOf(id)} healed +${lifeDelta} (❤ ${p.life})`);
       }
       const nowCourtIds = new Set(p.court.map((r) => r.cardId));
-      const lostIds = before.courtIds.filter((cid) => !nowCourtIds.has(cid));
-      if (lostIds.length > 0) {
-        const lostNames = lostIds.map(cardLabel).join(", ");
-        pushEvent(colorOf(id), `${nameOf(id)} lost Royal${lostIds.length > 1 ? "s" : ""} ${lostNames}`);
+      const lostRoyals = before.court.filter((r) => !nowCourtIds.has(r.cardId));
+      if (lostRoyals.length > 0) {
+        const lostNames = lostRoyals.map(royalStatLabel).join(", ");
+        pushEvent(colorOf(id), `${nameOf(id)} lost Royal${lostRoyals.length > 1 ? "s" : ""} ${lostNames}`);
         damageParts.push(`${nameOf(id)} lost ${lostNames}`);
       }
       if (!before.eliminated && p.isEliminated) {
@@ -663,7 +691,16 @@ export default function MatchScreen() {
     prevPlayersRef.current = Object.fromEntries(
       Object.entries(gameState.players).map(([id, p]) => [
         id,
-        { life: p.life, courtIds: p.court.map((r) => r.cardId), eliminated: !!p.isEliminated },
+        {
+          life: p.life,
+          court: p.court.map((r) => ({
+            cardId: r.cardId,
+            buffAttack: r.buffAttack,
+            buffHealth: r.buffHealth,
+            damageTaken: r.damageTaken,
+          })),
+          eliminated: !!p.isEliminated,
+        },
       ]),
     );
   }, [gameState]);
