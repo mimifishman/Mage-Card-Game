@@ -59,6 +59,7 @@ export interface MyMatchItem {
   inviteCode: string;
   status: MyMatchItemStatus;
   playerCount: number;
+  playerNames: string[];
 }
 
 export interface MyMatchesResponse {

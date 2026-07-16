@@ -264,6 +264,12 @@ importers:
       '@babel/core':
         specifier: ^7.25.2
         version: 7.29.0
+      '@expo-google-fonts/cinzel':
+        specifier: ^0.4.0
+        version: 0.4.2
+      '@expo-google-fonts/cinzel-decorative':
+        specifier: ^0.4.0
+        version: 0.4.1
       '@expo-google-fonts/inter':
         specifier: ^0.4.0
         version: 0.4.2
@@ -1309,6 +1315,12 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux]
+
+  '@expo-google-fonts/cinzel-decorative@0.4.1':
+    resolution: {integrity: sha512-e9kUUDldLbeNbt2VmycLgWZf2vNCsmvE8COs4WgEIUyvC1ndFPVkw/sy6gCceb5nNzmIw45J9CrUZ1TrGqOcWA==}
+
+  '@expo-google-fonts/cinzel@0.4.2':
+    resolution: {integrity: sha512-UAlyuHCGjmKpMt2MoCKYueHz8ZEzjHO1VEol2G7NcPW54UH+85SWIGzpor05YNqUvr/aoqS8Qrfnswxg1RsNMw==}
 
   '@expo-google-fonts/inter@0.4.2':
     resolution: {integrity: sha512-syfiImMaDmq7cFi0of+waE2M4uSCyd16zgyWxdPOY7fN2VBmSLKEzkfbZgeOjJq61kSqPBNNtXjggiQiSD6gMQ==}
@@ -7708,6 +7720,10 @@ snapshots:
 
   '@esbuild/linux-x64@0.27.3':
     optional: true
+
+  '@expo-google-fonts/cinzel-decorative@0.4.1': {}
+
+  '@expo-google-fonts/cinzel@0.4.2': {}
 
   '@expo-google-fonts/inter@0.4.2': {}
 

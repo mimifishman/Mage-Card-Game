@@ -1999,8 +1999,8 @@ export default function MatchScreen() {
 
       {/* Cinematic overlays — decorative only, never intercept touches. */}
       <CardFlightHost flights={flights} />
-      {turnFlare && <TurnFlare key={turnFlare.key} color={turnFlare.color} />}
-      {yourTurnKey !== null && <YourTurnBanner key={yourTurnKey} color={colorOf(myId)} />}
+      {turnFlare && <TurnFlare key={`flare-${turnFlare.key}`} color={turnFlare.color} />}
+      {yourTurnKey !== null && <YourTurnBanner key={`yourturn-${yourTurnKey}`} color={colorOf(myId)} />}
 
       <ToastHost toasts={toasts} />
     </View>

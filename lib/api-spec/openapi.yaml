@@ -586,7 +586,7 @@ components:
           type: string
     MyMatchItem:
       type: object
-      required: [matchId, inviteCode, status, playerCount]
+      required: [matchId, inviteCode, status, playerCount, playerNames]
       properties:
         matchId:
           type: string
@@ -597,6 +597,10 @@ components:
           enum: [waiting, in_progress]
         playerCount:
           type: integer
+        playerNames:
+          type: array
+          items:
+            type: string
     MyMatchesResponse:
       type: object
       required: [matches]

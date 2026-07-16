@@ -239,7 +239,7 @@ export async function getActiveMatchForUser(userId: string): Promise<string | nu
 
 export async function getOpenMatchesForUser(
   userId: string,
-): Promise<{ matchId: string; inviteCode: string; status: string; playerCount: number }[]> {
+): Promise<{ matchId: string; inviteCode: string; status: string; playerCount: number; playerNames: string[] }[]> {
   const rows = await db
     .select({
       matchId: matchesTable.id,
@@ -258,22 +258,28 @@ export async function getOpenMatchesForUser(
   if (rows.length === 0) return [];
 
   const matchIds = rows.map((r) => r.matchId);
-  const countRows = await db
+  const playerRows = await db
     .select({
       matchId: matchPlayersTable.matchId,
-      playerCount: sql<number>`count(*)::int`,
+      displayName: usersTable.displayName,
     })
     .from(matchPlayersTable)
-    .where(inArray(matchPlayersTable.matchId, matchIds))
-    .groupBy(matchPlayersTable.matchId);
+    .innerJoin(usersTable, eq(matchPlayersTable.userId, usersTable.id))
+    .where(inArray(matchPlayersTable.matchId, matchIds));
 
-  const countMap = new Map(countRows.map((r) => [r.matchId, r.playerCount]));
+  const playersByMatch = new Map<string, string[]>();
+  for (const row of playerRows) {
+    const names = playersByMatch.get(row.matchId) ?? [];
+    names.push(row.displayName);
+    playersByMatch.set(row.matchId, names);
+  }
 
   return rows.map((r) => ({
     matchId: r.matchId,
     inviteCode: r.inviteCode,
     status: r.status,
-    playerCount: countMap.get(r.matchId) ?? 1,
+    playerCount: playersByMatch.get(r.matchId)?.length ?? 1,
+    playerNames: playersByMatch.get(r.matchId) ?? [],
   }));
 }
 
