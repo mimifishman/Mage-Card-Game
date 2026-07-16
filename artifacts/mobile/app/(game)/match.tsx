@@ -175,7 +175,7 @@ export default function MatchScreen() {
   }, []);
 
   const prevPhaseRef = useRef<string | null>(null);
-  const prevPlayersRef = useRef<Record<string, { life: number; courtSize: number; eliminated: boolean }>>({});
+  const prevPlayersRef = useRef<Record<string, { life: number; courtIds: string[]; eliminated: boolean }>>({});
   const prevActivePlayerRef = useRef<string | null>(null);
   const prevPendingClubRef = useRef<string | null>(null);
   const hasNavigatedRef = useRef(false);
@@ -387,8 +387,8 @@ export default function MatchScreen() {
         }
       }
       const lines: string[] = [];
-      if (deadDef.length > 0) lines.push(`${defName} lost ${deadDef.join(", ")}`);
-      if (deadAtk.length > 0) lines.push(`${atkName} lost ${deadAtk.join(", ")}`);
+      if (deadDef.length > 0) lines.push(`${defName} lost Royal${deadDef.length > 1 ? "s" : ""} ${deadDef.join(", ")}`);
+      if (deadAtk.length > 0) lines.push(`${atkName} lost Royal${deadAtk.length > 1 ? "s" : ""} ${deadAtk.join(", ")}`);
       for (const [pid, prevLife] of Object.entries(snap.lives)) {
         const nowLife = gameState.players[pid]?.life ?? prevLife;
         if (nowLife < prevLife) lines.push(`${nameOf(pid)} took ${prevLife - nowLife} damage (❤ ${nowLife})`);
@@ -530,6 +530,18 @@ export default function MatchScreen() {
     const possOf = (id: string) => (id === effectMyId ? "your" : `${nameOf(id)}'s`);
     // Possessive when the owner is also the actor: "your own" / "Bob's own".
     const ownPossOf = (id: string) => (id === effectMyId ? "your own" : `${nameOf(id)}'s own`);
+    const cardLabel = (id: string) => {
+      const c = parseCardId(id);
+      return `${c.displayRank}${c.suitSymbol}`;
+    };
+    // A Royal named with its current effective totals, e.g. "K♥ (⚔10 ♥4)".
+    const royalLabel = (playerId: string, royalCardId: string) => {
+      const royal = gameState.players[playerId]?.court.find((r) => r.cardId === royalCardId);
+      if (!royal) return cardLabel(royalCardId);
+      const atk = effectiveAttack(royalCardId, royal.buffAttack);
+      const hp = effectiveHealth(royalCardId, royal.buffHealth, royal.damageTaken);
+      return `${cardLabel(royalCardId)} (⚔${atk} ♥${hp})`;
+    };
 
     // Turn changes.
     if (prevActivePlayerRef.current && prevActivePlayerRef.current !== gameState.activePlayerId) {
@@ -552,17 +564,18 @@ export default function MatchScreen() {
     if (prev !== "declare_blocks" && gameState.phase === "declare_blocks") {
       setCompletedDuels([]);
       setDuelNotice(null);
-      const byAttacker = new Map<string, Map<string, number>>();
+      const byAttacker = new Map<string, Map<string, string[]>>();
       for (const a of gameState.attacks) {
-        const inner = byAttacker.get(a.attackerPlayerId) ?? new Map<string, number>();
-        inner.set(a.targetPlayerId, (inner.get(a.targetPlayerId) ?? 0) + 1);
+        const inner = byAttacker.get(a.attackerPlayerId) ?? new Map<string, string[]>();
+        inner.set(a.targetPlayerId, [...(inner.get(a.targetPlayerId) ?? []), a.attackerCardId]);
         byAttacker.set(a.attackerPlayerId, inner);
       }
       for (const [atkId, targets] of byAttacker) {
-        for (const [tgtId, n] of targets) {
+        for (const [tgtId, cardIds] of targets) {
+          const royals = cardIds.map((cid) => royalLabel(atkId, cid)).join(", ");
           pushEvent(
             colorOf(atkId),
-            `${nameOf(atkId)} attacked ${nameOf(tgtId)} with ${n} Royal${n > 1 ? "s" : ""}`,
+            `${nameOf(atkId)} attacked ${nameOf(tgtId)} with ${royals}`,
           );
         }
       }
@@ -576,9 +589,11 @@ export default function MatchScreen() {
       const c = gameState.pendingClubDebuff;
       const clubTargetPoss =
         c.attackerPlayerId === c.targetPlayerId ? ownPossOf(c.attackerPlayerId) : possOf(c.targetPlayerId);
+      // Stats read here are pre-debuff: the play is still pending when this fires.
+      const clubPip = parseCardId(c.clubCardId).pipValue;
       pushEvent(
         colorOf(c.attackerPlayerId),
-        `${nameOf(c.attackerPlayerId)} played a Club on ${clubTargetPoss} Royal`,
+        `${nameOf(c.attackerPlayerId)} played ${cardLabel(c.clubCardId)} (−${clubPip}) on ${clubTargetPoss} Royal ${royalLabel(c.targetPlayerId, c.targetRoyalId)}`,
       );
     }
     prevPendingClubRef.current = pendingClubKey;
@@ -604,10 +619,12 @@ export default function MatchScreen() {
       } else if (lifeDelta > 0) {
         pushEvent(colorOf(id), `${nameOf(id)} healed +${lifeDelta} (❤ ${p.life})`);
       }
-      const courtLost = before.courtSize - p.court.length;
-      if (courtLost > 0) {
-        pushEvent(colorOf(id), `${nameOf(id)} lost ${courtLost} Royal${courtLost > 1 ? "s" : ""}`);
-        damageParts.push(`${nameOf(id)} lost ${courtLost} Royal${courtLost > 1 ? "s" : ""}`);
+      const nowCourtIds = new Set(p.court.map((r) => r.cardId));
+      const lostIds = before.courtIds.filter((cid) => !nowCourtIds.has(cid));
+      if (lostIds.length > 0) {
+        const lostNames = lostIds.map(cardLabel).join(", ");
+        pushEvent(colorOf(id), `${nameOf(id)} lost Royal${lostIds.length > 1 ? "s" : ""} ${lostNames}`);
+        damageParts.push(`${nameOf(id)} lost ${lostNames}`);
       }
       if (!before.eliminated && p.isEliminated) {
         pushEvent(colorOf(id), `☠ ${nameOf(id)} ${id === effectMyId ? "were" : "was"} eliminated!`);
@@ -646,7 +663,7 @@ export default function MatchScreen() {
     prevPlayersRef.current = Object.fromEntries(
       Object.entries(gameState.players).map(([id, p]) => [
         id,
-        { life: p.life, courtSize: p.court.length, eliminated: !!p.isEliminated },
+        { life: p.life, courtIds: p.court.map((r) => r.cardId), eliminated: !!p.isEliminated },
       ]),
     );
   }, [gameState]);
