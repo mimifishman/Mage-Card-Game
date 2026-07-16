@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Cinzel_700Bold",
     color: Colors.textPrimary,
     letterSpacing: 1,
   },

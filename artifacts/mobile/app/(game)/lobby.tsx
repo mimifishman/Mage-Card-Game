@@ -208,7 +208,7 @@ export default function LobbyScreen() {
               testID="create-match-button"
             >
               <LinearGradient
-                colors={["#1E1830", "#120F20"]}
+                colors={Gradients.panelRaised}
                 style={styles.actionCardGradient}
               >
                 <View style={[styles.actionIconBg, { backgroundColor: "rgba(200,155,60,0.15)" }]}>
@@ -238,7 +238,7 @@ export default function LobbyScreen() {
               testID="join-match-button"
             >
               <LinearGradient
-                colors={["#1A1E30", "#0F1220"]}
+                colors={Gradients.panel}
                 style={styles.actionCardGradient}
               >
                 <View style={[styles.actionIconBg, { backgroundColor: "rgba(41,128,185,0.15)" }]}>
@@ -385,10 +385,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroTitle: {
-    fontSize: 36,
-    fontFamily: "Inter_700Bold",
+    fontSize: 34,
+    fontFamily: "Cinzel_700Bold",
     color: Colors.textPrimary,
     letterSpacing: 4,
+    textShadowColor: "rgba(200,155,60,0.4)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
     marginTop: 8,
   },
   heroSubtitle: {
