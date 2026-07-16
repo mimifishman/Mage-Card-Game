@@ -4,8 +4,10 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeOut, FadeInUp } from "react-native-reanimated";
 import type { PublicPlayerState } from "@workspace/api-client-react";
 import CourtZone from "./CourtZone";
+import SuitHitEffect from "./effects/SuitHitEffect";
 import Colors from "@/constants/colors";
 import { parseCardId } from "@/lib/gameUtils";
+import type { HitEffectEvent } from "@/lib/hitEffectsDiff";
 
 interface SeatProps {
   player: PublicPlayerState;
@@ -39,6 +41,10 @@ interface SeatProps {
   attackingYouWith?: string[];
   phase?: string;
   isDefender?: boolean;
+  /** Active suit hit effects on this seat (damage/heal/destroy), from useHitEffects. */
+  hitEffects?: HitEffectEvent[];
+  /** Active suit hit effects per royal card in this seat's court. */
+  royalHitEffects?: Record<string, HitEffectEvent[]>;
 }
 
 export default function Seat({
@@ -65,6 +71,8 @@ export default function Seat({
   attackingYouWith,
   phase,
   isDefender,
+  hitEffects,
+  royalHitEffects,
 }: SeatProps) {
   // Life-change floater: when life changes, float a ±N over the heart stat.
   const prevLifeRef = useRef(player.life);
@@ -81,6 +89,16 @@ export default function Seat({
   }, [player.life]);
 
   const showAttacking = !!attackingYouWith && attackingYouWith.length > 0;
+
+  // Suit hit effects anchored over the seat header (crest + stats) — rendered
+  // last so they draw above everything, but never intercept touches.
+  const fxOverlay = !!hitEffects?.length && (
+    <View pointerEvents="none" style={styles.fxOverlay}>
+      {hitEffects.map((e) => (
+        <SuitHitEffect key={e.id} suit={e.suit} kind={e.kind} delayMs={e.delayMs} size={72} />
+      ))}
+    </View>
+  );
 
   const crest = (
     <Pressable
@@ -203,8 +221,10 @@ export default function Seat({
             highlightBadgeText={highlightBadgeText}
             glowIds={royalGlowIds}
             glowColor={glowColor ?? color}
+            effectsByRoyalId={royalHitEffects}
           />
         )}
+        {fxOverlay}
       </Pressable>
     );
   }
@@ -252,8 +272,10 @@ export default function Seat({
           highlightBadgeText={highlightBadgeText}
           glowIds={royalGlowIds}
           glowColor={glowColor ?? color}
+          effectsByRoyalId={royalHitEffects}
         />
       )}
+      {fxOverlay}
     </View>
   );
 }
@@ -440,6 +462,15 @@ const styles = StyleSheet.create({
     right: -4,
     fontSize: 13,
     fontFamily: "Inter_700Bold",
+  },
+  // Anchor box for suit hit effects: the seat header (crest + stats) area,
+  // so effects land on the "character" rather than the court strip below.
+  fxOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 64,
   },
   attackingBadge: {
     backgroundColor: "rgba(200,16,46,0.14)",

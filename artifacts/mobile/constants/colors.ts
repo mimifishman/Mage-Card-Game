@@ -31,6 +31,20 @@ export function seatColorFor(index: number): string {
   return SEAT_COLORS[((index % SEAT_COLORS.length) + SEAT_COLORS.length) % SEAT_COLORS.length]!;
 }
 
+// Hit-effect palette, one entry per suit (plus Joker). The base suit colors
+// above are too dark to read against the felt board, so each effect gets a
+// bright `accent` and a near-white `flash` alongside its `core` suit color.
+// Spades keep an ink core but use steel/white so the sword survives the dark
+// background.
+export type SuitFxKey = "C" | "H" | "D" | "S" | "JOKER";
+export const SUIT_FX: Record<SuitFxKey, { core: string; accent: string; flash: string }> = {
+  C: { core: SUIT_GREEN, accent: "#66BB6A", flash: "#E8F5E9" },
+  H: { core: SUIT_RED, accent: "#F06292", flash: "#FCE4EC" },
+  D: { core: SUIT_BLUE, accent: "#64B5F6", flash: "#E3F2FD" },
+  S: { core: SUIT_INK, accent: "#CFD8DC", flash: "#FFFFFF" },
+  JOKER: { core: BRAND, accent: "#FFD54F", flash: "#FFF8E1" },
+};
+
 const Colors = {
   brand: BRAND,
   brandDim: BRAND_DIM,
@@ -53,6 +67,7 @@ const Colors = {
   accentGreen: ACCENT_GREEN,
   border: BORDER,
   borderLight: BORDER_LIGHT,
+  suitFx: SUIT_FX,
 };
 
 export default Colors;

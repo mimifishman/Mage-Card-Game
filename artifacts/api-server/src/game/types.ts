@@ -109,6 +109,22 @@ export interface CombatSummary {
   immediateHits?: CombatPairOutcome[];
 }
 
+/**
+ * Attribution record for direct (non-combat) damage — a Club burned for face
+ * damage or a Joker's 10-damage mode. Combat damage is already attributable
+ * client-side via lastCombatSummary/duelContext, but these plays only show up
+ * as a life delta, so clients need the source card to pick the right visual
+ * effect. `seq` increases monotonically per match so clients can detect a new
+ * hit without phase-transition gating (and even when the same card/target
+ * repeats).
+ */
+export interface DirectHit {
+  sourceCardId: CardId;
+  targetPlayerId: string;
+  amount: number;
+  seq: number;
+}
+
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";
 
 export type TurnPhase =
@@ -166,6 +182,8 @@ export interface GameState {
   hasAttackedThisTurn: boolean;
   duelContext?: DuelContext;
   lastCombatSummary?: CombatSummary;
+  /** Last direct (non-combat) damage event, for client hit-effect attribution. */
+  lastDirectHit?: DirectHit;
   pendingClubDebuff?: PendingClubDebuff;
   /** Targeted opponents who still need to submit (or pass on) blocks during "declare_blocks". Cleared once all have submitted. */
   pendingBlockDefenders?: string[];

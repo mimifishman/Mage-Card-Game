@@ -8,8 +8,10 @@ import {
 } from "react-native";
 import type { RoyalInCourt } from "@workspace/api-client-react";
 import CardView from "./CardView";
+import SuitHitEffect from "./effects/SuitHitEffect";
 import Colors from "@/constants/colors";
 import { effectiveAttack, effectiveHealth, royalBaseHealth, parseCardId, type Rank } from "@/lib/gameUtils";
+import type { HitEffectEvent } from "@/lib/hitEffectsDiff";
 
 interface CourtZoneProps {
   court: RoyalInCourt[];
@@ -28,6 +30,8 @@ interface CourtZoneProps {
       a seat-colored glow and everything else dims. */
   glowIds?: Set<string>;
   glowColor?: string;
+  /** Active suit hit effects to overlay per royal (from useHitEffects). */
+  effectsByRoyalId?: Record<string, HitEffectEvent[]>;
 }
 
 const ATTACHED_SIZE: Record<"sm" | "md" | "lg" | "xl", "xs" | "sm" | "md" | "lg" | "xl"> = {
@@ -52,9 +56,11 @@ export default function CourtZone({
   highlightBadgeText,
   glowIds,
   glowColor,
+  effectsByRoyalId,
 }: CourtZoneProps) {
   const statFontSize = size === "xl" ? 15 : size === "lg" ? 14 : 12;
   const targeting = !!glowIds;
+  const effectSize = size === "xl" ? 72 : size === "lg" ? 64 : 56;
 
   return (
     <View style={styles.container}>
@@ -168,6 +174,20 @@ export default function CourtZone({
                 {isTapped && (
                   <View style={styles.tappedBadge}>
                     <Text style={styles.tappedText}>💤 USED</Text>
+                  </View>
+                )}
+
+                {!!effectsByRoyalId?.[royal.cardId]?.length && (
+                  <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                    {effectsByRoyalId[royal.cardId]!.map((e) => (
+                      <SuitHitEffect
+                        key={e.id}
+                        suit={e.suit}
+                        kind={e.kind}
+                        delayMs={e.delayMs}
+                        size={effectSize}
+                      />
+                    ))}
                   </View>
                 )}
               </Pressable>

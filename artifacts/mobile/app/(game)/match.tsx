@@ -54,6 +54,7 @@ import {
   canPlayerInitiateInterrupt,
 } from "@/lib/gameUtils";
 import type { CardAction, ValidAction } from "@/lib/gameUtils";
+import { useHitEffects } from "@/lib/hitEffects";
 
 export interface ActionParams {
   cardId: string;
@@ -429,6 +430,11 @@ export default function MatchScreen() {
       setCompletedDuels([]);
     }
   }, [gameState]);
+
+  // Suit-themed hit effects (lightning / heal bloom / shard burst / sword)
+  // plus their haptics + SFX, derived by diffing snapshots. Kept separate
+  // from the ticker diff below — see lib/hitEffectsDiff.ts for the rules.
+  const { seatEffects, royalEffects } = useHitEffects(gameState, user?.id ?? "");
 
   // Diff-based match log + damage/combat notices. This replaces the old
   // fade-away combat banner: everything lands in the persistent ticker, and
@@ -1314,6 +1320,8 @@ export default function MatchScreen() {
         crestTargetHint={assigningTargets ? "⚔ SEND HERE" : "🎯 TAP"}
         onCrestPress={() => dispatchPlayerTarget(opp.id)}
         attackingYouWith={attacksFrom(opp.id)}
+        hitEffects={seatEffects[opp.id]}
+        royalHitEffects={royalEffects}
       />
     );
   };
@@ -1673,6 +1681,8 @@ export default function MatchScreen() {
               crestTargetable={targetingPlayers && !assigningTargets}
               crestTargetHint="🎯 TAP"
               onCrestPress={() => dispatchPlayerTarget(myId)}
+              hitEffects={seatEffects[myId]}
+              royalHitEffects={royalEffects}
             />
           </View>
         )}
