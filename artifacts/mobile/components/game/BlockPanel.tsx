@@ -6,6 +6,7 @@ import type { AttackDeclaration, RoyalInCourt } from "@workspace/api-client-reac
 import { parseCardId, effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
+import { Tints } from "@/constants/theme";
 
 interface BlockPanelProps {
   attacks: AttackDeclaration[];
@@ -291,7 +292,7 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   attackerColActive: {
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: Tints.white,
   },
   attackerVal: {
     fontSize: 12,
@@ -299,10 +300,10 @@ const styles = StyleSheet.create({
     color: Colors.accentRed,
   },
   attackerHp: {
-    color: "#66BB6A",
+    color: Colors.suitFx.C.accent,
   },
   stateChipBlocked: {
-    backgroundColor: "rgba(46,125,50,0.3)",
+    backgroundColor: Tints.green,
     borderRadius: 5,
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -310,10 +311,10 @@ const styles = StyleSheet.create({
   stateChipBlockedText: {
     fontSize: 10,
     fontFamily: "Inter_700Bold",
-    color: "#8FDF9A",
+    color: Colors.accentGreenSoft,
   },
   stateChipPass: {
-    backgroundColor: "rgba(200,16,46,0.2)",
+    backgroundColor: Tints.crimson,
     borderRadius: 5,
     paddingHorizontal: 5,
     paddingVertical: 1,
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
   stateChipPassText: {
     fontSize: 10,
     fontFamily: "Inter_700Bold",
-    color: "#FF8A8A",
+    color: Colors.accentRedSoft,
   },
   stateChipPending: {
     backgroundColor: Colors.bgSurface,
@@ -357,8 +358,8 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   blockerChipSelected: {
-    backgroundColor: "#8FDF9A",
-    borderColor: "#8FDF9A",
+    backgroundColor: Colors.accentGreenSoft,
+    borderColor: Colors.accentGreenSoft,
   },
   blockerChipUsedElsewhere: {
     opacity: 0.6,
@@ -385,9 +386,9 @@ const styles = StyleSheet.create({
   },
   passChip: {
     alignSelf: "flex-start",
-    backgroundColor: "rgba(200,16,46,0.12)",
+    backgroundColor: Tints.crimson,
     borderWidth: 1.5,
-    borderColor: "rgba(229,57,53,0.5)",
+    borderColor: Tints.redBorder,
     borderRadius: 9,
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -411,10 +412,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-    color: "#8FDF9A",
+    color: Colors.accentGreenSoft,
   },
   previewDanger: {
-    color: "#FF8A8A",
+    color: Colors.accentRedSoft,
   },
   confirmBtn: {
     backgroundColor: Colors.brand,

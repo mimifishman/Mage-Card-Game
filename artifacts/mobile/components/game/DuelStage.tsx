@@ -6,6 +6,7 @@ import type { AttackDeclaration, DuelContext, RoyalInCourt } from "@workspace/ap
 import { effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
+import { Tints, Type } from "@/constants/theme";
 
 interface DuelStageProps {
   phase: string;
@@ -112,7 +113,7 @@ export default function DuelStage({
     >
       {/* Who is dueling, and whose move it is */}
       <View style={styles.header}>
-        <Ionicons name="flash" size={15} color="#C89B3C" />
+        <Ionicons name="flash" size={15} color={Colors.brand} />
         <Text style={styles.title}>
           DUEL: <Text style={{ color: attackerColor }}>{attackerName}</Text>
           <Text style={styles.vsInline}>  vs  </Text>
@@ -243,10 +244,10 @@ export default function DuelStage({
 const styles = StyleSheet.create({
   stage: {
     marginHorizontal: 8,
-    backgroundColor: "rgba(10,20,14,0.92)",
+    backgroundColor: Tints.obsidianPanel,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: "#C89B3C",
+    borderColor: Colors.brand,
     padding: 10,
     gap: 8,
   },
@@ -258,8 +259,8 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: 14,
-    fontFamily: "Inter_700Bold",
-    color: "#C89B3C",
+    ...Type.heading,
+    color: Colors.brand,
     letterSpacing: 0.5,
   },
   vsInline: {
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   diamondUsedChip: {
-    backgroundColor: "rgba(21,101,192,0.25)",
+    backgroundColor: Tints.azure,
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
   diamondUsedText: {
     fontSize: 10,
     fontFamily: "Inter_700Bold",
-    color: "#7EB6FF",
+    color: Colors.suitFx.D.accent,
   },
   turnRow: {
     flexDirection: "row",
@@ -296,7 +297,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(46,125,50,0.10)",
+    backgroundColor: Tints.greenFaint,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -304,7 +305,7 @@ const styles = StyleSheet.create({
   doneCheck: {
     fontSize: 12,
     fontFamily: "Inter_700Bold",
-    color: "#8FDF9A",
+    color: Colors.suitFx.C.accent,
   },
   doneText: {
     flex: 1,
@@ -335,7 +336,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: Tints.whiteFaint,
     borderRadius: 10,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -358,7 +359,7 @@ const styles = StyleSheet.create({
   },
   targetRing: {
     borderWidth: 2,
-    borderColor: "#C89B3C",
+    borderColor: Colors.brand,
     borderStyle: "dashed",
     borderRadius: 10,
     padding: 2,
@@ -367,7 +368,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -7,
     right: -7,
-    backgroundColor: "#C89B3C",
+    backgroundColor: Colors.brand,
     borderRadius: 9,
     paddingHorizontal: 3,
     paddingVertical: 1,
@@ -389,17 +390,17 @@ const styles = StyleSheet.create({
   },
   statAtk: {
     fontFamily: "Inter_700Bold",
-    color: "#C89B3C",
+    color: Colors.brand,
   },
   statHp: {
     fontFamily: "Inter_700Bold",
-    color: "#66BB6A",
+    color: Colors.suitFx.C.accent,
   },
   vsBadge: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "#C89B3C",
+    backgroundColor: Colors.brand,
     alignItems: "center",
     justifyContent: "center",
   },

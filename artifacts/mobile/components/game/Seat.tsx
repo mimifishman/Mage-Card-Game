@@ -6,6 +6,7 @@ import type { PublicPlayerState } from "@workspace/api-client-react";
 import CourtZone from "./CourtZone";
 import SuitHitEffect from "./effects/SuitHitEffect";
 import Colors from "@/constants/colors";
+import { Tints } from "@/constants/theme";
 import { parseCardId } from "@/lib/gameUtils";
 import type { HitEffectEvent } from "@/lib/hitEffectsDiff";
 
@@ -301,7 +302,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
-    backgroundColor: "rgba(26,56,36,0.85)",
+    backgroundColor: "rgba(30,30,66,0.85)",
   },
   containerIdle: {
     opacity: 0.82,
@@ -329,7 +330,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   crestTargetable: {
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: Tints.white,
   },
   avatar: {
     width: 30,
@@ -369,7 +370,7 @@ const styles = StyleSheet.create({
   statusChipText: {
     fontSize: 9,
     fontFamily: "Inter_700Bold",
-    color: "#0A1F13",
+    color: Colors.bgDeep,
     letterSpacing: 1,
   },
   eliminatedText: {
@@ -386,7 +387,7 @@ const styles = StyleSheet.create({
   crestHintText: {
     fontSize: 9,
     fontFamily: "Inter_700Bold",
-    color: "#0A1F13",
+    color: Colors.bgDeep,
     letterSpacing: 0.5,
   },
   statsRow: {
@@ -412,10 +413,10 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   statLife: {
-    backgroundColor: "rgba(255,107,107,0.12)",
+    backgroundColor: Tints.life,
   },
   statVault: {
-    backgroundColor: "rgba(200,155,60,0.14)",
+    backgroundColor: Tints.gold,
   },
   statPrimaryIcon: {
     fontSize: 15,
@@ -473,9 +474,9 @@ const styles = StyleSheet.create({
     height: 64,
   },
   attackingBadge: {
-    backgroundColor: "rgba(200,16,46,0.14)",
+    backgroundColor: Tints.crimson,
     borderWidth: 1,
-    borderColor: "rgba(229,57,53,0.6)",
+    borderColor: Tints.redBorder,
     borderRadius: 8,
     paddingVertical: 4,
     paddingHorizontal: 8,

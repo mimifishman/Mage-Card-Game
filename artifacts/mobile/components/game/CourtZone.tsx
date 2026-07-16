@@ -10,6 +10,7 @@ import type { RoyalInCourt } from "@workspace/api-client-react";
 import CardView from "./CardView";
 import SuitHitEffect from "./effects/SuitHitEffect";
 import Colors from "@/constants/colors";
+import { Tints } from "@/constants/theme";
 import { effectiveAttack, effectiveHealth, royalBaseHealth, parseCardId, type Rank } from "@/lib/gameUtils";
 import type { HitEffectEvent } from "@/lib/hitEffectsDiff";
 
@@ -232,11 +233,11 @@ const styles = StyleSheet.create({
     minWidth: 60,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(13,43,26,0.5)",
+    backgroundColor: Tints.obsidian,
   },
   emptySlotMine: {
     borderColor: Colors.borderLight,
-    backgroundColor: "rgba(26,56,36,0.5)",
+    backgroundColor: Tints.panelFaint,
   },
   emptyText: {
     fontSize: 10,
@@ -265,14 +266,14 @@ const styles = StyleSheet.create({
   },
   royalDuelGlow: {
     borderWidth: 2,
-    borderColor: "#C89B3C",
+    borderColor: Colors.brand,
     borderRadius: 10,
-    backgroundColor: "rgba(200,155,60,0.12)",
+    backgroundColor: Tints.gold,
     padding: 3,
   },
   royalTargetRing: {
     borderWidth: 2,
-    borderColor: "#C89B3C",
+    borderColor: Colors.brand,
     borderStyle: "dashed",
     borderRadius: 10,
     padding: 2,
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -7,
     right: -7,
-    backgroundColor: "#C89B3C",
+    backgroundColor: Colors.brand,
     borderRadius: 9,
     paddingHorizontal: 3,
     paddingVertical: 1,
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   duelBadge: {
-    backgroundColor: "#C89B3C",
+    backgroundColor: Colors.brand,
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 1,
@@ -307,32 +308,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   atkPill: {
-    backgroundColor: "rgba(200,155,60,0.30)",
+    backgroundColor: Tints.goldStrong,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "rgba(200,155,60,0.55)",
+    borderColor: Tints.goldBorder,
   },
   atkPillText: {
     fontFamily: "Inter_700Bold",
-    color: "#C89B3C",
+    color: Colors.brand,
   },
   hpPill: {
-    backgroundColor: "rgba(27,94,32,0.28)",
+    backgroundColor: Tints.green,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "rgba(46,125,50,0.55)",
+    borderColor: Tints.greenBorder,
   },
   hpPillDamaged: {
-    backgroundColor: "rgba(200,16,46,0.14)",
-    borderColor: "rgba(200,16,46,0.4)",
+    backgroundColor: Tints.crimson,
+    borderColor: Tints.crimsonBorder,
   },
   hpPillText: {
     fontFamily: "Inter_700Bold",
-    color: "#66BB6A",
+    color: Colors.suitFx.C.accent,
   },
   hpPillTextDamaged: {
     color: Colors.accentRed,
@@ -344,12 +345,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   tappedBadge: {
-    backgroundColor: "rgba(200,155,60,0.2)",
+    backgroundColor: Tints.gold,
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderWidth: 1,
-    borderColor: "rgba(200,155,60,0.4)",
+    borderColor: Tints.goldBorder,
   },
   tappedText: {
     fontSize: 9,

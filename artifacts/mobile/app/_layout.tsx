@@ -5,6 +5,8 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
+import { Cinzel_600SemiBold, Cinzel_700Bold } from "@expo-google-fonts/cinzel";
+import { CinzelDecorative_700Bold } from "@expo-google-fonts/cinzel-decorative";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -92,6 +94,11 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    // Sanctum display faces: Cinzel for headings, Cinzel Decorative for the
+    // wordmark and Royal ranks. Numerals/body stay Inter (see constants/theme.ts).
+    Cinzel_600SemiBold,
+    Cinzel_700Bold,
+    CinzelDecorative_700Bold,
   });
 
   useEffect(() => {

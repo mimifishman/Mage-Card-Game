@@ -1,24 +1,33 @@
-const BRAND = "#C89B3C";
+// ── Wizard's Sanctum palette ─────────────────────────────────────────────
+// Arcane obsidian & runes: deep space-black/indigo stone lit by gem-colored
+// light and gold filigree. Cards stay warm parchment relics so they read as
+// the brightest objects on the board. Token KEYS are stable — components
+// theme themselves entirely off this file plus constants/theme.ts.
+const BRAND = "#C89B3C"; // gold filigree
 const BRAND_DIM = "#8B6914";
-const BG_FELT = "#0D2B1A";
-const BG_CARD_FACE = "#F8F4E9";
-const BG_ZONE_DEEP = "#0A1F13";
-const BG_ZONE_MID = "#122B1A";
-const BG_ZONE_SURFACE = "#1A3824";
-const BG_HAND_TRAY = "#0C2317";
-const TEXT_PRIMARY = "#F0E6C8";
+const BG_OBSIDIAN = "#080810"; // deepest backdrop
+const BG_CARD_FACE = "#F8F4E9"; // parchment card face
+const BG_ZONE_DEEP = "#0A0A1A";
+const BG_ZONE_MID = "#101024"; // indigo stone panel
+const BG_ZONE_SURFACE = "#181836";
+const BG_HAND_TRAY = "#0C0C20";
+const TEXT_PRIMARY = "#F0E6C8"; // warm parchment
 const TEXT_SECONDARY = "#C8B88A";
-const TEXT_MUTED = "#7A9E8A";
+const TEXT_MUTED = "#8B8BB8"; // cool violet-grey
 const TEXT_ON_CARD = "#1A1208";
 const SUIT_RED = "#C8102E";
 const SUIT_BLUE = "#1565C0";
 const SUIT_GREEN = "#1B5E20";
 const SUIT_INK = "#0D0D0D";
 const ACCENT_RED = "#E53935";
+const ACCENT_RED_SOFT = "#FF8A8A"; // readable red text on dark panels
 const ACCENT_BLUE = "#1976D2";
 const ACCENT_GREEN = "#2E7D32";
-const BORDER = "#1E4A2A";
-const BORDER_LIGHT = "#2D6040";
+const ACCENT_GREEN_SOFT = "#8FDF9A"; // readable green text on dark panels
+const ARCANE = "#7C6CF0"; // rune-glow violet
+const ARCANE_DIM = "#4A3FA0";
+const BORDER = "#26264E"; // indigo stone edge
+const BORDER_LIGHT = "#3A3A72";
 
 // Per-seat accent colors, assigned by turn order for the whole match.
 // Used on seat borders, name tags, attack arrows and event-ticker entries so
@@ -32,10 +41,10 @@ export function seatColorFor(index: number): string {
 }
 
 // Hit-effect palette, one entry per suit (plus Joker). The base suit colors
-// above are too dark to read against the felt board, so each effect gets a
-// bright `accent` and a near-white `flash` alongside its `core` suit color.
+// above are too dark to read against the obsidian board, so each effect gets
+// a bright `accent` and a near-white `flash` alongside its `core` suit color.
 // Spades keep an ink core but use steel/white so the sword survives the dark
-// background.
+// background. Also doubles as the per-suit gem/metal theme for card frames.
 export type SuitFxKey = "C" | "H" | "D" | "S" | "JOKER";
 export const SUIT_FX: Record<SuitFxKey, { core: string; accent: string; flash: string }> = {
   C: { core: SUIT_GREEN, accent: "#66BB6A", flash: "#E8F5E9" },
@@ -48,7 +57,7 @@ export const SUIT_FX: Record<SuitFxKey, { core: string; accent: string; flash: s
 const Colors = {
   brand: BRAND,
   brandDim: BRAND_DIM,
-  bgDeep: BG_FELT,
+  bgDeep: BG_OBSIDIAN,
   bgCard: BG_ZONE_MID,
   bgCardFace: BG_CARD_FACE,
   bgSurface: BG_ZONE_SURFACE,
@@ -63,8 +72,12 @@ const Colors = {
   suitGreen: SUIT_GREEN,
   suitInk: SUIT_INK,
   accentRed: ACCENT_RED,
+  accentRedSoft: ACCENT_RED_SOFT,
   accentBlue: ACCENT_BLUE,
   accentGreen: ACCENT_GREEN,
+  accentGreenSoft: ACCENT_GREEN_SOFT,
+  arcane: ARCANE,
+  arcaneDim: ARCANE_DIM,
   border: BORDER,
   borderLight: BORDER_LIGHT,
   suitFx: SUIT_FX,
