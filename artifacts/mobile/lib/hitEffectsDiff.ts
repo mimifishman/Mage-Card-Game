@@ -70,6 +70,12 @@ export interface HitEffectsView {
     amount: number;
     seq: number;
   } | null;
+  pendingClubDebuff?: {
+    attackerPlayerId: string;
+    clubCardId: string;
+    targetPlayerId: string;
+    targetRoyalId: string;
+  } | null;
 }
 
 export interface PrevSlice {
@@ -79,6 +85,13 @@ export interface PrevSlice {
   directHitSeq: number;
   /** attackerCardId → owning playerId, captured while attacks are declared. */
   attackOwners: Record<string, string>;
+  /** The club-response window that was open, if any — see rule 4b. */
+  pendingClub: {
+    attackerPlayerId: string;
+    clubCardId: string;
+    targetPlayerId: string;
+    targetRoyalId: string;
+  } | null;
   players: Record<
     string,
     { life: number; royals: Record<string, string[]> } // royalId → attachedCards
@@ -124,6 +137,14 @@ export function toPrevSlice(view: HitEffectsView): PrevSlice {
     attackOwners: Object.fromEntries(
       (view.attacks ?? []).map((a) => [a.attackerCardId, a.attackerPlayerId]),
     ),
+    pendingClub: view.pendingClubDebuff
+      ? {
+          attackerPlayerId: view.pendingClubDebuff.attackerPlayerId,
+          clubCardId: view.pendingClubDebuff.clubCardId,
+          targetPlayerId: view.pendingClubDebuff.targetPlayerId,
+          targetRoyalId: view.pendingClubDebuff.targetRoyalId,
+        }
+      : null,
     players,
   };
 }
@@ -219,6 +240,30 @@ export function diffHitEffects(
           sourceCardId: cid,
         });
       }
+    }
+  }
+
+  // 4b. Club resolution via the respond_to_club window closing. Rule 4 only
+  //     sees clubs that PERSIST in attachedCards — but a club that cancels
+  //     against a spade is removed server-side within the same action, and a
+  //     club that kills its royal takes the whole court entry with it. In
+  //     both cases the club still visibly landed, so when the pending window
+  //     clears and rule 4 has nothing to show, fire the effect from here:
+  //     on the royal if it survived, on the seat (as a destroy) if it died.
+  const pc = prev.pendingClub;
+  if (pc && !view.pendingClubDebuff) {
+    const targetPlayer = view.players[pc.targetPlayerId];
+    const royal = targetPlayer?.court.find((r) => r.cardId === pc.targetRoyalId);
+    const clubStuck = !!royal?.attachedCards.includes(pc.clubCardId);
+    if (!clubStuck) {
+      raw.push({
+        suit: "C",
+        kind: royal ? "debuff" : "destroy",
+        playerId: pc.targetPlayerId,
+        royalId: royal ? pc.targetRoyalId : undefined,
+        sourcePlayerId: pc.attackerPlayerId,
+        sourceCardId: pc.clubCardId,
+      });
     }
   }
 

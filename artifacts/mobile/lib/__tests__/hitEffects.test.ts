@@ -199,6 +199,85 @@ describe("diffHitEffects", () => {
     expect(diff(before, after)).toEqual([]);
   });
 
+  it("fires the club effect when a pending club resolves by cancelling (no attachment persists)", () => {
+    const pending = {
+      attackerPlayerId: "a",
+      clubCardId: "4C",
+      targetPlayerId: "b",
+      targetRoyalId: "KD",
+    };
+    const before = view({
+      phase: "respond_to_club",
+      players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: ["4S"] }]) },
+      pendingClubDebuff: pending,
+    });
+    // Club and spade cancelled each other — royal survives, nothing attached.
+    const after = view({
+      phase: "main",
+      players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: [] }]) },
+    });
+    const events = diff(before, after);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      suit: "C",
+      kind: "debuff",
+      playerId: "b",
+      royalId: "KD",
+      sourcePlayerId: "a",
+      sourceCardId: "4C",
+    });
+  });
+
+  it("fires a seat-level club destroy when a pending club kills the royal", () => {
+    const pending = {
+      attackerPlayerId: "a",
+      clubCardId: "9C",
+      targetPlayerId: "b",
+      targetRoyalId: "JD",
+    };
+    const before = view({
+      phase: "respond_to_club",
+      players: { a: player(20), b: player(20, [{ cardId: "JD" }]) },
+      pendingClubDebuff: pending,
+    });
+    const after = view({
+      phase: "main",
+      players: { a: player(20), b: player(20) }, // JD gone
+    });
+    const events = diff(before, after);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      suit: "C",
+      kind: "destroy",
+      playerId: "b",
+      sourcePlayerId: "a",
+      sourceCardId: "9C",
+    });
+    expect(events[0]!.royalId).toBeUndefined();
+  });
+
+  it("does not double-fire when the pending club sticks as an attachment", () => {
+    const pending = {
+      attackerPlayerId: "a",
+      clubCardId: "4C",
+      targetPlayerId: "b",
+      targetRoyalId: "KD",
+    };
+    const before = view({
+      phase: "respond_to_club",
+      players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: [] }]) },
+      pendingClubDebuff: pending,
+    });
+    const after = view({
+      phase: "main",
+      players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: ["4C"] }]) },
+    });
+    const events = diff(before, after);
+    // Exactly one debuff — from the attachment diff (rule 4), not rule 4b too.
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ suit: "C", kind: "debuff", royalId: "KD" });
+  });
+
   it("fires a direct burn when lastDirectHit.seq changes, attributed to the source suit", () => {
     const before = view({
       players: { a: player(20), b: player(20) },
