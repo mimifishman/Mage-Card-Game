@@ -219,9 +219,9 @@ export default function GameOverScreen() {
                 return (
                   <View key={p.userId} style={[styles.playerRow, isWinner && styles.playerRowWinner]}>
                     <View style={[styles.playerDot, { backgroundColor: color }]} />
-                    <Text style={[styles.playerRowName, { color }]} numberOfLines={1}>
+                    <Text style={styles.playerRowName} numberOfLines={1}>
                       {p.displayName}
-                      {p.userId === user?.id ? " (you)" : ""}
+                      {p.userId === user?.id ? <Text style={styles.youLabel}> (you)</Text> : ""}
                     </Text>
                     {isWinner && <Ionicons name="trophy" size={14} color={Colors.brand} />}
                   </View>
@@ -230,7 +230,7 @@ export default function GameOverScreen() {
             </View>
           )}
 
-          <Text style={styles.matchIdText}>Match: {matchId}</Text>
+          <Text style={styles.matchIdText}>Match: {matchData?.match?.inviteCode ?? matchId}</Text>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(300).duration(600)} style={styles.buttons}>
@@ -458,6 +458,12 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+  },
+  youLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
   },
   matchIdText: {
     fontSize: 11,
