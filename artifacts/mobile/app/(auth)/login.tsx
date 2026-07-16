@@ -27,6 +27,7 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { useOAuth, useSignIn, useSignUp } from "@clerk/clerk-expo";
 import Colors from "@/constants/colors";
+import { Gradients } from "@/constants/theme";
 import { useAuth } from "@/lib/auth";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -252,7 +253,7 @@ export default function LoginScreen() {
     <View style={styles.outerContainer}>
       {/* Background stays truly full-screen, outside any keyboard-avoiding layout */}
       <LinearGradient
-        colors={["#0A0A0F", "#100C1C", "#0A0A0F"]}
+        colors={Gradients.sanctum}
         style={StyleSheet.absoluteFill}
         locations={[0, 0.5, 1]}
       />

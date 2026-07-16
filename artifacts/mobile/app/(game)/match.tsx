@@ -31,8 +31,10 @@ import type {
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useAuth } from "@/lib/auth";
 import Colors, { seatColorFor } from "@/constants/colors";
+import { Gradients } from "@/constants/theme";
 import HandTray from "@/components/game/HandTray";
 import Seat from "@/components/game/Seat";
+import SanctumBackground from "@/components/game/SanctumBackground";
 import TableCenter from "@/components/game/TableCenter";
 import EventTicker from "@/components/game/EventTicker";
 import type { GameEvent } from "@/components/game/EventTicker";
@@ -854,7 +856,7 @@ export default function MatchScreen() {
   if (isLoading && !gameState) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <LinearGradient colors={["#0A0A0F", "#0C0D18"]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={Gradients.sanctumDeep} style={StyleSheet.absoluteFill} />
         <ActivityIndicator size="large" color={Colors.brand} />
         <Text style={styles.loadingText}>Loading game...</Text>
       </View>
@@ -864,7 +866,7 @@ export default function MatchScreen() {
   if (!gameState) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <LinearGradient colors={["#0A0A0F", "#0C0D18"]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={Gradients.sanctumDeep} style={StyleSheet.absoluteFill} />
         <Text style={styles.errorText}>Could not load game state.</Text>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>Go Back</Text>
@@ -1341,7 +1343,7 @@ export default function MatchScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={["#0D2B1A", "#0A1F13", "#0D2B1A"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <SanctumBackground runeCenter={0.42} />
 
       {/* ---- Status strip (single line, safe-area aware) ---- */}
       <View style={[styles.header, { paddingTop: topInset + 6 }]}>

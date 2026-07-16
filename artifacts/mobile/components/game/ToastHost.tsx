@@ -14,7 +14,7 @@ interface ToastHostProps {
 }
 
 const TONE_STYLES: Record<Toast["tone"], { bg: string; border: string; text: string }> = {
-  info: { bg: "rgba(26,56,36,0.96)", border: Colors.borderLight, text: Colors.textPrimary },
+  info: { bg: "rgba(24,24,54,0.96)", border: Colors.borderLight, text: Colors.textPrimary },
   error: { bg: "rgba(58,16,22,0.96)", border: "#E53935", text: "#FFB4B4" },
   success: { bg: "rgba(18,48,26,0.96)", border: "#2E7D32", text: "#A8E6B0" },
 };

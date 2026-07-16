@@ -28,6 +28,7 @@ import { useCreateMatch, useJoinMatch, useGetMyMatches, useAbandonMatch, getGetM
 import type { MyMatchItem } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
+import { Gradients } from "@/constants/theme";
 
 export default function LobbyScreen() {
   const { user, logout } = useAuth();
@@ -168,7 +169,7 @@ export default function LobbyScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <LinearGradient
-        colors={["#0A0A0F", "#0E0B18", "#0A0A0F"]}
+        colors={Gradients.sanctum}
         style={StyleSheet.absoluteFill}
       />
 
