@@ -74,22 +74,48 @@ export function setSfxMuted(m: boolean): void {
 }
 
 // ── Playback ─────────────────────────────────────────────────────────────
+function ensureAudioMode(): void {
+  if (audioModeSet) return;
+  audioModeSet = true;
+  // Game feedback should be audible with the iOS mute switch on, and
+  // should duck under (not pause) the user's music.
+  setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "mixWithOthers" }).catch(
+    () => {},
+  );
+}
+
+function getPlayer(source: number): AudioPlayer {
+  let player = players.get(source);
+  if (!player) {
+    player = createAudioPlayer(source);
+    players.set(source, player);
+  }
+  return player;
+}
+
+/**
+ * Eagerly create every sound's player so first plays are instant. Without
+ * this, a player is created on first use — and in Expo Go that means the
+ * WAV is fetched from the dev server at that moment, which can lag the
+ * sound seconds behind the action. Call once when the match screen mounts;
+ * players persist for the whole app session.
+ */
+export function preloadSfx(): void {
+  if (Platform.OS === "web") return;
+  try {
+    ensureAudioMode();
+    for (const source of Object.values(SUIT_SOURCES)) getPlayer(source);
+    for (const source of Object.values(GAME_SOURCES)) getPlayer(source);
+  } catch {
+    // Preloading is an optimization — playback will lazily retry.
+  }
+}
+
 function playSource(source: number, volume: number): void {
   if (Platform.OS === "web" || muted) return;
   try {
-    if (!audioModeSet) {
-      audioModeSet = true;
-      // Game feedback should be audible with the iOS mute switch on, and
-      // should duck under (not pause) the user's music.
-      setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "mixWithOthers" }).catch(
-        () => {},
-      );
-    }
-    let player = players.get(source);
-    if (!player) {
-      player = createAudioPlayer(source);
-      players.set(source, player);
-    }
+    ensureAudioMode();
+    const player = getPlayer(source);
     player.volume = volume;
     player.seekTo(0);
     player.play();

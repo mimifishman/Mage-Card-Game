@@ -57,7 +57,7 @@ import {
 } from "@/lib/gameUtils";
 import type { CardAction, ValidAction } from "@/lib/gameUtils";
 import { markLocalCast, useHitEffects } from "@/lib/hitEffects";
-import { getSfxMuted, playGameSfx, setSfxMuted } from "@/lib/sfx";
+import { getSfxMuted, playGameSfx, preloadSfx, setSfxMuted } from "@/lib/sfx";
 import {
   CardFlightHost,
   CARD_FLIGHT_TTL_MS,
@@ -495,6 +495,12 @@ export default function MatchScreen() {
   // Sound toggle (persisted in lib/sfx.ts; this state just drives the menu row).
   const [sfxMuted, setSfxMutedState] = useState(getSfxMuted());
 
+  // Load every sound up front — first plays are otherwise fetched from the
+  // dev server on demand and can land seconds late.
+  useEffect(() => {
+    preloadSfx();
+  }, []);
+
   // "YOUR TURN" proclamation, keyed so each of my turns replays it once.
   const [yourTurnKey, setYourTurnKey] = useState<number | null>(null);
 
@@ -513,12 +519,10 @@ export default function MatchScreen() {
         .filter((a) => a.targetPlayerId === localMyId)
         .slice(0, 3);
       incoming.forEach((a) => launchFlight(a.attackerCardId, "incoming"));
-      // War-drum when attacks are confirmed — heard by the attacker and
-      // everyone being attacked; bystanders stay quiet (personal-audio rule).
-      const involvedInAttack = gameState.attacks.some(
-        (a) => a.attackerPlayerId === localMyId || a.targetPlayerId === localMyId,
-      );
-      if (involvedInAttack) playGameSfx("attack");
+      // War-drum for everyone being attacked. The attacker already heard it
+      // optimistically at press time (handleAttack); bystanders stay quiet.
+      const amTargeted = gameState.attacks.some((a) => a.targetPlayerId === localMyId);
+      if (amTargeted) playGameSfx("attack");
     }
 
     // Duel start/end sounds — participants only, and only on the natural
@@ -973,6 +977,9 @@ export default function MatchScreen() {
   const handleAttack = useCallback((targets: { targetPlayerId: string; royalCardIds: string[] }[]) => {
     if (!matchId || targets.length === 0) return;
     buzzAction();
+    // The attacker hears the war drum at press time (no server round trip);
+    // the targets hear it when the declare_blocks snapshot lands.
+    playGameSfx("attack");
     submitAction({
       matchId,
       data: { type: "declare_attack", targets },
