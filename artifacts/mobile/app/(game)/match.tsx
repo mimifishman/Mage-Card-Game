@@ -513,6 +513,12 @@ export default function MatchScreen() {
         .filter((a) => a.targetPlayerId === localMyId)
         .slice(0, 3);
       incoming.forEach((a) => launchFlight(a.attackerCardId, "incoming"));
+      // War-drum when attacks are confirmed — heard by the attacker and
+      // everyone being attacked; bystanders stay quiet (personal-audio rule).
+      const involvedInAttack = gameState.attacks.some(
+        (a) => a.attackerPlayerId === localMyId || a.targetPlayerId === localMyId,
+      );
+      if (involvedInAttack) playGameSfx("attack");
     }
 
     // Duel start/end sounds — participants only, and only on the natural

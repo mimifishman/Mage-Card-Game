@@ -7,6 +7,7 @@ import sfxChime from "../assets/sfx/chime.wav";
 import sfxShatter from "../assets/sfx/shatter.wav";
 import sfxClang from "../assets/sfx/clang.wav";
 import sfxStar from "../assets/sfx/star.wav";
+import sfxAttack from "../assets/sfx/attack.wav";
 import sfxDoom from "../assets/sfx/doom.wav";
 import sfxDuelStart from "../assets/sfx/duel-start.wav";
 import sfxDuelEnd from "../assets/sfx/duel-end.wav";
@@ -30,9 +31,10 @@ const SUIT_SOURCES: Record<EffectSuit, number> = {
   JOKER: sfxStar,
 };
 
-export type GameSfx = "doom" | "duelStart" | "duelEnd" | "turn" | "fanfare" | "defeat";
+export type GameSfx = "attack" | "doom" | "duelStart" | "duelEnd" | "turn" | "fanfare" | "defeat";
 
 const GAME_SOURCES: Record<GameSfx, number> = {
+  attack: sfxAttack,
   doom: sfxDoom,
   duelStart: sfxDuelStart,
   duelEnd: sfxDuelEnd,
