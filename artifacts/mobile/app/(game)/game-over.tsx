@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Platform, Alert, ActivityIndicator } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,7 +7,13 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useAuth } from "@/lib/auth";
-import { useGetMatch, getGetMatchQueryKey, useRematchMatch } from "@workspace/api-client-react";
+import {
+  useGetMatch,
+  getGetMatchQueryKey,
+  useRematchMatch,
+  useGetMyMatches,
+  getGetMyMatchesQueryKey,
+} from "@workspace/api-client-react";
 import Colors, { seatColorFor } from "@/constants/colors";
 
 export default function GameOverScreen() {
@@ -22,20 +28,71 @@ export default function GameOverScreen() {
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
   const wsRef = useRef<WebSocket | null>(null);
+  const hasNavigatedRef = useRef(false);
+  const baselineWaitingRef = useRef<Set<string> | null>(null);
+  const [rematchRequested, setRematchRequested] = useState(false);
+
+  const goToWaitingRoom = (newMatchId: string, code?: string) => {
+    if (hasNavigatedRef.current) return;
+    hasNavigatedRef.current = true;
+    router.replace({
+      pathname: "/(game)/waiting-room",
+      params: code ? { matchId: newMatchId, inviteCode: code } : { matchId: newMatchId },
+    });
+  };
 
   const { data: matchData } = useGetMatch(matchId ?? "", {
     query: { queryKey: getGetMatchQueryKey(matchId ?? ""), enabled: !!matchId },
   });
 
+  const { data: myMatchesData } = useGetMyMatches({
+    query: {
+      queryKey: getGetMyMatchesQueryKey(),
+      enabled: !!matchId,
+      refetchInterval: 2500,
+    },
+  });
+
+  // Discover the rematch waiting room via the player's own open-matches list.
+  // Catches every player the transient WS "rematch" message may miss.
+  useEffect(() => {
+    const matches = myMatchesData?.matches;
+    if (!matches) return;
+
+    const waitingIds = matches
+      .filter((m) => m.status === "waiting")
+      .map((m) => m.matchId);
+
+    if (baselineWaitingRef.current === null) {
+      // First load establishes the baseline of pre-existing waiting rooms.
+      baselineWaitingRef.current = new Set(waitingIds);
+      return;
+    }
+
+    const baseline = baselineWaitingRef.current;
+    const fresh = matches
+      .filter(
+        (m) =>
+          m.status === "waiting" &&
+          m.matchId !== matchId &&
+          !baseline.has(m.matchId),
+      )
+      // Deterministic tiebreak so all clients converge on the same room.
+      .sort((a, b) => a.matchId.localeCompare(b.matchId));
+
+    if (fresh.length > 0) {
+      goToWaitingRoom(fresh[0].matchId, fresh[0].inviteCode);
+    }
+  }, [myMatchesData, matchId]);
+
   const { mutate: requestRematch, isPending: isRequestingRematch } = useRematchMatch({
     mutation: {
       onSuccess: (data) => {
-        router.replace({
-          pathname: "/(game)/waiting-room",
-          params: { matchId: data.matchId },
-        });
+        // Response carries no inviteCode; the waiting room resolves it from its own match poll.
+        goToWaitingRoom(data.matchId);
       },
       onError: (err: unknown) => {
+        setRematchRequested(false);
         const msg = (err as { data?: { error?: string } })?.data?.error ?? "Rematch failed";
         Alert.alert("Rematch Error", msg);
       },
@@ -64,10 +121,7 @@ export default function GameOverScreen() {
         try {
           const msg = JSON.parse(event.data as string) as { type: string; matchId?: string };
           if (msg.type === "rematch" && msg.matchId) {
-            router.replace({
-              pathname: "/(game)/waiting-room",
-              params: { matchId: msg.matchId },
-            });
+            goToWaitingRoom(msg.matchId);
           }
         } catch {
           // ignore parse errors
@@ -156,10 +210,11 @@ export default function GameOverScreen() {
         <Animated.View entering={FadeInDown.delay(300).duration(600)} style={styles.buttons}>
           <Pressable
             onPress={() => {
-              if (!matchId || isRequestingRematch) return;
+              if (!matchId || isRequestingRematch || rematchRequested) return;
+              setRematchRequested(true);
               requestRematch({ matchId });
             }}
-            disabled={isRequestingRematch}
+            disabled={isRequestingRematch || rematchRequested}
             style={({ pressed }) => [styles.playAgainBtn, pressed && { opacity: 0.8 }]}
           >
             <LinearGradient
@@ -168,13 +223,13 @@ export default function GameOverScreen() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              {isRequestingRematch ? (
+              {isRequestingRematch || rematchRequested ? (
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
                 <Ionicons name="refresh" size={20} color="#FFF" />
               )}
               <Text style={styles.playAgainText}>
-                {isRequestingRematch ? "Starting..." : "Rematch"}
+                {isRequestingRematch || rematchRequested ? "Rematch requested…" : "Rematch"}
               </Text>
             </LinearGradient>
           </Pressable>

@@ -67,6 +67,9 @@ export default function WaitingRoomScreen() {
 
   const players = matchData?.players ?? [];
   const matchStatus = matchData?.match?.status;
+  // Fall back to the polled match data when no code was passed in the route
+  // (e.g. rematch entries that only carry matchId).
+  const displayCode = inviteCode ?? matchData?.match?.inviteCode ?? "";
   const isHost = !!user?.id && matchData?.match?.createdBy === user.id;
 
   useEffect(() => {
@@ -134,9 +137,9 @@ export default function WaitingRoomScreen() {
   };
 
   const handleCopyCode = async () => {
-    if (inviteCode) {
+    if (displayCode) {
       try {
-        await Clipboard.setStringAsync(inviteCode);
+        await Clipboard.setStringAsync(displayCode);
       } catch (e) {
         console.warn("Clipboard copy failed:", e);
       }
@@ -181,7 +184,7 @@ export default function WaitingRoomScreen() {
               colors={["#1E1830", "#12101E"]}
               style={styles.codeGradient}
             >
-              <Text style={styles.codeText}>{inviteCode}</Text>
+              <Text style={styles.codeText}>{displayCode}</Text>
               <View style={styles.copyBtn}>
                 <Ionicons
                   name={copied ? "checkmark" : "copy-outline"}
@@ -248,7 +251,7 @@ export default function WaitingRoomScreen() {
                       {players.length < 2 ? "Invite a friend to start" : "Room for more"}
                     </Text>
                     <Text style={styles.inviteTileCode}>
-                      {copied ? "✓ copied" : `tap to copy ${inviteCode ?? ""}`}
+                      {copied ? "✓ copied" : `tap to copy ${displayCode}`}
                     </Text>
                   </Pressable>
                 </Animated.View>
