@@ -1,9 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, Alert, ActivityIndicator, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, {
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useAuth } from "@/lib/auth";
@@ -15,6 +23,9 @@ import {
   getGetMyMatchesQueryKey,
 } from "@workspace/api-client-react";
 import Colors, { seatColorFor } from "@/constants/colors";
+import { Gradients, Type } from "@/constants/theme";
+import { Easings, useReduceMotion } from "@/lib/motion";
+import SanctumBackground from "@/components/game/SanctumBackground";
 
 export default function GameOverScreen() {
   const { matchId, winnerUserId } = useLocalSearchParams<{
@@ -151,10 +162,18 @@ export default function GameOverScreen() {
 
   return (
     <View style={styles.container}>
+      <SanctumBackground runeCenter={0.32} />
+      {/* Win/lose mood wash over the sanctum. */}
       <LinearGradient
-        colors={didWin ? ["#0A0A0F", "#0C1A08", "#0A0A0F"] : ["#0A0A0F", "#1A080C", "#0A0A0F"]}
+        colors={
+          didWin
+            ? (["transparent", "rgba(200,155,60,0.10)", "transparent"] as const)
+            : (["transparent", "rgba(200,16,46,0.10)", "transparent"] as const)
+        }
         style={StyleSheet.absoluteFill}
+        pointerEvents="none"
       />
+      {didWin && <VictoryMotes />}
 
       <View style={[styles.content, { paddingTop: topInset + 40, paddingBottom: bottomInset + 24 }]}>
         <Animated.View entering={FadeInDown.duration(600)} style={styles.centerBlock}>
@@ -218,7 +237,7 @@ export default function GameOverScreen() {
             style={({ pressed }) => [styles.playAgainBtn, pressed && { opacity: 0.8 }]}
           >
             <LinearGradient
-              colors={[Colors.accentGreen, "#1E8449"]}
+              colors={Gradients.green}
               style={styles.playAgainGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -243,6 +262,96 @@ export default function GameOverScreen() {
         </Animated.View>
       </View>
     </View>
+  );
+}
+
+// Deterministic mote placements: horizontal position (fraction of width),
+// stagger, size and drift speed. Eight is plenty — this loops forever.
+const MOTES = [
+  { x: 0.12, delay: 0, s: 5, dur: 5200 },
+  { x: 0.25, delay: 900, s: 4, dur: 6100 },
+  { x: 0.38, delay: 2000, s: 6, dur: 4800 },
+  { x: 0.52, delay: 400, s: 4, dur: 5600 },
+  { x: 0.63, delay: 1500, s: 5, dur: 5000 },
+  { x: 0.75, delay: 2600, s: 4, dur: 6400 },
+  { x: 0.86, delay: 700, s: 6, dur: 5400 },
+  { x: 0.94, delay: 1900, s: 4, dur: 5900 },
+];
+
+/** Golden motes rising forever behind a victory — opacity/transform only. */
+function VictoryMotes() {
+  const reduceMotion = useReduceMotion();
+  const { width, height } = useWindowDimensions();
+  if (reduceMotion) return null;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {MOTES.map((m, i) => (
+        <RisingMote key={i} x={m.x * width} height={height} delay={m.delay} size={m.s} duration={m.dur} />
+      ))}
+    </View>
+  );
+}
+
+function RisingMote({
+  x,
+  height,
+  delay,
+  size,
+  duration,
+}: {
+  x: number;
+  height: number;
+  delay: number;
+  size: number;
+  duration: number;
+}) {
+  const ty = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    ty.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(-height * 0.85, { duration, easing: Easings.linear }),
+          withTiming(0, { duration: 0 }),
+        ),
+        -1,
+      ),
+    );
+    opacity.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(0.7, { duration: duration * 0.15 }),
+          withTiming(0.7, { duration: duration * 0.55 }),
+          withTiming(0, { duration: duration * 0.3 }),
+        ),
+        -1,
+      ),
+    );
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: ty.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          left: x,
+          bottom: -size,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: "#FFD54F",
+        },
+        style,
+      ]}
+    />
   );
 }
 
@@ -281,8 +390,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.accentRed,
   },
   resultTitle: {
-    fontSize: 40,
-    fontFamily: "Inter_700Bold",
+    fontSize: 38,
+    ...Type.display,
     letterSpacing: 1,
   },
   winTitle: {

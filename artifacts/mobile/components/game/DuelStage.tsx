@@ -1,12 +1,24 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
+import Animated, {
+  FadeInDown,
+  FadeOut,
+  SlideInLeft,
+  SlideInRight,
+  ZoomIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import type { AttackDeclaration, DuelContext, RoyalInCourt } from "@workspace/api-client-react";
 import { effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
 import { Tints, Type } from "@/constants/theme";
+import { useReduceMotion } from "@/lib/motion";
 
 interface DuelStageProps {
   phase: string;
@@ -57,6 +69,7 @@ export default function DuelStage({
   onPass,
 }: DuelStageProps) {
   const targetable = targetingRoyals && !!onRoyalTarget;
+  const reduceMotion = useReduceMotion();
 
   // A duel fighter card. The card ALWAYS keeps its owner's colour (identity),
   // so tappability is shown by a neutral gold dashed ring + 🎯 badge rather
@@ -159,7 +172,12 @@ export default function DuelStage({
         ) : (
           livePairs.map(({ atk, atkRoyal, liveBlockers }) => (
             <View key={atk.attackerCardId} style={styles.pairRow}>
-              <View style={styles.fighter}>
+              {/* The clash: fighters slam in from opposite sides, the VS
+                  seal stamps down with a flash between them. */}
+              <Animated.View
+                entering={reduceMotion ? undefined : SlideInLeft.springify().damping(15)}
+                style={styles.fighter}
+              >
                 <FighterCard cardId={atk.attackerCardId} ownerId={duelContext.attackerPlayerId} baseGlow={attackerColor} />
                 <Text style={styles.fighterStats}>
                   <Text style={styles.statAtk}>⚔{effectiveAttack(atk.attackerCardId, atkRoyal!.buffAttack)}</Text>
@@ -168,13 +186,20 @@ export default function DuelStage({
                     ♥{effectiveHealth(atk.attackerCardId, atkRoyal!.buffHealth, atkRoyal!.damageTaken)}
                   </Text>
                 </Text>
-              </View>
+              </Animated.View>
 
-              <View style={styles.vsBadge}>
+              <Animated.View
+                entering={reduceMotion ? undefined : ZoomIn.delay(180).springify().damping(12)}
+                style={styles.vsBadge}
+              >
+                {!reduceMotion && <ClashFlash />}
                 <Text style={styles.vsText}>VS</Text>
-              </View>
+              </Animated.View>
 
-              <View style={styles.blockerGroup}>
+              <Animated.View
+                entering={reduceMotion ? undefined : SlideInRight.springify().damping(15)}
+                style={styles.blockerGroup}
+              >
                 {liveBlockers.map((blkId) => {
                   const blk = defenderRoyal(blkId)!;
                   return (
@@ -190,7 +215,7 @@ export default function DuelStage({
                     </View>
                   );
                 })}
-              </View>
+              </Animated.View>
             </View>
           ))
         )}
@@ -241,7 +266,34 @@ export default function DuelStage({
   );
 }
 
+/** One-shot gold shockwave behind the VS seal when a fight row appears. */
+function ClashFlash() {
+  const scale = useSharedValue(0.3);
+  const opacity = useSharedValue(0);
+  useEffect(() => {
+    scale.value = withDelay(220, withTiming(2.1, { duration: 340 }));
+    opacity.value = withDelay(
+      220,
+      withSequence(withTiming(0.8, { duration: 70 }), withTiming(0, { duration: 270 })),
+    );
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+  return <Animated.View pointerEvents="none" style={[styles.clashFlash, style]} />;
+}
+
 const styles = StyleSheet.create({
+  clashFlash: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#FFF3D6",
+  },
   stage: {
     marginHorizontal: 8,
     backgroundColor: Tints.obsidianPanel,

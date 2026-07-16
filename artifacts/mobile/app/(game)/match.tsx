@@ -57,6 +57,12 @@ import {
 } from "@/lib/gameUtils";
 import type { CardAction, ValidAction } from "@/lib/gameUtils";
 import { useHitEffects } from "@/lib/hitEffects";
+import {
+  CardFlightHost,
+  CARD_FLIGHT_TTL_MS,
+  type CardFlightEvent,
+} from "@/components/game/effects/CardFlight";
+import TurnFlare from "@/components/game/effects/TurnFlare";
 
 export interface ActionParams {
   cardId: string;
@@ -438,6 +444,39 @@ export default function MatchScreen() {
   // from the ticker diff below — see lib/hitEffectsDiff.ts for the rules.
   const { seatEffects, royalEffects } = useHitEffects(gameState, user?.id ?? "");
 
+  // Cinematic card flights (visual clones only — game state untouched):
+  // "cast" when I play a card, "incoming" when attacks are declared at me.
+  const [flights, setFlights] = useState<CardFlightEvent[]>([]);
+  const flightIdRef = useRef(0);
+  const launchFlight = useCallback((cardId: string, kind: CardFlightEvent["kind"]) => {
+    const id = ++flightIdRef.current;
+    setFlights((cur) => [...cur.slice(-2), { id, cardId, kind }]); // cap 3 live flights
+    setTimeout(() => {
+      setFlights((cur) => cur.filter((f) => f.id !== id));
+    }, CARD_FLIGHT_TTL_MS + 300);
+  }, []);
+
+  // Arcane sweep when the turn passes to a new player.
+  const [turnFlare, setTurnFlare] = useState<{ key: number; color: string } | null>(null);
+
+  // Incoming-attack lunge: when a fresh combat opens against me, dive the
+  // attacker cards toward my seat (visual only; capped at 3).
+  const prevAttackPhaseRef = useRef<string>("");
+  useEffect(() => {
+    if (!gameState) return;
+    const localMyId = user?.id ?? "";
+    if (
+      gameState.phase === "declare_blocks" &&
+      prevAttackPhaseRef.current !== "declare_blocks"
+    ) {
+      const incoming = gameState.attacks
+        .filter((a) => a.targetPlayerId === localMyId)
+        .slice(0, 3);
+      incoming.forEach((a) => launchFlight(a.attackerCardId, "incoming"));
+    }
+    prevAttackPhaseRef.current = gameState.phase;
+  }, [gameState, user, launchFlight]);
+
   // Diff-based match log + damage/combat notices. This replaces the old
   // fade-away combat banner: everything lands in the persistent ticker, and
   // big moments also toast.
@@ -456,6 +495,7 @@ export default function MatchScreen() {
     // Turn changes.
     if (prevActivePlayerRef.current && prevActivePlayerRef.current !== gameState.activePlayerId) {
       pushEvent(colorOf(gameState.activePlayerId), `${nameOf(gameState.activePlayerId)} — turn ${gameState.turnNumber}`);
+      setTurnFlare({ key: gameState.turnNumber * 100 + gameState.turnOrder.indexOf(gameState.activePlayerId), color: colorOf(gameState.activePlayerId) });
     }
     prevActivePlayerRef.current = gameState.activePlayerId;
 
@@ -801,9 +841,11 @@ export default function MatchScreen() {
             cardId: params.cardId,
           };
       }
+      // Visual-only: the played card arcs from the hand onto the board.
+      launchFlight(params.cardId, "cast");
       submitAction({ matchId, data: body });
     },
-    [matchId, gameState, user, submitAction, showToast],
+    [matchId, gameState, user, submitAction, showToast, launchFlight],
   );
 
   const handleEndTurn = useCallback(() => {
@@ -1872,6 +1914,10 @@ export default function MatchScreen() {
           onConfirm={handleSetDamageOrder}
         />
       )}
+
+      {/* Cinematic overlays — decorative only, never intercept touches. */}
+      <CardFlightHost flights={flights} />
+      {turnFlare && <TurnFlare key={turnFlare.key} color={turnFlare.color} />}
 
       <ToastHost toasts={toasts} />
     </View>

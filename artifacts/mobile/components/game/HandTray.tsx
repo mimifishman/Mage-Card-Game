@@ -6,9 +6,11 @@ import {
   Pressable,
   StyleSheet,
 } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
 import { parseCardId } from "@/lib/gameUtils";
+import { useReduceMotion } from "@/lib/motion";
 
 interface HandTrayProps {
   cards: string[];
@@ -64,6 +66,7 @@ export default function HandTray({
   canPlayCard,
   onCardPress,
 }: HandTrayProps) {
+  const reduceMotion = useReduceMotion();
   const globalCanPlay =
     (isMyTurn && (phase === "main" || phase === "discard")) ||
     (isDefender && phase === "declare_blocks") ||
@@ -133,13 +136,25 @@ export default function HandTray({
                   isSelected && styles.cardWrapperSelected,
                 ]}
               >
-                <CardView
-                  cardId={cardId}
-                  size="lg"
-                  selected={isSelected}
-                  dimmed={!cardPlayable}
-                  unaffordable={unaffordable}
-                />
+                {/* Newly drawn cards deal in with a staggered fan flourish —
+                    entering only runs on mount, so settled cards stay put. */}
+                <Animated.View
+                  entering={
+                    reduceMotion
+                      ? undefined
+                      : FadeInDown.delay(Math.min(idx * 55, 330))
+                          .springify()
+                          .damping(16)
+                  }
+                >
+                  <CardView
+                    cardId={cardId}
+                    size="lg"
+                    selected={isSelected}
+                    dimmed={!cardPlayable}
+                    unaffordable={unaffordable}
+                  />
+                </Animated.View>
               </Pressable>
             );
           })}
