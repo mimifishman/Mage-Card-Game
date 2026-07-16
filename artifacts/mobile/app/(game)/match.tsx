@@ -395,17 +395,25 @@ export default function MatchScreen() {
       const defName = nameOf(snap.defenderId);
       const atkCourt = gameState.players[snap.attackerId]?.court ?? [];
       const defCourt = gameState.players[snap.defenderId]?.court ?? [];
-      // Name a destroyed Royal with its totals from the duel-start snapshot.
-      const deadLabel = (id: string) => {
+      // Name any Royal in the duel with its duel-start totals (works for a
+      // destroyed Royal too, since stats come from the snapshot).
+      const royalName = (id: string) => {
         const s = snap.stats[id];
         return s ? royalStatLabel(s) : cardLabel(id);
       };
+      // The dueling Royals on each side, with their values — so the outcome
+      // shows what both duelers were worth going into the fight.
+      const atkRoyals = [...new Set(snap.pairs.map((p) => p.attackerCardId))].map(royalName);
+      const defRoyals = [...new Set(snap.pairs.flatMap((p) => p.blockerIds))].map(royalName);
+      const atkSide = atkRoyals.length ? `${atkName} ${atkRoyals.join(", ")}` : atkName;
+      const defSide = defRoyals.length ? `${defName} ${defRoyals.join(", ")}` : defName;
+
       const deadAtk: string[] = [];
       const deadDef: string[] = [];
       for (const p of snap.pairs) {
-        if (!atkCourt.some((r) => r.cardId === p.attackerCardId)) deadAtk.push(deadLabel(p.attackerCardId));
+        if (!atkCourt.some((r) => r.cardId === p.attackerCardId)) deadAtk.push(royalName(p.attackerCardId));
         for (const b of p.blockerIds) {
-          if (!defCourt.some((r) => r.cardId === b)) deadDef.push(deadLabel(b));
+          if (!defCourt.some((r) => r.cardId === b)) deadDef.push(royalName(b));
         }
       }
       const lines: string[] = [];
@@ -417,7 +425,7 @@ export default function MatchScreen() {
         else if (nowLife > prevLife) lines.push(`${nameOf(pid)} healed +${nowLife - prevLife} (❤ ${nowLife})`);
       }
       if (lines.length === 0) lines.push("Both sides survived — no losses");
-      return { title: `${atkName} vs ${defName}`, lines };
+      return { title: `${atkSide} vs ${defSide}`, lines };
     };
 
     const snap = duelSnapshotRef.current;
