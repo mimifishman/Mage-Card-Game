@@ -217,7 +217,7 @@ export default function MatchScreen() {
     stats: Record<string, RoyalStats>;
   } | null>(null);
   const [completedDuels, setCompletedDuels] = useState<{ id: number; text: string }[]>([]);
-  const [duelNotice, setDuelNotice] = useState<{ id: number; title: string; lines: string[] } | null>(null);
+  const [duelNotice, setDuelNotice] = useState<{ id: number; header?: string; title: string; lines: string[] } | null>(null);
 
   // The result panel informs without blocking: it auto-clears after ~9s.
   useEffect(() => {
@@ -575,8 +575,10 @@ export default function MatchScreen() {
 
     const snap = duelSnapshotRef.current;
     const ctx = gameState.duelContext;
+    let handledByDuelTracker = false;
 
     if (isDuelTurnPhase(gameState.phase) && ctx) {
+      handledByDuelTracker = true;
       const sameDuel =
         snap && snap.attackerId === ctx.attackerPlayerId && snap.defenderId === ctx.defenderPlayerId;
       if (!sameDuel) {
@@ -616,12 +618,111 @@ export default function MatchScreen() {
     } else if (snap) {
       // Combat left the duel phases — the last duel is over. Show the result
       // panel (non-blocking, auto-clears) and log it permanently.
+      handledByDuelTracker = true;
       const res = finalize(snap);
       duelSnapshotRef.current = null;
       const idn = idCounterRef.current++;
       setDuelNotice({ id: idn, title: res.title, lines: res.lines });
       pushEvent(colorOf(snap.attackerId), `Duel over — ${res.title}: ${res.lines.join(" · ")}`);
       setCompletedDuels([]);
+    }
+
+    // Combat that resolved WITHOUT the client ever rendering a duel phase.
+    // Three cases produce no duelNotice from the snapshot tracker above:
+    //   A) the defender let every attacker through unblocked (no duel exists),
+    //   B) blocks were made but both sides had no duel cards, so the engine
+    //      auto-resolved the whole fight inside one action, and
+    //   C) a mix of the two.
+    // In all three the state jumps declare_blocks → main in a single update.
+    // Synthesize the same auto-clearing panel from lastCombatSummary so the
+    // player always sees what happened. A duel that WAS rendered is skipped
+    // here (handledByDuelTracker) — that path already showed the panel.
+    // Gate on the phase transition, NOT on lastCombatSummary changing:
+    // lastCombatSummary lingers in state across turns, so diffing it would
+    // replay the previous combat at the start of a new turn. "We were in a
+    // combat phase last render and aren't now" is the reliable signal that a
+    // fight just resolved. prevPhaseRef still holds the previous phase here —
+    // it's updated by the diff effect, which runs after this one.
+    const summary = gameState.lastCombatSummary;
+    const prevPhase = prevPhaseRef.current;
+    const cameFromCombat =
+      prevPhase === "declare_blocks" ||
+      prevPhase === "assign_damage_order" ||
+      isDuelTurnPhase(prevPhase ?? "");
+    const combatResolvedNow =
+      gameState.phase !== "declare_blocks" &&
+      gameState.phase !== "assign_damage_order" &&
+      !isDuelTurnPhase(gameState.phase);
+    if (
+      cameFromCombat &&
+      combatResolvedNow &&
+      !handledByDuelTracker &&
+      summary &&
+      summary.pairs.length > 0
+    ) {
+      // Pre-combat stats come from the previous snapshot (this effect runs
+      // before the diff effect updates prevPlayersRef), so destroyed Royals
+      // are still named with the values they died with.
+      const prevPlayers = prevPlayersRef.current;
+      // Combat always resolves within the attacker's turn.
+      const attackerId = gameState.activePlayerId;
+      const royalName = (ownerId: string, cardId: string) => {
+        const before = prevPlayers[ownerId]?.court.find((r) => r.cardId === cardId);
+        return before ? royalStatLabel(before) : cardLabel(cardId);
+      };
+
+      const blockedPairs = summary.pairs.filter((p) => (p.blockerCardIds?.length ?? 0) > 0);
+      const unblockedPairs = summary.pairs.filter(
+        (p) => (p.blockerCardIds?.length ?? 0) === 0 && p.directDamage > 0,
+      );
+      const anyBlocked = blockedPairs.length > 0;
+
+      const defenderIds = [...new Set(summary.pairs.map((p) => p.targetPlayerId))];
+      const atkRoyals = [...new Set(summary.pairs.map((p) => p.attackerCardId))].map((c) =>
+        royalName(attackerId, c),
+      );
+      const title = `${nameOf(attackerId)} ${atkRoyals.join(", ")} → ${defenderIds
+        .map(nameOf)
+        .join(", ")}`;
+
+      const lines: string[] = [];
+      // Per-pair narration: how each attacking Royal fared.
+      for (const p of blockedPairs) {
+        const blockers = p.blockerCardIds.map((b) => royalName(p.targetPlayerId, b)).join(" + ");
+        lines.push(`${royalName(attackerId, p.attackerCardId)} — blocked by ${blockers}`);
+      }
+      for (const p of unblockedPairs) {
+        lines.push(
+          `${royalName(attackerId, p.attackerCardId)} hit ${nameOf(p.targetPlayerId)} for ${p.directDamage} (unblocked)`,
+        );
+      }
+      // Losses (from court diffs) and life deltas.
+      for (const p of blockedPairs) {
+        if (p.attackerDestroyed) {
+          lines.push(`${nameOf(attackerId)} lost Royal ${royalName(attackerId, p.attackerCardId)}`);
+        }
+        for (const b of p.blockerCardIds) {
+          const survived = gameState.players[p.targetPlayerId]?.court.some((r) => r.cardId === b);
+          if (!survived) lines.push(`${nameOf(p.targetPlayerId)} lost Royal ${royalName(p.targetPlayerId, b)}`);
+        }
+      }
+      for (const pid of [attackerId, ...defenderIds]) {
+        const beforeLife = prevPlayers[pid]?.life;
+        const nowLife = gameState.players[pid]?.life;
+        if (beforeLife !== undefined && nowLife !== undefined && nowLife !== beforeLife) {
+          lines.push(
+            nowLife < beforeLife
+              ? `${nameOf(pid)} took ${beforeLife - nowLife} damage (❤ ${nowLife})`
+              : `${nameOf(pid)} healed +${nowLife - beforeLife} (❤ ${nowLife})`,
+          );
+        }
+      }
+      if (lines.length === 0) lines.push("Both sides survived — no losses");
+
+      const header = anyBlocked ? "COMBAT" : "ATTACK — UNBLOCKED";
+      const idn = idCounterRef.current++;
+      setDuelNotice({ id: idn, header, title, lines });
+      pushEvent(colorOf(attackerId), `${header} — ${title}: ${lines.join(" · ")}`);
     }
   }, [gameState]);
 
@@ -1805,7 +1906,7 @@ export default function MatchScreen() {
             <Animated.View entering={FadeInDown.duration(250)} style={styles.duelResultPanel}>
               <View style={styles.duelResultHeader}>
                 <Ionicons name="flash" size={13} color="#C89B3C" />
-                <Text style={styles.duelResultTitle}>DUEL OVER — {duelNotice.title}</Text>
+                <Text style={styles.duelResultTitle}>{duelNotice.header ?? "DUEL OVER"} — {duelNotice.title}</Text>
                 <Pressable onPress={() => setDuelNotice(null)} hitSlop={8}>
                   <Ionicons name="close" size={16} color={Colors.textMuted} />
                 </Pressable>
