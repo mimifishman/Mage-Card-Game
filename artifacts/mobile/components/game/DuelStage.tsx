@@ -1,11 +1,24 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
+import Animated, {
+  FadeInDown,
+  FadeOut,
+  SlideInLeft,
+  SlideInRight,
+  ZoomIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import type { AttackDeclaration, DuelContext, RoyalInCourt } from "@workspace/api-client-react";
 import { effectiveAttack, effectiveHealth } from "@/lib/gameUtils";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
+import { Tints, Type } from "@/constants/theme";
+import { useReduceMotion } from "@/lib/motion";
 
 interface DuelStageProps {
   phase: string;
@@ -56,6 +69,7 @@ export default function DuelStage({
   onPass,
 }: DuelStageProps) {
   const targetable = targetingRoyals && !!onRoyalTarget;
+  const reduceMotion = useReduceMotion();
 
   // A duel fighter card. The card ALWAYS keeps its owner's colour (identity),
   // so tappability is shown by a neutral gold dashed ring + 🎯 badge rather
@@ -112,7 +126,7 @@ export default function DuelStage({
     >
       {/* Who is dueling, and whose move it is */}
       <View style={styles.header}>
-        <Ionicons name="flash" size={15} color="#C89B3C" />
+        <Ionicons name="flash" size={15} color={Colors.brand} />
         <Text style={styles.title}>
           DUEL: <Text style={{ color: attackerColor }}>{attackerName}</Text>
           <Text style={styles.vsInline}>  vs  </Text>
@@ -158,7 +172,12 @@ export default function DuelStage({
         ) : (
           livePairs.map(({ atk, atkRoyal, liveBlockers }) => (
             <View key={atk.attackerCardId} style={styles.pairRow}>
-              <View style={styles.fighter}>
+              {/* The clash: fighters slam in from opposite sides, the VS
+                  seal stamps down with a flash between them. */}
+              <Animated.View
+                entering={reduceMotion ? undefined : SlideInLeft.springify().damping(15)}
+                style={styles.fighter}
+              >
                 <FighterCard cardId={atk.attackerCardId} ownerId={duelContext.attackerPlayerId} baseGlow={attackerColor} />
                 <Text style={styles.fighterStats}>
                   <Text style={styles.statAtk}>⚔{effectiveAttack(atk.attackerCardId, atkRoyal!.buffAttack)}</Text>
@@ -167,13 +186,20 @@ export default function DuelStage({
                     ♥{effectiveHealth(atk.attackerCardId, atkRoyal!.buffHealth, atkRoyal!.damageTaken)}
                   </Text>
                 </Text>
-              </View>
+              </Animated.View>
 
-              <View style={styles.vsBadge}>
+              <Animated.View
+                entering={reduceMotion ? undefined : ZoomIn.delay(180).springify().damping(12)}
+                style={styles.vsBadge}
+              >
+                {!reduceMotion && <ClashFlash />}
                 <Text style={styles.vsText}>VS</Text>
-              </View>
+              </Animated.View>
 
-              <View style={styles.blockerGroup}>
+              <Animated.View
+                entering={reduceMotion ? undefined : SlideInRight.springify().damping(15)}
+                style={styles.blockerGroup}
+              >
                 {liveBlockers.map((blkId) => {
                   const blk = defenderRoyal(blkId)!;
                   return (
@@ -189,7 +215,7 @@ export default function DuelStage({
                     </View>
                   );
                 })}
-              </View>
+              </Animated.View>
             </View>
           ))
         )}
@@ -240,13 +266,40 @@ export default function DuelStage({
   );
 }
 
+/** One-shot gold shockwave behind the VS seal when a fight row appears. */
+function ClashFlash() {
+  const scale = useSharedValue(0.3);
+  const opacity = useSharedValue(0);
+  useEffect(() => {
+    scale.value = withDelay(220, withTiming(2.1, { duration: 340 }));
+    opacity.value = withDelay(
+      220,
+      withSequence(withTiming(0.8, { duration: 70 }), withTiming(0, { duration: 270 })),
+    );
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+  return <Animated.View pointerEvents="none" style={[styles.clashFlash, style]} />;
+}
+
 const styles = StyleSheet.create({
+  clashFlash: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#FFF3D6",
+  },
   stage: {
     marginHorizontal: 8,
-    backgroundColor: "rgba(10,20,14,0.92)",
+    backgroundColor: Tints.obsidianPanel,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: "#C89B3C",
+    borderColor: Colors.brand,
     padding: 10,
     gap: 8,
   },
@@ -258,8 +311,8 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: 14,
-    fontFamily: "Inter_700Bold",
-    color: "#C89B3C",
+    ...Type.heading,
+    color: Colors.brand,
     letterSpacing: 0.5,
   },
   vsInline: {
@@ -267,7 +320,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   diamondUsedChip: {
-    backgroundColor: "rgba(21,101,192,0.25)",
+    backgroundColor: Tints.azure,
     borderRadius: 5,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -275,7 +328,7 @@ const styles = StyleSheet.create({
   diamondUsedText: {
     fontSize: 10,
     fontFamily: "Inter_700Bold",
-    color: "#7EB6FF",
+    color: Colors.suitFx.D.accent,
   },
   turnRow: {
     flexDirection: "row",
@@ -296,7 +349,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(46,125,50,0.10)",
+    backgroundColor: Tints.greenFaint,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -304,7 +357,7 @@ const styles = StyleSheet.create({
   doneCheck: {
     fontSize: 12,
     fontFamily: "Inter_700Bold",
-    color: "#8FDF9A",
+    color: Colors.suitFx.C.accent,
   },
   doneText: {
     flex: 1,
@@ -335,7 +388,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    backgroundColor: Tints.whiteFaint,
     borderRadius: 10,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -358,7 +411,7 @@ const styles = StyleSheet.create({
   },
   targetRing: {
     borderWidth: 2,
-    borderColor: "#C89B3C",
+    borderColor: Colors.brand,
     borderStyle: "dashed",
     borderRadius: 10,
     padding: 2,
@@ -367,7 +420,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -7,
     right: -7,
-    backgroundColor: "#C89B3C",
+    backgroundColor: Colors.brand,
     borderRadius: 9,
     paddingHorizontal: 3,
     paddingVertical: 1,
@@ -389,17 +442,17 @@ const styles = StyleSheet.create({
   },
   statAtk: {
     fontFamily: "Inter_700Bold",
-    color: "#C89B3C",
+    color: Colors.brand,
   },
   statHp: {
     fontFamily: "Inter_700Bold",
-    color: "#66BB6A",
+    color: Colors.suitFx.C.accent,
   },
   vsBadge: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "#C89B3C",
+    backgroundColor: Colors.brand,
     alignItems: "center",
     justifyContent: "center",
   },

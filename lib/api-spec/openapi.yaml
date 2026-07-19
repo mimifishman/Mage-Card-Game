@@ -586,7 +586,7 @@ components:
           type: string
     MyMatchItem:
       type: object
-      required: [matchId, inviteCode, status, playerCount]
+      required: [matchId, inviteCode, status, playerCount, playerNames]
       properties:
         matchId:
           type: string
@@ -597,6 +597,10 @@ components:
           enum: [waiting, in_progress]
         playerCount:
           type: integer
+        playerNames:
+          type: array
+          items:
+            type: string
     MyMatchesResponse:
       type: object
       required: [matches]
@@ -838,6 +842,23 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CombatPairOutcome"
+    DirectHit:
+      type: object
+      description: >-
+        Attribution record for direct (non-combat) damage — a Club burned for
+        face damage or a Joker's damage mode. seq increases monotonically per
+        match so clients can detect a new hit even when the same card/target
+        repeats.
+      required: [sourceCardId, targetPlayerId, amount, seq]
+      properties:
+        sourceCardId:
+          type: string
+        targetPlayerId:
+          type: string
+        amount:
+          type: integer
+        seq:
+          type: integer
     PendingClubDebuff:
       type: object
       required: [attackerPlayerId, clubCardId, targetPlayerId, targetRoyalId]
@@ -931,6 +952,8 @@ components:
           $ref: "#/components/schemas/DuelContext"
         lastCombatSummary:
           $ref: "#/components/schemas/CombatSummary"
+        lastDirectHit:
+          $ref: "#/components/schemas/DirectHit"
         pendingClubDebuff:
           $ref: "#/components/schemas/PendingClubDebuff"
         pendingBlockDefenders:

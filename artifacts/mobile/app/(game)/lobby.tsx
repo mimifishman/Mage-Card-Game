@@ -28,6 +28,7 @@ import { useCreateMatch, useJoinMatch, useGetMyMatches, useAbandonMatch, getGetM
 import type { MyMatchItem } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
+import { Gradients } from "@/constants/theme";
 
 export default function LobbyScreen() {
   const { user, logout } = useAuth();
@@ -168,7 +169,7 @@ export default function LobbyScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <LinearGradient
-        colors={["#0A0A0F", "#0E0B18", "#0A0A0F"]}
+        colors={Gradients.sanctum}
         style={StyleSheet.absoluteFill}
       />
 
@@ -207,7 +208,7 @@ export default function LobbyScreen() {
               testID="create-match-button"
             >
               <LinearGradient
-                colors={["#1E1830", "#120F20"]}
+                colors={Gradients.panelRaised}
                 style={styles.actionCardGradient}
               >
                 <View style={[styles.actionIconBg, { backgroundColor: "rgba(200,155,60,0.15)" }]}>
@@ -237,7 +238,7 @@ export default function LobbyScreen() {
               testID="join-match-button"
             >
               <LinearGradient
-                colors={["#1A1E30", "#0F1220"]}
+                colors={Gradients.panel}
                 style={styles.actionCardGradient}
               >
                 <View style={[styles.actionIconBg, { backgroundColor: "rgba(41,128,185,0.15)" }]}>
@@ -291,18 +292,21 @@ export default function LobbyScreen() {
             {myMatches.map((match) => (
               <View key={match.matchId} style={styles.matchCard} testID={`my-match-card-${match.matchId}`}>
                 <View style={styles.matchCardLeft}>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      match.status === "in_progress" ? styles.statusInProgress : styles.statusWaiting,
-                    ]}
-                  >
-                    <Text style={styles.statusBadgeText}>
-                      {match.status === "in_progress" ? "In Progress" : "Waiting"}
-                    </Text>
+                  <View style={styles.matchCardHeader}>
+                    <Text style={styles.matchCode}>Match {match.inviteCode}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        match.status === "in_progress" ? styles.statusInProgress : styles.statusWaiting,
+                      ]}
+                    >
+                      <Text style={styles.statusBadgeText}>
+                        {match.status === "in_progress" ? "In Progress" : "Waiting"}
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={styles.matchPlayerCount}>
-                    {match.playerCount} {match.playerCount === 1 ? "player" : "players"}
+                  <Text style={styles.matchPlayerNames} numberOfLines={1}>
+                    {match.playerNames.length > 0 ? match.playerNames.join(" · ") : `${match.playerCount} player${match.playerCount === 1 ? "" : "s"}`}
                   </Text>
                 </View>
                 <View style={styles.matchCardActions}>
@@ -384,10 +388,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroTitle: {
-    fontSize: 36,
-    fontFamily: "Inter_700Bold",
+    fontSize: 34,
+    fontFamily: "Cinzel_700Bold",
     color: Colors.textPrimary,
     letterSpacing: 4,
+    textShadowColor: "rgba(200,155,60,0.4)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
     marginTop: 8,
   },
   heroSubtitle: {
@@ -489,6 +496,25 @@ const styles = StyleSheet.create({
   },
   matchCardLeft: {
     gap: 4,
+    flex: 1,
+    marginRight: 12,
+  },
+  matchCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  matchCode: {
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+    color: Colors.textPrimary,
+    letterSpacing: 0.5,
+  },
+  matchPlayerNames: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
   },
   statusBadge: {
     alignSelf: "flex-start",

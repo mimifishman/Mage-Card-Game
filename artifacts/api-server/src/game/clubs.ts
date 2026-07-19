@@ -112,6 +112,12 @@ export function applyClub(
     return ok({
       ...state,
       abyss: [...state.abyss, cardId],
+      lastDirectHit: {
+        sourceCardId: cardId,
+        targetPlayerId,
+        amount: card.pipValue,
+        seq: (state.lastDirectHit?.seq ?? 0) + 1,
+      },
       players: {
         ...state.players,
         [playerId]: afterSpend,

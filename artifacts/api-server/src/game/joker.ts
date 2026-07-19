@@ -116,6 +116,12 @@ export function playJokerDamagePlayer(
   return ok({
     ...state,
     abyss: [...state.abyss, jokerCardId],
+    lastDirectHit: {
+      sourceCardId: jokerCardId,
+      targetPlayerId,
+      amount: JOKER_COST,
+      seq: (state.lastDirectHit?.seq ?? 0) + 1,
+    },
     players: {
       ...state.players,
       [playerId]: afterSpend,

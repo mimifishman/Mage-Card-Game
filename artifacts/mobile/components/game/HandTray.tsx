@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   ScrollView,
   View,
@@ -6,9 +6,18 @@ import {
   Pressable,
   StyleSheet,
 } from "react-native";
+import Animated, {
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import CardView from "./CardView";
 import Colors from "@/constants/colors";
 import { parseCardId } from "@/lib/gameUtils";
+import { useReduceMotion } from "@/lib/motion";
 
 interface HandTrayProps {
   cards: string[];
@@ -29,6 +38,24 @@ interface HandTrayProps {
       (which runs getValidActionsForCard with full game context). */
   canPlayCard?: (cardId: string) => boolean;
   onCardPress: (cardId: string) => void;
+}
+
+/** The selected card floats with a slow idle bob — charged and ready to cast. */
+function SelectedBob({ active, children }: { active: boolean; children: React.ReactNode }) {
+  const reduceMotion = useReduceMotion();
+  const bob = useSharedValue(0);
+  useEffect(() => {
+    if (active && !reduceMotion) {
+      bob.value = withRepeat(
+        withSequence(withTiming(-3, { duration: 650 }), withTiming(0, { duration: 650 })),
+        -1,
+      );
+    } else {
+      bob.value = 0; // direct assignment cancels the loop
+    }
+  }, [active, reduceMotion]);
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: bob.value }] }));
+  return <Animated.View style={style}>{children}</Animated.View>;
 }
 
 function isCardEligibleAsInterrupt(cardId: string): boolean {
@@ -64,6 +91,7 @@ export default function HandTray({
   canPlayCard,
   onCardPress,
 }: HandTrayProps) {
+  const reduceMotion = useReduceMotion();
   const globalCanPlay =
     (isMyTurn && (phase === "main" || phase === "discard")) ||
     (isDefender && phase === "declare_blocks") ||
@@ -133,13 +161,27 @@ export default function HandTray({
                   isSelected && styles.cardWrapperSelected,
                 ]}
               >
-                <CardView
-                  cardId={cardId}
-                  size="lg"
-                  selected={isSelected}
-                  dimmed={!cardPlayable}
-                  unaffordable={unaffordable}
-                />
+                {/* Newly drawn cards deal in with a staggered fan flourish —
+                    entering only runs on mount, so settled cards stay put. */}
+                <Animated.View
+                  entering={
+                    reduceMotion
+                      ? undefined
+                      : FadeInDown.delay(Math.min(idx * 55, 330))
+                          .springify()
+                          .damping(16)
+                  }
+                >
+                  <SelectedBob active={isSelected}>
+                    <CardView
+                      cardId={cardId}
+                      size="lg"
+                      selected={isSelected}
+                      dimmed={!cardPlayable}
+                      unaffordable={unaffordable}
+                    />
+                  </SelectedBob>
+                </Animated.View>
               </Pressable>
             );
           })}

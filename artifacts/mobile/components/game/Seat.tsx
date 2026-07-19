@@ -1,11 +1,23 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import Animated, { FadeOut, FadeInUp } from "react-native-reanimated";
+import Animated, {
+  FadeOut,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import type { PublicPlayerState } from "@workspace/api-client-react";
 import CourtZone from "./CourtZone";
+import SuitHitEffect from "./effects/SuitHitEffect";
 import Colors from "@/constants/colors";
+import { Tints } from "@/constants/theme";
 import { parseCardId } from "@/lib/gameUtils";
+import type { HitEffectEvent } from "@/lib/hitEffectsDiff";
+import { useReduceMotion } from "@/lib/motion";
 
 interface SeatProps {
   player: PublicPlayerState;
@@ -39,6 +51,10 @@ interface SeatProps {
   attackingYouWith?: string[];
   phase?: string;
   isDefender?: boolean;
+  /** Active suit hit effects on this seat (damage/heal/destroy), from useHitEffects. */
+  hitEffects?: HitEffectEvent[];
+  /** Active suit hit effects per royal card in this seat's court. */
+  royalHitEffects?: Record<string, HitEffectEvent[]>;
 }
 
 export default function Seat({
@@ -65,6 +81,8 @@ export default function Seat({
   attackingYouWith,
   phase,
   isDefender,
+  hitEffects,
+  royalHitEffects,
 }: SeatProps) {
   // Life-change floater: when life changes, float a ±N over the heart stat.
   const prevLifeRef = useRef(player.life);
@@ -81,6 +99,35 @@ export default function Seat({
   }, [player.life]);
 
   const showAttacking = !!attackingYouWith && attackingYouWith.length > 0;
+
+  // Low-life heartbeat: at 5 life or less the ❤️ pill pulses gently. Under
+  // Reduce Motion the pulse stays still and only the red tint signals danger.
+  const reduceMotion = useReduceMotion();
+  const lowLife = !isEliminated && player.life <= 5;
+  const heartbeat = useSharedValue(1);
+  useEffect(() => {
+    if (lowLife && !reduceMotion) {
+      heartbeat.value = withRepeat(
+        withSequence(withTiming(1.1, { duration: 420 }), withTiming(1, { duration: 580 })),
+        -1,
+      );
+    } else {
+      heartbeat.value = 1; // direct assignment cancels the loop
+    }
+  }, [lowLife, reduceMotion]);
+  const heartbeatStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartbeat.value }],
+  }));
+
+  // Suit hit effects anchored over the seat header (crest + stats) — rendered
+  // last so they draw above everything, but never intercept touches.
+  const fxOverlay = !!hitEffects?.length && (
+    <View pointerEvents="none" style={styles.fxOverlay}>
+      {hitEffects.map((e) => (
+        <SuitHitEffect key={e.id} suit={e.suit} kind={e.kind} delayMs={e.delayMs} size={72} />
+      ))}
+    </View>
+  );
 
   const crest = (
     <Pressable
@@ -125,7 +172,15 @@ export default function Seat({
   const stats = !isEliminated && (
     <View style={[styles.statsRow, compact && styles.statsRowCompact]}>
       {/* Prominent: Life + Vault — the two numbers that decide every choice. */}
-      <View style={[styles.statPrimary, styles.statLife, compact && styles.statPrimaryCompact]}>
+      <Animated.View
+        style={[
+          styles.statPrimary,
+          styles.statLife,
+          compact && styles.statPrimaryCompact,
+          lowLife && styles.statLifeLow,
+          heartbeatStyle,
+        ]}
+      >
         <Text style={[styles.statPrimaryIcon, compact && styles.statPrimaryIconCompact]}>❤️</Text>
         <Text style={[styles.statPrimaryValue, compact && styles.statPrimaryValueCompact, { color: "#FF6B6B" }]}>
           {player.life}
@@ -142,7 +197,7 @@ export default function Seat({
             {lifeDelta > 0 ? `+${lifeDelta}` : `${lifeDelta}`}
           </Animated.Text>
         )}
-      </View>
+      </Animated.View>
       <View style={[styles.statPrimary, styles.statVault, compact && styles.statPrimaryCompact]}>
         <Text style={[styles.statPrimaryIcon, compact && styles.statPrimaryIconCompact]}>⚡</Text>
         <Text style={[styles.statPrimaryValue, compact && styles.statPrimaryValueCompact, { color: Colors.brand }]}>
@@ -203,8 +258,10 @@ export default function Seat({
             highlightBadgeText={highlightBadgeText}
             glowIds={royalGlowIds}
             glowColor={glowColor ?? color}
+            effectsByRoyalId={royalHitEffects}
           />
         )}
+        {fxOverlay}
       </Pressable>
     );
   }
@@ -252,8 +309,10 @@ export default function Seat({
           highlightBadgeText={highlightBadgeText}
           glowIds={royalGlowIds}
           glowColor={glowColor ?? color}
+          effectsByRoyalId={royalHitEffects}
         />
       )}
+      {fxOverlay}
     </View>
   );
 }
@@ -279,7 +338,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
-    backgroundColor: "rgba(26,56,36,0.85)",
+    backgroundColor: "rgba(30,30,66,0.85)",
   },
   containerIdle: {
     opacity: 0.82,
@@ -307,7 +366,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   crestTargetable: {
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: Tints.white,
   },
   avatar: {
     width: 30,
@@ -347,7 +406,7 @@ const styles = StyleSheet.create({
   statusChipText: {
     fontSize: 9,
     fontFamily: "Inter_700Bold",
-    color: "#0A1F13",
+    color: Colors.bgDeep,
     letterSpacing: 1,
   },
   eliminatedText: {
@@ -364,7 +423,7 @@ const styles = StyleSheet.create({
   crestHintText: {
     fontSize: 9,
     fontFamily: "Inter_700Bold",
-    color: "#0A1F13",
+    color: Colors.bgDeep,
     letterSpacing: 0.5,
   },
   statsRow: {
@@ -390,10 +449,16 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   statLife: {
-    backgroundColor: "rgba(255,107,107,0.12)",
+    backgroundColor: Tints.life,
+  },
+  // Danger state at ≤5 life: hotter tint + red edge under the heartbeat pulse.
+  statLifeLow: {
+    backgroundColor: "rgba(229,57,53,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(229,57,53,0.7)",
   },
   statVault: {
-    backgroundColor: "rgba(200,155,60,0.14)",
+    backgroundColor: Tints.gold,
   },
   statPrimaryIcon: {
     fontSize: 15,
@@ -441,10 +506,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_700Bold",
   },
+  // Anchor box for suit hit effects: the seat header (crest + stats) area,
+  // so effects land on the "character" rather than the court strip below.
+  fxOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 64,
+  },
   attackingBadge: {
-    backgroundColor: "rgba(200,16,46,0.14)",
+    backgroundColor: Tints.crimson,
     borderWidth: 1,
-    borderColor: "rgba(229,57,53,0.6)",
+    borderColor: Tints.redBorder,
     borderRadius: 8,
     paddingVertical: 4,
     paddingHorizontal: 8,

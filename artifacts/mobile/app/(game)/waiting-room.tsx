@@ -29,6 +29,7 @@ import {
   getGetMatchQueryKey,
 } from "@workspace/api-client-react";
 import Colors, { seatColorFor } from "@/constants/colors";
+import { Gradients } from "@/constants/theme";
 import { useAuth } from "@/lib/auth";
 
 export default function WaitingRoomScreen() {
@@ -157,7 +158,7 @@ export default function WaitingRoomScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={["#0A0A0F", "#0C0D18", "#0A0A0F"]}
+        colors={Gradients.sanctum}
         style={StyleSheet.absoluteFill}
       />
 
@@ -344,7 +345,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Cinzel_700Bold",
     color: Colors.textPrimary,
     letterSpacing: 1,
   },

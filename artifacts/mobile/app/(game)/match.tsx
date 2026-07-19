@@ -31,8 +31,10 @@ import type {
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useAuth } from "@/lib/auth";
 import Colors, { seatColorFor } from "@/constants/colors";
+import { Gradients } from "@/constants/theme";
 import HandTray from "@/components/game/HandTray";
 import Seat from "@/components/game/Seat";
+import SanctumBackground from "@/components/game/SanctumBackground";
 import TableCenter from "@/components/game/TableCenter";
 import EventTicker from "@/components/game/EventTicker";
 import type { GameEvent } from "@/components/game/EventTicker";
@@ -54,6 +56,15 @@ import {
   canPlayerInitiateInterrupt,
 } from "@/lib/gameUtils";
 import type { CardAction, ValidAction } from "@/lib/gameUtils";
+import { markLocalCast, useHitEffects } from "@/lib/hitEffects";
+import { getSfxMuted, playGameSfx, preloadSfx, setSfxMuted } from "@/lib/sfx";
+import {
+  CardFlightHost,
+  CARD_FLIGHT_TTL_MS,
+  type CardFlightEvent,
+} from "@/components/game/effects/CardFlight";
+import TurnFlare from "@/components/game/effects/TurnFlare";
+import YourTurnBanner from "@/components/game/effects/YourTurnBanner";
 
 export interface ActionParams {
   cardId: string;
@@ -62,6 +73,24 @@ export interface ActionParams {
   targetPlayerId?: string;
   targetCardId?: string;
   mode?: string;
+}
+
+// Just the Royal fields the match log needs to name a card with its totals.
+type RoyalStats = { cardId: string; buffAttack: number; buffHealth: number; damageTaken: number };
+
+// e.g. "8♣" — rank + suit symbol only.
+function cardLabel(id: string): string {
+  const c = parseCardId(id);
+  return `${c.displayRank}${c.suitSymbol}`;
+}
+
+// A Royal named with its effective totals, e.g. "K♥ (⚔10 ♥4)". Used everywhere
+// the log mentions a Royal so a card is never shown without its value — for a
+// destroyed Royal, pass its last-known stats from a snapshot.
+function royalStatLabel(r: RoyalStats): string {
+  const atk = effectiveAttack(r.cardId, r.buffAttack);
+  const hp = effectiveHealth(r.cardId, r.buffHealth, r.damageTaken);
+  return `${cardLabel(r.cardId)} (⚔${atk} ♥${hp})`;
 }
 
 // Plain-language names for engine phases — raw ids read as jargon.
@@ -164,7 +193,7 @@ export default function MatchScreen() {
   }, []);
 
   const prevPhaseRef = useRef<string | null>(null);
-  const prevPlayersRef = useRef<Record<string, { life: number; courtSize: number; eliminated: boolean }>>({});
+  const prevPlayersRef = useRef<Record<string, { life: number; court: RoyalStats[]; eliminated: boolean }>>({});
   const prevActivePlayerRef = useRef<string | null>(null);
   const prevPendingClubRef = useRef<string | null>(null);
   const hasNavigatedRef = useRef(false);
@@ -177,6 +206,9 @@ export default function MatchScreen() {
     defenderId: string;
     pairs: { attackerCardId: string; blockerIds: string[] }[];
     lives: Record<string, number>;
+    // Last-known stats of every Royal in the duel, so a destroyed Royal can
+    // still be named with its totals in the outcome.
+    stats: Record<string, RoyalStats>;
   } | null>(null);
   const [completedDuels, setCompletedDuels] = useState<{ id: number; text: string }[]>([]);
   const [duelNotice, setDuelNotice] = useState<{ id: number; title: string; lines: string[] } | null>(null);
@@ -357,34 +389,43 @@ export default function MatchScreen() {
     const effectMyId = user?.id ?? "";
     const nameOf = (id: string) =>
       id === effectMyId ? "You" : (displayNames[id] ?? id.slice(0, 8));
-    const cardLabel = (id: string) => {
-      const c = parseCardId(id);
-      return `${c.displayRank}${c.suitSymbol}`;
-    };
 
     const finalize = (snap: NonNullable<typeof duelSnapshotRef.current>) => {
       const atkName = nameOf(snap.attackerId);
       const defName = nameOf(snap.defenderId);
       const atkCourt = gameState.players[snap.attackerId]?.court ?? [];
       const defCourt = gameState.players[snap.defenderId]?.court ?? [];
+      // Name any Royal in the duel with its duel-start totals (works for a
+      // destroyed Royal too, since stats come from the snapshot).
+      const royalName = (id: string) => {
+        const s = snap.stats[id];
+        return s ? royalStatLabel(s) : cardLabel(id);
+      };
+      // The dueling Royals on each side, with their values — so the outcome
+      // shows what both duelers were worth going into the fight.
+      const atkRoyals = [...new Set(snap.pairs.map((p) => p.attackerCardId))].map(royalName);
+      const defRoyals = [...new Set(snap.pairs.flatMap((p) => p.blockerIds))].map(royalName);
+      const atkSide = atkRoyals.length ? `${atkName} ${atkRoyals.join(", ")}` : atkName;
+      const defSide = defRoyals.length ? `${defName} ${defRoyals.join(", ")}` : defName;
+
       const deadAtk: string[] = [];
       const deadDef: string[] = [];
       for (const p of snap.pairs) {
-        if (!atkCourt.some((r) => r.cardId === p.attackerCardId)) deadAtk.push(cardLabel(p.attackerCardId));
+        if (!atkCourt.some((r) => r.cardId === p.attackerCardId)) deadAtk.push(royalName(p.attackerCardId));
         for (const b of p.blockerIds) {
-          if (!defCourt.some((r) => r.cardId === b)) deadDef.push(cardLabel(b));
+          if (!defCourt.some((r) => r.cardId === b)) deadDef.push(royalName(b));
         }
       }
       const lines: string[] = [];
-      if (deadDef.length > 0) lines.push(`${defName} lost ${deadDef.join(", ")}`);
-      if (deadAtk.length > 0) lines.push(`${atkName} lost ${deadAtk.join(", ")}`);
+      if (deadDef.length > 0) lines.push(`${defName} lost Royal${deadDef.length > 1 ? "s" : ""} ${deadDef.join(", ")}`);
+      if (deadAtk.length > 0) lines.push(`${atkName} lost Royal${deadAtk.length > 1 ? "s" : ""} ${deadAtk.join(", ")}`);
       for (const [pid, prevLife] of Object.entries(snap.lives)) {
         const nowLife = gameState.players[pid]?.life ?? prevLife;
         if (nowLife < prevLife) lines.push(`${nameOf(pid)} took ${prevLife - nowLife} damage (❤ ${nowLife})`);
         else if (nowLife > prevLife) lines.push(`${nameOf(pid)} healed +${nowLife - prevLife} (❤ ${nowLife})`);
       }
       if (lines.length === 0) lines.push("Both sides survived — no losses");
-      return { title: `${atkName} vs ${defName}`, lines };
+      return { title: `${atkSide} vs ${defSide}`, lines };
     };
 
     const snap = duelSnapshotRef.current;
@@ -416,6 +457,15 @@ export default function MatchScreen() {
             [ctx.attackerPlayerId]: gameState.players[ctx.attackerPlayerId]?.life ?? 0,
             [ctx.defenderPlayerId]: gameState.players[ctx.defenderPlayerId]?.life ?? 0,
           },
+          stats: Object.fromEntries(
+            [
+              ...(gameState.players[ctx.attackerPlayerId]?.court ?? []),
+              ...(gameState.players[ctx.defenderPlayerId]?.court ?? []),
+            ].map((r) => [
+              r.cardId,
+              { cardId: r.cardId, buffAttack: r.buffAttack, buffHealth: r.buffHealth, damageTaken: r.damageTaken },
+            ]),
+          ),
         };
       }
     } else if (snap) {
@@ -429,6 +479,91 @@ export default function MatchScreen() {
       setCompletedDuels([]);
     }
   }, [gameState]);
+
+  // Suit-themed hit effects (lightning / heal bloom / shard burst / sword)
+  // plus their haptics + SFX, derived by diffing snapshots. Kept separate
+  // from the ticker diff below — see lib/hitEffectsDiff.ts for the rules.
+  const { seatEffects, royalEffects } = useHitEffects(gameState, user?.id ?? "");
+
+  // Cinematic card flights (visual clones only — game state untouched):
+  // "cast" when I play a card, "incoming" when attacks are declared at me.
+  const [flights, setFlights] = useState<CardFlightEvent[]>([]);
+  const flightIdRef = useRef(0);
+  const launchFlight = useCallback((cardId: string, kind: CardFlightEvent["kind"]) => {
+    const id = ++flightIdRef.current;
+    setFlights((cur) => [...cur.slice(-2), { id, cardId, kind }]); // cap 3 live flights
+    setTimeout(() => {
+      setFlights((cur) => cur.filter((f) => f.id !== id));
+    }, CARD_FLIGHT_TTL_MS + 300);
+  }, []);
+
+  // Arcane sweep when the turn passes to a new player.
+  const [turnFlare, setTurnFlare] = useState<{ key: number; color: string } | null>(null);
+
+  // Sound toggle (persisted in lib/sfx.ts; this state just drives the menu row).
+  const [sfxMuted, setSfxMutedState] = useState(getSfxMuted());
+
+  // Load every sound up front — first plays are otherwise fetched from the
+  // dev server on demand and can land seconds late.
+  useEffect(() => {
+    preloadSfx();
+  }, []);
+
+  // "YOUR TURN" proclamation, keyed so each of my turns replays it once.
+  const [yourTurnKey, setYourTurnKey] = useState<number | null>(null);
+
+  // Incoming-attack lunge: when a fresh combat opens against me, dive the
+  // attacker cards toward my seat (visual only; capped at 3). The same
+  // phase-watcher also cues the duel start/end sounds for the two duelists.
+  const prevAttackPhaseRef = useRef<string>("");
+  const prevDuelDefenderRef = useRef<string | null>(null);
+  const wasDuelParticipantRef = useRef(false);
+  useEffect(() => {
+    if (!gameState) return;
+    const localMyId = user?.id ?? "";
+    const prevPhase = prevAttackPhaseRef.current;
+    if (gameState.phase === "declare_blocks" && prevPhase !== "declare_blocks") {
+      const incoming = gameState.attacks
+        .filter((a) => a.targetPlayerId === localMyId)
+        .slice(0, 3);
+      incoming.forEach((a) => launchFlight(a.attackerCardId, "incoming"));
+      // War-drum for everyone being attacked. The attacker already heard it
+      // optimistically at press time (handleAttack); bystanders stay quiet.
+      const amTargeted = gameState.attacks.some((a) => a.targetPlayerId === localMyId);
+      if (amTargeted) playGameSfx("attack");
+    }
+
+    // Duel start/end sounds — participants only, and only on the natural
+    // transitions: interrupt/club-response windows that interpose mid-duel
+    // must not re-trigger either sound.
+    const inDuelPhase =
+      gameState.phase === "duel_attacker_turn" || gameState.phase === "duel_blocker_turn";
+    const duelSoundCtx = gameState.duelContext;
+    const amDuelist =
+      !!duelSoundCtx &&
+      (localMyId === duelSoundCtx.attackerPlayerId || localMyId === duelSoundCtx.defenderPlayerId);
+    if (inDuelPhase && duelSoundCtx) {
+      const enteredNaturally =
+        prevPhase === "declare_blocks" || prevPhase === "assign_damage_order";
+      const nextDuelInQueue =
+        prevDuelDefenderRef.current !== null &&
+        prevDuelDefenderRef.current !== duelSoundCtx.defenderPlayerId;
+      if ((enteredNaturally || nextDuelInQueue) && amDuelist) {
+        playGameSfx("duelStart");
+      }
+      prevDuelDefenderRef.current = duelSoundCtx.defenderPlayerId;
+      wasDuelParticipantRef.current = amDuelist;
+    } else if (
+      (gameState.phase === "main" || gameState.phase === "draw") &&
+      (prevPhase === "duel_attacker_turn" || prevPhase === "duel_blocker_turn")
+    ) {
+      if (wasDuelParticipantRef.current) playGameSfx("duelEnd");
+      prevDuelDefenderRef.current = null;
+      wasDuelParticipantRef.current = false;
+    }
+
+    prevAttackPhaseRef.current = gameState.phase;
+  }, [gameState, user, launchFlight]);
 
   // Diff-based match log + damage/combat notices. This replaces the old
   // fade-away combat banner: everything lands in the persistent ticker, and
@@ -444,10 +579,29 @@ export default function MatchScreen() {
     const possOf = (id: string) => (id === effectMyId ? "your" : `${nameOf(id)}'s`);
     // Possessive when the owner is also the actor: "your own" / "Bob's own".
     const ownPossOf = (id: string) => (id === effectMyId ? "your own" : `${nameOf(id)}'s own`);
+    // A Royal named with its effective totals, e.g. "K♥ (⚔10 ♥4)". Falls back to
+    // the previous snapshot when the Royal has already left the court, so a card
+    // is never logged without its value.
+    const royalLabel = (playerId: string, royalCardId: string) => {
+      const royal =
+        gameState.players[playerId]?.court.find((r) => r.cardId === royalCardId) ??
+        prevPlayers[playerId]?.court.find((r) => r.cardId === royalCardId);
+      return royal ? royalStatLabel(royal) : cardLabel(royalCardId);
+    };
 
     // Turn changes.
     if (prevActivePlayerRef.current && prevActivePlayerRef.current !== gameState.activePlayerId) {
       pushEvent(colorOf(gameState.activePlayerId), `${nameOf(gameState.activePlayerId)} — turn ${gameState.turnNumber}`);
+      const flareKey = gameState.turnNumber * 100 + gameState.turnOrder.indexOf(gameState.activePlayerId);
+      setTurnFlare({ key: flareKey, color: colorOf(gameState.activePlayerId) });
+      if (gameState.activePlayerId === effectMyId) {
+        // The pass-of-turn should be unmissable: banner + chime + buzz.
+        setYourTurnKey(flareKey);
+        playGameSfx("turn");
+        if (Platform.OS !== "web") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        }
+      }
     }
     prevActivePlayerRef.current = gameState.activePlayerId;
 
@@ -456,17 +610,18 @@ export default function MatchScreen() {
     if (prev !== "declare_blocks" && gameState.phase === "declare_blocks") {
       setCompletedDuels([]);
       setDuelNotice(null);
-      const byAttacker = new Map<string, Map<string, number>>();
+      const byAttacker = new Map<string, Map<string, string[]>>();
       for (const a of gameState.attacks) {
-        const inner = byAttacker.get(a.attackerPlayerId) ?? new Map<string, number>();
-        inner.set(a.targetPlayerId, (inner.get(a.targetPlayerId) ?? 0) + 1);
+        const inner = byAttacker.get(a.attackerPlayerId) ?? new Map<string, string[]>();
+        inner.set(a.targetPlayerId, [...(inner.get(a.targetPlayerId) ?? []), a.attackerCardId]);
         byAttacker.set(a.attackerPlayerId, inner);
       }
       for (const [atkId, targets] of byAttacker) {
-        for (const [tgtId, n] of targets) {
+        for (const [tgtId, cardIds] of targets) {
+          const royals = cardIds.map((cid) => royalLabel(atkId, cid)).join(", ");
           pushEvent(
             colorOf(atkId),
-            `${nameOf(atkId)} attacked ${nameOf(tgtId)} with ${n} Royal${n > 1 ? "s" : ""}`,
+            `${nameOf(atkId)} attacked ${nameOf(tgtId)} with ${royals}`,
           );
         }
       }
@@ -480,9 +635,11 @@ export default function MatchScreen() {
       const c = gameState.pendingClubDebuff;
       const clubTargetPoss =
         c.attackerPlayerId === c.targetPlayerId ? ownPossOf(c.attackerPlayerId) : possOf(c.targetPlayerId);
+      // Stats read here are pre-debuff: the play is still pending when this fires.
+      const clubPip = parseCardId(c.clubCardId).pipValue;
       pushEvent(
         colorOf(c.attackerPlayerId),
-        `${nameOf(c.attackerPlayerId)} played a Club on ${clubTargetPoss} Royal`,
+        `${nameOf(c.attackerPlayerId)} played ${cardLabel(c.clubCardId)} (−${clubPip}) on ${clubTargetPoss} Royal ${royalLabel(c.targetPlayerId, c.targetRoyalId)}`,
       );
     }
     prevPendingClubRef.current = pendingClubKey;
@@ -508,10 +665,12 @@ export default function MatchScreen() {
       } else if (lifeDelta > 0) {
         pushEvent(colorOf(id), `${nameOf(id)} healed +${lifeDelta} (❤ ${p.life})`);
       }
-      const courtLost = before.courtSize - p.court.length;
-      if (courtLost > 0) {
-        pushEvent(colorOf(id), `${nameOf(id)} lost ${courtLost} Royal${courtLost > 1 ? "s" : ""}`);
-        damageParts.push(`${nameOf(id)} lost ${courtLost} Royal${courtLost > 1 ? "s" : ""}`);
+      const nowCourtIds = new Set(p.court.map((r) => r.cardId));
+      const lostRoyals = before.court.filter((r) => !nowCourtIds.has(r.cardId));
+      if (lostRoyals.length > 0) {
+        const lostNames = lostRoyals.map(royalStatLabel).join(", ");
+        pushEvent(colorOf(id), `${nameOf(id)} lost Royal${lostRoyals.length > 1 ? "s" : ""} ${lostNames}`);
+        damageParts.push(`${nameOf(id)} lost ${lostNames}`);
       }
       if (!before.eliminated && p.isEliminated) {
         pushEvent(colorOf(id), `☠ ${nameOf(id)} ${id === effectMyId ? "were" : "was"} eliminated!`);
@@ -550,7 +709,16 @@ export default function MatchScreen() {
     prevPlayersRef.current = Object.fromEntries(
       Object.entries(gameState.players).map(([id, p]) => [
         id,
-        { life: p.life, courtSize: p.court.length, eliminated: !!p.isEliminated },
+        {
+          life: p.life,
+          court: p.court.map((r) => ({
+            cardId: r.cardId,
+            buffAttack: r.buffAttack,
+            buffHealth: r.buffHealth,
+            damageTaken: r.damageTaken,
+          })),
+          eliminated: !!p.isEliminated,
+        },
       ]),
     );
   }, [gameState]);
@@ -793,9 +961,14 @@ export default function MatchScreen() {
             cardId: params.cardId,
           };
       }
+      // Visual-only: the played card arcs from the hand onto the board.
+      launchFlight(params.cardId, "cast");
+      // Remember that WE cast this card so the resulting hit effect is
+      // audible on this device (see isAudibleToMe in lib/hitEffects.ts).
+      markLocalCast(params.cardId);
       submitAction({ matchId, data: body });
     },
-    [matchId, gameState, user, submitAction, showToast],
+    [matchId, gameState, user, submitAction, showToast, launchFlight],
   );
 
   const handleEndTurn = useCallback(() => {
@@ -812,6 +985,9 @@ export default function MatchScreen() {
   const handleAttack = useCallback((targets: { targetPlayerId: string; royalCardIds: string[] }[]) => {
     if (!matchId || targets.length === 0) return;
     buzzAction();
+    // The attacker hears the war drum at press time (no server round trip);
+    // the targets hear it when the declare_blocks snapshot lands.
+    playGameSfx("attack");
     submitAction({
       matchId,
       data: { type: "declare_attack", targets },
@@ -848,7 +1024,7 @@ export default function MatchScreen() {
   if (isLoading && !gameState) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <LinearGradient colors={["#0A0A0F", "#0C0D18"]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={Gradients.sanctumDeep} style={StyleSheet.absoluteFill} />
         <ActivityIndicator size="large" color={Colors.brand} />
         <Text style={styles.loadingText}>Loading game...</Text>
       </View>
@@ -858,7 +1034,7 @@ export default function MatchScreen() {
   if (!gameState) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <LinearGradient colors={["#0A0A0F", "#0C0D18"]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={Gradients.sanctumDeep} style={StyleSheet.absoluteFill} />
         <Text style={styles.errorText}>Could not load game state.</Text>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>Go Back</Text>
@@ -1314,6 +1490,8 @@ export default function MatchScreen() {
         crestTargetHint={assigningTargets ? "⚔ SEND HERE" : "🎯 TAP"}
         onCrestPress={() => dispatchPlayerTarget(opp.id)}
         attackingYouWith={attacksFrom(opp.id)}
+        hitEffects={seatEffects[opp.id]}
+        royalHitEffects={royalEffects}
       />
     );
   };
@@ -1333,7 +1511,7 @@ export default function MatchScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={["#0D2B1A", "#0A1F13", "#0D2B1A"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <SanctumBackground runeCenter={0.42} />
 
       {/* ---- Status strip (single line, safe-area aware) ---- */}
       <View style={[styles.header, { paddingTop: topInset + 6 }]}>
@@ -1355,6 +1533,20 @@ export default function MatchScreen() {
 
       {showMenu && (
         <View style={[styles.menuDropdown, { top: topInset + 40 }]}>
+          <Pressable
+            onPress={() => {
+              setSfxMuted(!sfxMuted);
+              setSfxMutedState(!sfxMuted);
+            }}
+            style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons
+              name={sfxMuted ? "volume-mute" : "volume-high"}
+              size={16}
+              color={Colors.textSecondary}
+            />
+            <Text style={styles.menuItemLabel}>{sfxMuted ? "Sound: Off" : "Sound: On"}</Text>
+          </Pressable>
           <Pressable
             onPress={handleAbandon}
             style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
@@ -1673,6 +1865,8 @@ export default function MatchScreen() {
               crestTargetable={targetingPlayers && !assigningTargets}
               crestTargetHint="🎯 TAP"
               onCrestPress={() => dispatchPlayerTarget(myId)}
+              hitEffects={seatEffects[myId]}
+              royalHitEffects={royalEffects}
             />
           </View>
         )}
@@ -1861,6 +2055,11 @@ export default function MatchScreen() {
         />
       )}
 
+      {/* Cinematic overlays — decorative only, never intercept touches. */}
+      <CardFlightHost flights={flights} />
+      {turnFlare && <TurnFlare key={`flare-${turnFlare.key}`} color={turnFlare.color} />}
+      {yourTurnKey !== null && <YourTurnBanner key={`yourturn-${yourTurnKey}`} color={colorOf(myId)} />}
+
       <ToastHost toasts={toasts} />
     </View>
   );
@@ -1951,6 +2150,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
     color: Colors.accentRed,
+  },
+  menuItemLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
   },
   board: {
     flex: 1,
