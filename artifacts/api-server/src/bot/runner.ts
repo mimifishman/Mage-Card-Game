@@ -5,7 +5,8 @@ import {
   loadEngineState,
 } from "../repositories/matchRepository";
 import { dispatchAction, getTurnHolderId } from "../game/dispatcher";
-import { chooseBotAction, fallbackAction, personaForMatch } from "../game/bot";
+import { chooseBotAction, chooseBotInterrupt, fallbackAction, personaForMatch } from "../game/bot";
+import type { GameState } from "../game/types";
 import { isGameOver } from "../game";
 import { applyResultAndBroadcast } from "../services/matchStart";
 
@@ -26,7 +27,15 @@ const BIG_MOVE_TYPES = new Set([
 /** Hard cap per kick — a full bot turn is typically < 20 actions. */
 const MAX_ACTIONS_PER_KICK = 300;
 
+/**
+ * At most this many interrupt plays per game turn, so the bot reacts like a
+ * player rather than machine-gunning its hand during the human's turn.
+ */
+const MAX_INTERRUPTS_PER_TURN = 2;
+
 const runningMatches = new Set<string>();
+/** Per-match interrupt budget, keyed by the game turn it was spent in. */
+const interruptBudget = new Map<string, { turn: number; used: number }>();
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,7 +84,12 @@ async function runOneBotAction(matchId: string, botIds: Set<string>): Promise<st
   if (isGameOver(state)) return null;
 
   const holderId = getTurnHolderId(state);
-  if (!holderId || !botIds.has(holderId)) return null;
+  if (!holderId || !botIds.has(holderId)) {
+    // Someone else holds priority — the bot may still react with an
+    // interrupt (heal, buff, club…), exactly like a human playing during
+    // an opponent's turn.
+    return tryBotInterrupt(matchId, state, botIds);
+  }
 
   const persona = personaForMatch(matchId);
   const action = chooseBotAction(state, holderId, { persona });
@@ -102,5 +116,41 @@ async function runOneBotAction(matchId: string, botIds: Set<string>): Promise<st
   }
 
   await applyResultAndBroadcast(matchId, holderId, action, result.value);
+  return action.type;
+}
+
+/**
+ * Plays at most one interrupt for the bot while another player holds
+ * priority, budgeted per game turn. Returns the action type when one was
+ * played (so the loop paces and re-checks — the bot may chain up to the
+ * budget), or null to stop the loop.
+ */
+async function tryBotInterrupt(
+  matchId: string,
+  state: GameState,
+  botIds: Set<string>,
+): Promise<string | null> {
+  const botId = [...botIds].find((id) => state.players[id] && !state.players[id]!.isEliminated);
+  if (!botId) return null;
+
+  const budget = interruptBudget.get(matchId);
+  const used = budget && budget.turn === state.turnNumber ? budget.used : 0;
+  if (used >= MAX_INTERRUPTS_PER_TURN) return null;
+
+  const action = chooseBotInterrupt(state, botId, { persona: personaForMatch(matchId) });
+  if (!action) return null;
+
+  const result = dispatchAction(state, botId, action);
+  if (!result.ok) {
+    // Interrupts have no legal-fallback obligation — doing nothing is fine.
+    logger.warn(
+      { matchId, botId, action, phase: state.phase, error: result.error },
+      "Bot interrupt rejected by engine — skipping",
+    );
+    return null;
+  }
+
+  interruptBudget.set(matchId, { turn: state.turnNumber, used: used + 1 });
+  await applyResultAndBroadcast(matchId, botId, action, result.value);
   return action.type;
 }

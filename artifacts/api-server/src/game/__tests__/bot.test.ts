@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { chooseBotAction, fallbackAction, createRng, personaForMatch } from "../bot";
+import { chooseBotAction, chooseBotInterrupt, fallbackAction, createRng, personaForMatch } from "../bot";
 import { dispatchAction, getTurnHolderId } from "../dispatcher";
 import { createInitialGameState, dealInitialHands, determineFirstPlayer } from "../setup";
 import { isGameOver } from "../turn";
@@ -337,6 +337,79 @@ describe("turn progress", () => {
       steps++;
     }
     expect(steps).toBeLessThan(LIMIT);
+  });
+});
+
+describe("chooseBotInterrupt", () => {
+  it("plays a beneficial interrupt during the opponent's main phase", () => {
+    // Human (P1) is active; bot has a big spade + a royal to buff and vault
+    // to pay for it — a clear gain over doing nothing.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D", "9D"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [BOT]: makePlayer(BOT, {
+          hand: ["9S", "8H"],
+          court: [mkRoyal("QS")],
+          life: 12,
+        }),
+      },
+    });
+    let sawInterrupt = false;
+    for (const seed of [1, 2, 3, 42, 1337]) {
+      const action = chooseBotInterrupt(state, BOT, { rng: createRng(seed) });
+      if (action) {
+        sawInterrupt = true;
+        const result = dispatchAction(state, BOT, action);
+        expect(
+          result.ok,
+          `seed ${seed}: interrupt ${JSON.stringify(action)} rejected: ${result.ok ? "" : result.error}`,
+        ).toBe(true);
+      }
+    }
+    expect(sawInterrupt).toBe(true);
+  });
+
+  it("stays quiet with an empty hand", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { hand: [] }),
+      },
+    });
+    expect(chooseBotInterrupt(state, BOT, { rng: createRng(1) })).toBeNull();
+  });
+
+  it("never interrupts outside interruptible phases", () => {
+    const state = makeState({
+      phase: "discard",
+      activePlayerId: P1,
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["2H", "3S", "4C", "5D", "6H", "7S", "8C", "9D"] }),
+        [BOT]: makePlayer(BOT, { hand: ["9S"], court: [mkRoyal("QS")] }),
+      },
+    });
+    expect(chooseBotInterrupt(state, BOT, { rng: createRng(1) })).toBeNull();
+  });
+
+  it("stays quiet when no play clears the gain threshold", () => {
+    // Only a low heart with no royal to attach to and full life — nothing
+    // worth doing.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { hand: ["2H"], court: [], life: 20 }),
+      },
+    });
+    expect(chooseBotInterrupt(state, BOT, { rng: createRng(1) })).toBeNull();
   });
 });
 

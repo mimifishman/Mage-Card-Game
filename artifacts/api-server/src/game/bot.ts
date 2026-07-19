@@ -1,6 +1,6 @@
 import { effectiveAttack, effectiveHealth, getCard } from "./cards";
 import type { GameAction } from "./actions";
-import type { CardId, GameState, PlayerState } from "./types";
+import type { CardId, GameState, PlayerState, TurnPhase } from "./types";
 import { availableVault } from "./vault";
 import { dispatchAction } from "./dispatcher";
 import { isGameOver, getWinner } from "./turn";
@@ -426,6 +426,9 @@ function duelCandidates(state: GameState, botId: string): GameAction[] {
     if (card.suit === "D" && !diamondUsed) {
       candidates.push({ type: "discard_diamond_to_draw", cardId });
     }
+    if (card.suit === "H" && me.life < 20) {
+      candidates.push({ type: "discard_heart_to_heal", heartCardId: cardId });
+    }
     if (card.suit === "H" || card.suit === "S") {
       // Buff own Royals that are fighting in the current duel.
       const pairRoyalIds = new Set<CardId>();
@@ -456,11 +459,26 @@ function respondToClubCandidates(state: GameState, botId: string): GameAction[] 
   if (!me || !pending) return candidates;
 
   const vault = availableVault(state.mine, me);
+
+  // The response window grants one free Diamond action — card advantage the
+  // bot should rarely pass up. Scoring decides.
+  if (!pending.defenderDiamondUsed) {
+    for (const cardId of me.hand) {
+      const card = getCard(cardId);
+      if (card.suit === "D" && !card.isRoyal) {
+        candidates.push({ type: "discard_diamond_to_draw", cardId });
+        break;
+      }
+    }
+  }
+
   const clubPip = getCard(pending.clubCardId).pipValue;
   const targetRoyal = me.court.find((r) => r.cardId === pending.targetRoyalId);
   if (!targetRoyal) return candidates;
 
-  // Only bother reacting if the Club would actually destroy the Royal.
+  // Attach buffs only when the Club would actually destroy the Royal —
+  // one-ply scoring can't see the pending debuff, so this gate stands in for
+  // "is spending a buff here worth it".
   if (effectiveHealth(targetRoyal) > clubPip) return candidates;
 
   for (const cardId of me.hand) {
@@ -508,6 +526,54 @@ export function enumerateCandidateActions(state: GameState, botId: string): Game
 /** Cap softmax sampling to the strongest few options so the tail of weak-but-legal moves stays rare. */
 const TOP_K = 6;
 
+/**
+ * Softmax-samples one of the scored candidates. A winning move is never left
+ * to chance. Assumes `scored` is non-empty.
+ */
+function sampleByScore(
+  scored: Array<{ action: GameAction; score: number }>,
+  temperature: number,
+  rng: () => number,
+): GameAction {
+  const sorted = [...scored].sort((a, b) => b.score - a.score);
+  const top = sorted.slice(0, TOP_K);
+
+  if (top[0]!.score >= WIN_SCORE) return top[0]!.action;
+
+  const t = Math.max(temperature, 0.01);
+  const maxScore = top[0]!.score;
+  const weights = top.map((c) => Math.exp((c.score - maxScore) / t));
+  const total = weights.reduce((s, w) => s + w, 0);
+
+  let roll = rng() * total;
+  for (let i = 0; i < top.length; i++) {
+    roll -= weights[i]!;
+    if (roll <= 0) return top[i]!.action;
+  }
+  return top[top.length - 1]!.action;
+}
+
+/**
+ * Settles transient response windows before evaluating, so a play's score
+ * reflects its actual outcome. A Club aimed at a Royal parks the game in
+ * respond_to_club with the debuff still pending — scored as-is it looks like
+ * pure cost (card + vault spent, board unchanged) and the bot would never
+ * club a Royal. Peek ahead by letting the target confirm (the engine is the
+ * simulator; a real target may respond better, so this is the pessimistic
+ * floor for the defender / optimistic view for the caster).
+ */
+function resolveForScoring(state: GameState): GameState {
+  let current = state;
+  for (let i = 0; i < 2; i++) {
+    if (current.phase !== "respond_to_club" || !current.pendingClubDebuff) break;
+    const targetId = current.pendingClubDebuff.targetPlayerId;
+    const res = dispatchAction(current, targetId, { type: "confirm_club_response" });
+    if (!res.ok) break;
+    current = res.value;
+  }
+  return current;
+}
+
 export function chooseBotAction(
   state: GameState,
   botId: string,
@@ -523,26 +589,145 @@ export function chooseBotAction(
   for (const action of candidates) {
     const result = dispatchAction(state, botId, action);
     if (!result.ok) continue;
-    scored.push({ action, score: evaluateState(result.value, botId, persona) });
+    scored.push({ action, score: evaluateState(resolveForScoring(result.value), botId, persona) });
   }
 
   if (scored.length === 0) return fallback;
 
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, TOP_K);
+  return sampleByScore(scored, persona.temperature, rng);
+}
 
-  // A winning move is never left to chance.
-  if (top[0]!.score >= WIN_SCORE) return top[0]!.action;
+// ---------------------------------------------------------------------------
+// Interrupts — playing cards while someone ELSE holds priority.
+//
+// The engine allows any non-turn-holder to play an eligible card at any time
+// (dispatchAction routes it through the immediate-interrupt path), and a
+// non-active player's Vault resets at their own turn start, so Vault left
+// unspent during an opponent's turn is simply wasted — good players react.
+// The bot mirrors that: after each human action the runner asks whether an
+// interrupt is clearly worth it (score gain over doing nothing must beat a
+// threshold, so the bot doesn't machine-gun its whole hand).
+// ---------------------------------------------------------------------------
 
-  const temperature = Math.max(persona.temperature, 0.01);
-  const maxScore = top[0]!.score;
-  const weights = top.map((c) => Math.exp((c.score - maxScore) / temperature));
-  const total = weights.reduce((s, w) => s + w, 0);
+/** Phases in which the bot considers interrupting when it lacks priority. */
+const INTERRUPT_PHASES: TurnPhase[] = [
+  "main",
+  "declare_blocks",
+  "duel_attacker_turn",
+  "duel_blocker_turn",
+];
 
-  let roll = rng() * total;
-  for (let i = 0; i < top.length; i++) {
-    roll -= weights[i]!;
-    if (roll <= 0) return top[i]!.action;
+/** Minimum evaluation gain over "do nothing" before an interrupt is played. */
+const INTERRUPT_MIN_GAIN = 2;
+
+/**
+ * Interrupt-eligible candidate plays (no Royals-to-court, no attacks, no
+ * Diamond-to-Mine — the engine forbids those outside the bot's own turn).
+ */
+export function enumerateInterruptCandidates(state: GameState, botId: string): GameAction[] {
+  const me = state.players[botId];
+  if (!me || me.isEliminated) return [];
+  const vault = availableVault(state.mine, me);
+  const opponents = nonEliminatedOpponents(state, botId);
+  const candidates: GameAction[] = [];
+
+  for (const cardId of me.hand) {
+    const card = getCard(cardId);
+    if (card.isRoyal) continue;
+    if (card.vaultCost > vault) continue;
+
+    if (card.suit === "H") {
+      for (const royal of me.court) {
+        candidates.push({ type: "attach_heart", heartCardId: cardId, targetRoyalId: royal.cardId });
+      }
+      if (me.life < 20) {
+        candidates.push({ type: "discard_heart_to_heal", heartCardId: cardId });
+      }
+    }
+
+    if (card.suit === "S") {
+      for (const royal of me.court) {
+        candidates.push({ type: "attach_spade", spadeCardId: cardId, targetRoyalId: royal.cardId });
+      }
+      const reclaim = state.abyss
+        .filter((abyssId) => {
+          const t = getCard(abyssId);
+          const value = t.isJoker ? 10 : t.pipValue;
+          return (t.isRoyal || t.isJoker) && value <= card.pipValue;
+        })
+        .sort((a, b) => {
+          const va = getCard(a).isJoker ? 10 : getCard(a).pipValue;
+          const vb = getCard(b).isJoker ? 10 : getCard(b).pipValue;
+          return vb - va;
+        })[0];
+      if (reclaim) {
+        candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: reclaim });
+      }
+    }
+
+    if (card.suit === "C") {
+      for (const opp of opponents) {
+        for (const royal of opp.court) {
+          candidates.push({
+            type: "apply_club",
+            clubCardId: cardId,
+            targetPlayerId: opp.id,
+            targetRoyalId: royal.cardId,
+          });
+        }
+        candidates.push({ type: "apply_club", clubCardId: cardId, targetPlayerId: opp.id });
+      }
+    }
+
+    if (card.isJoker) {
+      for (const opp of opponents) {
+        for (const royal of opp.court) {
+          candidates.push({
+            type: "play_joker",
+            cardId,
+            mode: "destroy_royal",
+            targetPlayerId: opp.id,
+            targetRoyalId: royal.cardId,
+          });
+        }
+        candidates.push({ type: "play_joker", cardId, mode: "damage_player", targetPlayerId: opp.id });
+      }
+    }
+
+    if (card.suit === "D") {
+      candidates.push({ type: "discard_diamond_to_draw", cardId });
+    }
   }
-  return top[top.length - 1]!.action;
+
+  return candidates;
+}
+
+/**
+ * Decides whether the bot should interrupt right now. Returns the chosen
+ * action, or null when nothing beats staying quiet by at least
+ * INTERRUPT_MIN_GAIN. Unlike chooseBotAction there is no fallback — doing
+ * nothing is always a legal "move" here.
+ */
+export function chooseBotInterrupt(
+  state: GameState,
+  botId: string,
+  options: { persona?: BotPersona; rng?: () => number } = {},
+): GameAction | null {
+  if (!INTERRUPT_PHASES.includes(state.phase)) return null;
+  if (isGameOver(state)) return null;
+
+  const persona = options.persona ?? personaForMatch(state.matchId);
+  const rng = options.rng ?? Math.random;
+  const baseline = evaluateState(state, botId, persona);
+
+  const scored: Array<{ action: GameAction; score: number }> = [];
+  for (const action of enumerateInterruptCandidates(state, botId)) {
+    const result = dispatchAction(state, botId, action);
+    if (!result.ok) continue;
+    const score = evaluateState(resolveForScoring(result.value), botId, persona);
+    if (score >= baseline + INTERRUPT_MIN_GAIN) scored.push({ action, score });
+  }
+
+  if (scored.length === 0) return null;
+  return sampleByScore(scored, persona.temperature, rng);
 }
