@@ -222,7 +222,7 @@ function actionCardId(action: GameAction): string | undefined {
  * turn/response it is to act in the current phase. Reuses the same
  * phase-to-actor mapping already encoded in `canPlayCard`.
  */
-function getTurnHolderId(state: GameState): string | undefined {
+export function getTurnHolderId(state: GameState): string | undefined {
   switch (state.phase) {
     case "declare_blocks":
       return state.attacks[0]?.targetPlayerId;

@@ -2,25 +2,30 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { requireAuth } from "../middlewares/authMiddleware";
 import {
   createMatch,
+  createVsAiMatch,
   joinMatchByCode,
   getMatchWithPlayers,
   isMatchHost,
   isMatchPlayer,
-  getMatchPlayerOrder,
-  startMatch,
   loadEngineState,
-  saveEngineState,
   finishMatch,
   createRematch,
-  logAction,
   getOpenMatchesForUser,
 } from "../repositories/matchRepository";
-import { createInitialGameState, determineFirstPlayer, dealInitialHands } from "../game";
+import { ensureBotUser, isBotProviderId } from "../repositories/botRepository";
 import { dispatchAction } from "../game/dispatcher";
 import { GameActionSchema } from "../game/actions";
-import { buildPlayerView, broadcastViews } from "../game/serializer";
+import { buildPlayerView } from "../game/serializer";
 import { sendToUser, broadcastToMatch } from "../ws/manager";
-import { isGameOver, getWinner } from "../game";
+import { initializeAndStartMatch, applyResultAndBroadcast } from "../services/matchStart";
+import { kickBotRunner } from "../bot/runner";
+import { withMatchLock } from "../lib/matchLock";
+
+type MatchPlayersData = NonNullable<Awaited<ReturnType<typeof getMatchWithPlayers>>>;
+
+function botUserIds(data: MatchPlayersData): string[] {
+  return data.players.filter((p) => isBotProviderId(p.providerUserId)).map((p) => p.userId);
+}
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -38,9 +43,29 @@ router.get("/mine", async (req: Request, res: Response) => {
 
 router.post("/", async (req: Request, res: Response) => {
   const userId = req.user!.internalUserId;
+  const vsAi = (req.body as { vsAi?: unknown } | undefined)?.vsAi === true;
+
   try {
-    const match = await createMatch(userId);
-    res.status(201).json({ match: { id: match.id, inviteCode: match.inviteCode, status: match.status } });
+    if (!vsAi) {
+      const match = await createMatch(userId);
+      res.status(201).json({ match: { id: match.id, inviteCode: match.inviteCode, status: match.status } });
+      return;
+    }
+
+    const botUserId = await ensureBotUser();
+    const match = await createVsAiMatch(userId, botUserId);
+    const started = await initializeAndStartMatch(match.id);
+    if (!started.ok) {
+      req.log.error({ matchId: match.id, error: started.error }, "Failed to start vs-AI match");
+      await finishMatch(match.id, null);
+      res.status(500).json({ error: "Failed to start match" });
+      return;
+    }
+
+    // The bot may have won the first-player draw — let it take its turn.
+    kickBotRunner(match.id, [botUserId]);
+
+    res.status(201).json({ match: { id: match.id, inviteCode: match.inviteCode, status: "in_progress" } });
   } catch (err) {
     req.log.error({ err }, "Failed to create match");
     res.status(500).json({ error: "Failed to create match" });
@@ -115,6 +140,7 @@ router.get("/:id", async (req: Request, res: Response) => {
         life: p.life,
         isEliminated: p.isEliminated,
         joinedAt: p.joinedAt,
+        isBot: isBotProviderId(p.providerUserId),
       })),
     });
   } catch (err) {
@@ -147,35 +173,11 @@ router.post("/:id/start", async (req: Request, res: Response) => {
       return;
     }
 
-    const playerIds = await getMatchPlayerOrder(id);
-    const displayNames: Record<string, string> = {};
-    for (const p of data.players) {
-      displayNames[p.userId] = p.displayName;
-    }
-    const stateResult = createInitialGameState(id, playerIds, displayNames);
-    if (!stateResult.ok) {
-      res.status(400).json({ error: stateResult.error });
+    const started = await initializeAndStartMatch(id);
+    if (!started.ok) {
+      res.status(400).json({ error: started.error });
       return;
     }
-
-    const withFirst = determineFirstPlayer(stateResult.value);
-    if (!withFirst.ok) {
-      res.status(500).json({ error: withFirst.error });
-      return;
-    }
-
-    const withHands = dealInitialHands(withFirst.value);
-    if (!withHands.ok) {
-      res.status(500).json({ error: withHands.error });
-      return;
-    }
-
-    const engineState = withHands.value;
-    await startMatch(id, engineState);
-
-    broadcastViews(engineState, playerIds, (uid, view) => {
-      sendToUser(id, uid, { type: "game_started", state: view });
-    });
 
     res.json({ matchId: id, status: "in_progress" });
   } catch (err) {
@@ -197,80 +199,62 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
   const action = parsed.data;
 
   try {
-    const [member, matchData, engineState] = await Promise.all([
-      isMatchPlayer(id, userId),
-      getMatchWithPlayers(id),
-      loadEngineState(id),
-    ]);
-
-    if (!member) {
-      res.status(403).json({ error: "Not a member of this match" });
-      return;
-    }
-    if (!matchData) {
-      res.status(404).json({ error: "Match not found" });
-      return;
-    }
-    if (matchData.match.status !== "in_progress") {
-      res.status(400).json({ error: `Match is not in progress (status: ${matchData.match.status})` });
-      return;
-    }
-    if (!engineState) {
-      res.status(400).json({ error: "Match state is missing" });
-      return;
-    }
-
-    const result = dispatchAction(engineState, userId, action);
-    if (!result.ok) {
-      req.log.warn(
-        {
-          matchId: id,
-          userId,
-          actionType: action.type,
-          action,
-          phase: engineState.phase,
-          activePlayerId: engineState.activePlayerId,
-          rejectionReason: result.error,
-        },
-        "Game action rejected by engine",
-      );
-      res.status(422).json({ error: result.error });
-      return;
-    }
-
-    const newState = result.value;
-
-    const playerIds = Object.keys(newState.players);
-    const myView = buildPlayerView(newState, userId);
-
-    if (isGameOver(newState)) {
-      const winner = getWinner(newState);
-      await Promise.all([
-        saveEngineState(id, newState).then(() => winner ? finishMatch(id, winner) : Promise.resolve()),
-        logAction(id, userId, action, newState.turnNumber),
+    // Serialized with the bot runner so both always act on fresh state.
+    await withMatchLock(id, async () => {
+      const [member, matchData, engineState] = await Promise.all([
+        isMatchPlayer(id, userId),
+        getMatchWithPlayers(id),
+        loadEngineState(id),
       ]);
 
-      broadcastViews(newState, playerIds, (uid, view) => {
-        sendToUser(id, uid, {
-          type: "game_over",
-          state: view,
-          winnerUserId: winner ?? null,
-        });
-      });
+      if (!member) {
+        res.status(403).json({ error: "Not a member of this match" });
+        return;
+      }
+      if (!matchData) {
+        res.status(404).json({ error: "Match not found" });
+        return;
+      }
+      if (matchData.match.status !== "in_progress") {
+        res.status(400).json({ error: `Match is not in progress (status: ${matchData.match.status})` });
+        return;
+      }
+      if (!engineState) {
+        res.status(400).json({ error: "Match state is missing" });
+        return;
+      }
 
-      res.json({ ok: true, phase: newState.phase, state: myView, winnerUserId: winner ?? null });
-    } else {
-      await Promise.all([
-        saveEngineState(id, newState),
-        logAction(id, userId, action, newState.turnNumber),
-      ]);
+      const result = dispatchAction(engineState, userId, action);
+      if (!result.ok) {
+        req.log.warn(
+          {
+            matchId: id,
+            userId,
+            actionType: action.type,
+            action,
+            phase: engineState.phase,
+            activePlayerId: engineState.activePlayerId,
+            rejectionReason: result.error,
+          },
+          "Game action rejected by engine",
+        );
+        res.status(422).json({ error: result.error });
+        return;
+      }
 
-      broadcastViews(newState, playerIds, (uid, view) => {
-        sendToUser(id, uid, { type: "state_update", state: view });
-      });
+      const newState = result.value;
+      const myView = buildPlayerView(newState, userId);
+      const winner = await applyResultAndBroadcast(id, userId, action, newState);
 
-      res.json({ ok: true, phase: newState.phase, state: myView });
-    }
+      if (winner !== undefined) {
+        res.json({ ok: true, phase: newState.phase, state: myView, winnerUserId: winner });
+      } else {
+        res.json({ ok: true, phase: newState.phase, state: myView });
+      }
+
+      // If the action handed priority to the AI opponent, let it respond.
+      kickBotRunner(id, botUserIds(matchData));
+    });
   } catch (err) {
     req.log.error({ err }, "Failed to process action");
     res.status(500).json({ error: "Failed to process action" });
@@ -361,6 +345,18 @@ router.post("/:id/rematch", async (req: Request, res: Response) => {
     }
 
     const newMatchId = await createRematch(id);
+
+    // Vs-AI rematches skip the waiting room: start immediately and wake the bot.
+    const botIds = botUserIds(data);
+    if (botIds.length > 0) {
+      const started = await initializeAndStartMatch(newMatchId);
+      if (!started.ok) {
+        req.log.error({ matchId: newMatchId, error: started.error }, "Failed to start vs-AI rematch");
+        res.status(500).json({ error: "Failed to start rematch" });
+        return;
+      }
+      kickBotRunner(newMatchId, botIds);
+    }
 
     broadcastToMatch(id, { type: "rematch", matchId: newMatchId });
 

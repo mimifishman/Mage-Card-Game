@@ -56,3 +56,8 @@ export {
 } from "./combat";
 
 export { endTurn, endTurnCleanupAndAdvance, eliminatePlayerIfNeeded, advanceTurn, isGameOver, getWinner } from "./turn";
+
+export { dispatchAction, getTurnHolderId } from "./dispatcher";
+
+export { chooseBotAction, enumerateCandidateActions, fallbackAction, personaForMatch, createRng } from "./bot";
+export type { BotPersona } from "./bot";

@@ -5,7 +5,8 @@ import { verifyToken } from "@clerk/backend";
 import type { AuthSession } from "../auth";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { loadEngineState, isMatchPlayer, getActiveMatchForUser } from "../repositories/matchRepository";
+import { loadEngineState, isMatchPlayer, getActiveMatchForUser, getMatchWithPlayers } from "../repositories/matchRepository";
+import { isBotProviderId } from "../repositories/botRepository";
 import { buildPlayerView } from "../game/serializer";
 import { logger } from "../lib/logger";
 
@@ -153,7 +154,29 @@ async function authorizedJoinAndReconnect(ws: WebSocket, client: WsClient, match
   }
   joinRoom(ws, client, matchId);
   await pushCurrentState(ws, client.userId, matchId);
+  void wakeBotIfStuck(matchId);
   return true;
+}
+
+/**
+ * Recovery: if the server restarted while the AI opponent held priority, no
+ * human action can re-trigger the bot runner (it isn't the human's turn), so
+ * a reconnect is the natural place to wake it. No-ops for bot-free matches
+ * and when it isn't the bot's turn.
+ */
+async function wakeBotIfStuck(matchId: string): Promise<void> {
+  try {
+    const data = await getMatchWithPlayers(matchId);
+    if (!data || data.match.status !== "in_progress") return;
+    const botIds = data.players
+      .filter((p) => isBotProviderId(p.providerUserId))
+      .map((p) => p.userId);
+    if (botIds.length === 0) return;
+    const { kickBotRunner } = await import("../bot/runner");
+    kickBotRunner(matchId, botIds);
+  } catch (err) {
+    logger.warn({ err, matchId }, "Failed to wake bot runner on reconnect");
+  }
 }
 
 async function bootstrapActiveMatch(ws: WebSocket, client: WsClient): Promise<void> {

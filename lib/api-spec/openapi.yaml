@@ -180,6 +180,12 @@ paths:
       parameters:
         - $ref: "#/components/parameters/AuthorizationSessionHeader"
         - $ref: "#/components/parameters/SessionCookie"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMatchRequest"
       responses:
         "201":
           description: Match created.
@@ -620,6 +626,16 @@ components:
         status:
           type: string
           enum: [waiting, in_progress, finished]
+    CreateMatchRequest:
+      type: object
+      properties:
+        vsAi:
+          type: boolean
+          default: false
+          description: >-
+            When true, creates a solo match against the AI opponent: the bot is
+            seated automatically and the match starts immediately (status will
+            be in_progress in the response).
     CreateMatchResponse:
       type: object
       required: [match]
@@ -650,6 +666,9 @@ components:
         joinedAt:
           type: string
           format: date-time
+        isBot:
+          type: boolean
+          description: True when this seat is occupied by the AI opponent.
     MatchDetails:
       type: object
       required: [id, status, inviteCode, createdBy, turnNumber]
