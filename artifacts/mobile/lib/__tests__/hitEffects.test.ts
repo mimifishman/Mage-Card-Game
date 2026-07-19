@@ -199,7 +199,65 @@ describe("diffHitEffects", () => {
     expect(diff(before, after)).toEqual([]);
   });
 
-  it("fires the club effect when a pending club resolves by cancelling (no attachment persists)", () => {
+  it("fires the club strike the moment the response window OPENS", () => {
+    const before = view({
+      phase: "main",
+      players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: [] }]) },
+    });
+    const after = view({
+      phase: "respond_to_club",
+      players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: [] }]) },
+      pendingClubDebuff: {
+        attackerPlayerId: "a",
+        clubCardId: "4C",
+        targetPlayerId: "b",
+        targetRoyalId: "KD",
+      },
+    });
+    const events = diff(before, after);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      suit: "C",
+      kind: "debuff",
+      playerId: "b",
+      royalId: "KD",
+      sourcePlayerId: "a",
+      sourceCardId: "4C",
+    });
+    // The window persisting across snapshots must not re-fire it.
+    expect(diff(after, after)).toEqual([]);
+  });
+
+  it("fires again when a NEW club opens a fresh response window", () => {
+    const pendingA = view({
+      phase: "respond_to_club",
+      players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: [] }]) },
+      pendingClubDebuff: {
+        attackerPlayerId: "a",
+        clubCardId: "4C",
+        targetPlayerId: "b",
+        targetRoyalId: "KD",
+      },
+    });
+    const pendingB = view({
+      phase: "respond_to_club",
+      players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: ["4C"] }]) },
+      pendingClubDebuff: {
+        attackerPlayerId: "a",
+        clubCardId: "6C",
+        targetPlayerId: "b",
+        targetRoyalId: "KD",
+      },
+    });
+    const events = diff(pendingA, pendingB);
+    const clubStrikes = events.filter((e) => e.suit === "C" && e.kind === "debuff");
+    // Exactly one NEW strike for 6C; 4C attaching is suppressed (its strike
+    // already played when its own window opened).
+    expect(clubStrikes).toHaveLength(1);
+    expect(clubStrikes[0]).toMatchObject({ sourceCardId: "6C", royalId: "KD" });
+  });
+
+  it("emits nothing at resolution when a pending club cancels against a spade", () => {
     const pending = {
       attackerPlayerId: "a",
       clubCardId: "4C",
@@ -212,20 +270,12 @@ describe("diffHitEffects", () => {
       pendingClubDebuff: pending,
     });
     // Club and spade cancelled each other — royal survives, nothing attached.
+    // The strike already played at window-open, so resolution is silent.
     const after = view({
       phase: "main",
       players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: [] }]) },
     });
-    const events = diff(before, after);
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      suit: "C",
-      kind: "debuff",
-      playerId: "b",
-      royalId: "KD",
-      sourcePlayerId: "a",
-      sourceCardId: "4C",
-    });
+    expect(diff(before, after)).toEqual([]);
   });
 
   it("fires a seat-level club destroy when a pending club kills the royal", () => {
@@ -256,7 +306,7 @@ describe("diffHitEffects", () => {
     expect(events[0]!.royalId).toBeUndefined();
   });
 
-  it("does not double-fire when the pending club sticks as an attachment", () => {
+  it("emits nothing at resolution when the pending club sticks as an attachment", () => {
     const pending = {
       attackerPlayerId: "a",
       clubCardId: "4C",
@@ -272,10 +322,8 @@ describe("diffHitEffects", () => {
       phase: "main",
       players: { a: player(20), b: player(20, [{ cardId: "KD", attachedCards: ["4C"] }]) },
     });
-    const events = diff(before, after);
-    // Exactly one debuff — from the attachment diff (rule 4), not rule 4b too.
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ suit: "C", kind: "debuff", royalId: "KD" });
+    // The strike played at window-open; the attachment landing is silent.
+    expect(diff(before, after)).toEqual([]);
   });
 
   it("fires a direct burn when lastDirectHit.seq changes, attributed to the source suit", () => {

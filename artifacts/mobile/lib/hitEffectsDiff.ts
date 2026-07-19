@@ -215,6 +215,23 @@ export function diffHitEffects(
     }
   }
 
+  // 3b. Club threat lands — the moment a club is PLAYED on a royal the
+  //     respond_to_club window opens; that is when the strike should show
+  //     and sound (not seconds later when the defender accepts). Keyed on
+  //     the club card id so a window persisting across snapshots doesn't
+  //     re-fire, while a fresh club does.
+  const nowPending = view.pendingClubDebuff;
+  if (nowPending && nowPending.clubCardId !== prev.pendingClub?.clubCardId) {
+    raw.push({
+      suit: "C",
+      kind: "debuff",
+      playerId: nowPending.targetPlayerId,
+      royalId: nowPending.targetRoyalId,
+      sourcePlayerId: nowPending.attackerPlayerId,
+      sourceCardId: nowPending.clubCardId,
+    });
+  }
+
   // 3+4. Per-player diffs: heals (always Hearts by rule) and new attachments
   //      (Clubs debuff, everything else buffs).
   for (const [pid, p] of Object.entries(view.players)) {
@@ -231,6 +248,14 @@ export function diffHitEffects(
       if (!beforeAttached) continue; // royal just entered play — not a hit
       for (const cid of royal.attachedCards) {
         if (beforeAttached.includes(cid)) continue;
+        // A club arriving from a response window already played its strike
+        // at window-open (rule 3b) — don't repeat it as it attaches.
+        if (
+          cid === prev.pendingClub?.clubCardId &&
+          royal.cardId === prev.pendingClub.targetRoyalId
+        ) {
+          continue;
+        }
         const suit = toEffectSuit(parseCardId(cid).suit);
         raw.push({
           suit,
@@ -243,24 +268,20 @@ export function diffHitEffects(
     }
   }
 
-  // 4b. Club resolution via the respond_to_club window closing. Rule 4 only
-  //     sees clubs that PERSIST in attachedCards — but a club that cancels
-  //     against a spade is removed server-side within the same action, and a
-  //     club that kills its royal takes the whole court entry with it. In
-  //     both cases the club still visibly landed, so when the pending window
-  //     clears and rule 4 has nothing to show, fire the effect from here:
-  //     on the royal if it survived, on the seat (as a destroy) if it died.
+  // 4b. Club resolution via the respond_to_club window closing. The strike
+  //     itself already showed at window-open (rule 3b); resolution only adds
+  //     drama when the royal DIED — the whole court entry vanishes, so
+  //     anchor a club-flavored destroy to the seat. Sticking or cancelling
+  //     resolutions emit nothing here.
   const pc = prev.pendingClub;
   if (pc && !view.pendingClubDebuff) {
     const targetPlayer = view.players[pc.targetPlayerId];
     const royal = targetPlayer?.court.find((r) => r.cardId === pc.targetRoyalId);
-    const clubStuck = !!royal?.attachedCards.includes(pc.clubCardId);
-    if (!clubStuck) {
+    if (targetPlayer && !royal) {
       raw.push({
         suit: "C",
-        kind: royal ? "debuff" : "destroy",
+        kind: "destroy",
         playerId: pc.targetPlayerId,
-        royalId: royal ? pc.targetRoyalId : undefined,
         sourcePlayerId: pc.attackerPlayerId,
         sourceCardId: pc.clubCardId,
       });
