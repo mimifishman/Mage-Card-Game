@@ -28,10 +28,13 @@ import { Easings, useReduceMotion } from "@/lib/motion";
 import { playGameSfx } from "@/lib/sfx";
 import SanctumBackground from "@/components/game/SanctumBackground";
 
+type PlayerSnapshot = { userId: string; displayName: string; seatIndex: number };
+
 export default function GameOverScreen() {
-  const { matchId, winnerUserId } = useLocalSearchParams<{
+  const { matchId, winnerUserId, players: playersParam } = useLocalSearchParams<{
     matchId: string;
     winnerUserId: string;
+    players: string;
   }>();
   const { user } = useAuth();
   const { getToken } = useClerkAuth();
@@ -43,6 +46,19 @@ export default function GameOverScreen() {
   const hasNavigatedRef = useRef(false);
   const baselineWaitingRef = useRef<Set<string> | null>(null);
   const [rematchRequested, setRematchRequested] = useState(false);
+
+  // Parse the players snapshot baked into the route params — available immediately,
+  // no API round-trip needed.
+  const paramPlayers: PlayerSnapshot[] = React.useMemo(() => {
+    if (!playersParam) return [];
+    try {
+      const parsed = JSON.parse(playersParam);
+      if (Array.isArray(parsed)) return parsed as PlayerSnapshot[];
+    } catch {
+      // malformed param — fall through to empty
+    }
+    return [];
+  }, [playersParam]);
 
   const goToWaitingRoom = (newMatchId: string, code?: string) => {
     if (hasNavigatedRef.current) return;
@@ -149,11 +165,22 @@ export default function GameOverScreen() {
     };
   }, [matchId]);
 
-  const displayNames: Record<string, string> = {};
-  if (matchData?.players) {
-    for (const p of matchData.players) {
-      displayNames[p.userId] = p.displayName;
+  // Prefer matchData players (richer / authoritative) once loaded; fall back to
+  // the param snapshot that arrived instantly with the navigation.
+  const mergedPlayers: PlayerSnapshot[] = React.useMemo(() => {
+    if (matchData?.players?.length) {
+      return matchData.players.map((p, i) => ({
+        userId: p.userId,
+        displayName: p.displayName,
+        seatIndex: i,
+      }));
     }
+    return paramPlayers;
+  }, [matchData?.players, paramPlayers]);
+
+  const displayNames: Record<string, string> = {};
+  for (const p of mergedPlayers) {
+    displayNames[p.userId] = p.displayName;
   }
 
   const didWin = winnerUserId === user?.id;
@@ -211,11 +238,11 @@ export default function GameOverScreen() {
             </View>
           )}
 
-          {(matchData?.players?.length ?? 0) > 0 && (
-            <View style={styles.playersList}>
-              {matchData!.players!.map((p, idx) => {
+          <View style={styles.playersList}>
+            {mergedPlayers.length > 0 ? (
+              mergedPlayers.map((p) => {
                 const isWinner = p.userId === winnerUserId;
-                const color = seatColorFor(idx);
+                const color = seatColorFor(p.seatIndex);
                 return (
                   <View key={p.userId} style={[styles.playerRow, isWinner && styles.playerRowWinner]}>
                     <View style={[styles.playerDot, { backgroundColor: color }]} />
@@ -226,9 +253,16 @@ export default function GameOverScreen() {
                     {isWinner && <Ionicons name="trophy" size={14} color={Colors.brand} />}
                   </View>
                 );
-              })}
-            </View>
-          )}
+              })
+            ) : (
+              [0, 1].map((i) => (
+                <View key={i} style={[styles.playerRow, styles.playerRowSkeleton]}>
+                  <View style={[styles.playerDot, styles.playerDotSkeleton]} />
+                  <View style={styles.playerNameSkeleton} />
+                </View>
+              ))
+            )}
+          </View>
 
           <Text style={styles.matchIdText}>Match: {matchData?.match?.inviteCode ?? matchId}</Text>
         </Animated.View>
@@ -464,6 +498,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
+  },
+  playerRowSkeleton: {
+    opacity: 0.5,
+  },
+  playerDotSkeleton: {
+    backgroundColor: Colors.border,
+  },
+  playerNameSkeleton: {
+    flex: 1,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.border,
   },
   matchIdText: {
     fontSize: 11,

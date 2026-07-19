@@ -255,13 +255,32 @@ export default function MatchScreen() {
     }
   }, [matchData]);
 
+  // Always-current players snapshot stored in a ref so that closures with stale
+  // deps (e.g. the WebSocket onmessage handler) can still read the latest value.
+  const playersParamRef = useRef("");
+  const _playersParam = (() => {
+    if (matchData?.players?.length) {
+      return JSON.stringify(
+        matchData.players.map((p, i) => ({ userId: p.userId, displayName: p.displayName, seatIndex: i })),
+      );
+    }
+    const order = gameState?.turnOrder ?? [];
+    if (order.length) {
+      return JSON.stringify(
+        order.map((uid, i) => ({ userId: uid, displayName: displayNames[uid] ?? uid.slice(0, 8), seatIndex: i })),
+      );
+    }
+    return "";
+  })();
+  playersParamRef.current = _playersParam;
+
   useEffect(() => {
     if (hasNavigatedRef.current) return;
     if (matchData?.match?.status === "finished" && matchId) {
       hasNavigatedRef.current = true;
       router.replace({
         pathname: "/(game)/game-over",
-        params: { matchId, winnerUserId: matchData.match.winnerUserId ?? "" },
+        params: { matchId, winnerUserId: matchData.match.winnerUserId ?? "", players: playersParamRef.current },
       });
     }
   }, [matchData?.match?.status, matchData?.match?.winnerUserId, matchId]);
@@ -320,7 +339,7 @@ export default function MatchScreen() {
             hasNavigatedRef.current = true;
             router.replace({
               pathname: "/(game)/game-over",
-              params: { matchId, winnerUserId: msg.winnerUserId ?? "" },
+              params: { matchId, winnerUserId: msg.winnerUserId ?? "", players: playersParamRef.current },
             });
           }
         } catch {
@@ -746,7 +765,7 @@ export default function MatchScreen() {
       onSuccess: () => {
         router.replace({
           pathname: "/(game)/game-over",
-          params: { matchId: matchId ?? "" },
+          params: { matchId: matchId ?? "", players: playersParamRef.current },
         });
       },
       onError: () => {
@@ -789,7 +808,7 @@ export default function MatchScreen() {
           hasNavigatedRef.current = true;
           router.replace({
             pathname: "/(game)/game-over",
-            params: { matchId, winnerUserId: data.winnerUserId },
+            params: { matchId, winnerUserId: data.winnerUserId, players: playersParamRef.current },
           });
         }
       },
