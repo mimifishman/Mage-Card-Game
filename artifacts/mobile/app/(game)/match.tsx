@@ -161,6 +161,12 @@ export default function MatchScreen() {
   // to a slow safety-net interval. When it's down we poll fast (as before).
   const wsRef = useRef<WebSocket | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  // Narrates each resolved action into the match log. Kept in a ref (assigned
+  // every render, like playersParamRef) so the long-lived WebSocket onmessage
+  // closure always calls the freshest version.
+  const logActionRef = useRef<
+    ((la: { actorUserId: string; action: GameActionRequest }, view: PlayerGameView) => void) | null
+  >(null);
 
   const [attackSelectMode, setAttackSelectMode] = useState(false);
   const [selectedAttackRoyalIds, setSelectedAttackRoyalIds] = useState<Set<string>>(new Set());
@@ -255,6 +261,13 @@ export default function MatchScreen() {
     }
   }, [matchData]);
 
+  // The AI opponent's seat (vs-AI matches only) — used to phrase waiting
+  // states as "thinking" rather than "waiting", since the bot never idles.
+  const botPlayerId = useMemo(
+    () => matchData?.players?.find((p) => p.isBot)?.userId ?? null,
+    [matchData?.players],
+  );
+
   // Always-current players snapshot stored in a ref so that closures with stale
   // deps (e.g. the WebSocket onmessage handler) can still read the latest value.
   // Using useMemo with explicit deps so React Compiler cannot silently cache this.
@@ -326,7 +339,15 @@ export default function MatchScreen() {
             type: string;
             state?: PlayerGameView;
             winnerUserId?: string | null;
+            lastAction?: { actorUserId: string; action: GameActionRequest };
           };
+          if (
+            (msg.type === "state_update" || msg.type === "game_over") &&
+            msg.lastAction &&
+            msg.state
+          ) {
+            logActionRef.current?.(msg.lastAction, msg.state);
+          }
           if (
             (msg.type === "state_update" ||
               msg.type === "game_started" ||
@@ -400,6 +421,110 @@ export default function MatchScreen() {
     (id: string) => seatColors[id] ?? Colors.textMuted,
     [seatColors],
   );
+
+  // Turns a server-reported action into a match-log line. This narrates the
+  // steps the diff-based log below can't see (Diamonds banked, Royals
+  // summoned, attachments, blocks, discards…) — without it, most of the AI
+  // Mage's turn is invisible. Action types the diff log already covers well
+  // (attacks, Royal-targeted Clubs, turn changes) are skipped to avoid
+  // double entries.
+  const describeLastAction = useCallback(
+    (la: { actorUserId: string; action: GameActionRequest }, view: PlayerGameView) => {
+      const actor = la.actorUserId;
+      const a = la.action as GameActionRequest & { blocks?: Record<string, unknown> };
+      const selfId = user?.id ?? "";
+      const nameOf = (id: string) => (id === selfId ? "You" : (displayNames[id] ?? id.slice(0, 8)));
+      const lbl = (id?: string) => (id ? cardLabel(id) : "a card");
+      // Name a Royal with its totals from the fresh view; a Royal already gone
+      // from the court (destroyed by this very action) falls back to its card.
+      const royalIn = (ownerId: string, royalId?: string) => {
+        if (!royalId) return "a Royal";
+        const r = view.players[ownerId]?.court?.find((x) => x.cardId === royalId);
+        return r ? royalStatLabel(r) : cardLabel(royalId);
+      };
+      const tgt = a.targetPlayerId ?? actor;
+
+      let text: string | null = null;
+      switch (a.type) {
+        case "play_diamond_to_mine":
+          text = `banked ${lbl(a.cardId)} into the Mine`;
+          break;
+        case "discard_diamond_to_draw":
+          text = `discarded ${lbl(a.cardId)} to draw a card`;
+          break;
+        case "discard_diamond_for_boost":
+          text =
+            tgt === actor
+              ? `burned ${lbl(a.cardId)} for a Vault boost`
+              : `burned ${lbl(a.cardId)} to boost ${nameOf(tgt)}'s Vault`;
+          break;
+        case "discard_to_abyss":
+          text = `discarded ${lbl(a.cardId)}`;
+          break;
+        case "play_royal_to_court":
+          text = `summoned ${royalIn(actor, a.cardId)}`;
+          break;
+        case "attach_heart":
+          text = `attached ${lbl(a.heartCardId)} to ${royalIn(tgt, a.targetRoyalId)}`;
+          break;
+        case "attach_spade":
+          text = `attached ${lbl(a.spadeCardId)} to ${royalIn(tgt, a.targetRoyalId)}`;
+          break;
+        case "discard_heart_to_heal":
+          text =
+            tgt === actor
+              ? `used ${lbl(a.heartCardId)} to heal`
+              : `used ${lbl(a.heartCardId)} to heal ${nameOf(tgt)}`;
+          break;
+        case "discard_spade_to_return":
+          text = `used ${lbl(a.spadeCardId)} to reclaim ${lbl(a.targetCardId)} from the Abyss`;
+          break;
+        case "apply_club":
+          // Royal-targeted Clubs are narrated by the pendingClubDebuff diff.
+          if (!a.targetRoyalId && a.clubCardId) {
+            text = `burned ${lbl(a.clubCardId)} — ${parseCardId(a.clubCardId).pipValue} damage to ${nameOf(tgt)}`;
+          }
+          break;
+        case "play_joker":
+          text =
+            a.mode === "destroy_royal" && a.targetRoyalId
+              ? `played a Joker — destroyed ${royalIn(tgt, a.targetRoyalId)}`
+              : `played a Joker — 10 damage to ${nameOf(tgt)}`;
+          break;
+        case "confirm_declare_blocks": {
+          const entries = Object.entries(a.blocks ?? {});
+          const blocked = entries.filter(([, v]) => Array.isArray(v) && v.length > 0);
+          text =
+            blocked.length === 0
+              ? "chose not to block"
+              : blocked
+                  .map(
+                    ([atkId, v]) =>
+                      `blocked ${cardLabel(atkId)} with ${(v as string[]).map(cardLabel).join(" + ")}`,
+                  )
+                  .join("; ");
+          break;
+        }
+        case "duel_pass":
+          text = "passed";
+          break;
+        case "confirm_club_response":
+          text = "let the Club resolve";
+          break;
+        case "discard_to_end_turn":
+          text = `discarded ${lbl(a.cardId)} (hand limit)`;
+          break;
+        default:
+          // declare_attack / end_turn / set_damage_order / interrupt_pass:
+          // covered by the diff log or pure bookkeeping.
+          break;
+      }
+
+      if (text) pushEvent(colorOf(actor), `${nameOf(actor)} ${text}`);
+    },
+    [user, displayNames, colorOf, pushEvent],
+  );
+  logActionRef.current = describeLastAction;
 
   // Snapshot the duel when it starts; when it ends (or hands off to the next
   // defender in the queue), diff courts + life against the snapshot to
@@ -1816,7 +1941,11 @@ export default function MatchScreen() {
           {!isMyTurn && !inDeclareBlocks && !inRespondToClub && !inDuel && !inAssignDamageOrder && !inInterrupt && (
             <View style={styles.waitingInlineCentered}>
               <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.waitingText}>Waiting for {activePlayerName}…</Text>
+              <Text style={styles.waitingText}>
+                {gameState.activePlayerId === botPlayerId
+                  ? `${activePlayerName} is thinking…`
+                  : `Waiting for ${activePlayerName}…`}
+              </Text>
             </View>
           )}
           {!isMyTurn && inDeclareBlocks && attacksTargetingMe.length === 0 && (

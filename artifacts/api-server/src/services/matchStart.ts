@@ -68,6 +68,12 @@ export async function applyResultAndBroadcast(
 ): Promise<string | null | undefined> {
   const playerIds = Object.keys(newState.players);
 
+  // Every card involved in a resolved action is public information by the
+  // time this broadcast happens (it landed in the mine/abyss/court), so the
+  // raw action is safe to share — it lets clients narrate each step in the
+  // match log instead of guessing from state diffs.
+  const lastAction = { actorUserId, action };
+
   if (isGameOver(newState)) {
     const winner = getWinner(newState);
     await Promise.all([
@@ -82,6 +88,7 @@ export async function applyResultAndBroadcast(
         type: "game_over",
         state: view,
         winnerUserId: winner ?? null,
+        lastAction,
       });
     });
 
@@ -94,7 +101,7 @@ export async function applyResultAndBroadcast(
   ]);
 
   broadcastViews(newState, playerIds, (uid, view) => {
-    sendToUser(matchId, uid, { type: "state_update", state: view });
+    sendToUser(matchId, uid, { type: "state_update", state: view, lastAction });
   });
 
   return undefined;

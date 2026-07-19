@@ -11,6 +11,18 @@ import { applyResultAndBroadcast } from "../services/matchStart";
 
 /** Pause between bot moves so the client can animate each state_update. */
 const BOT_MOVE_DELAY_MS = 700;
+/**
+ * Big, story-beat moves get a longer pause so the player can read the log
+ * entry and watch the board change before the next move lands.
+ */
+const BIG_MOVE_DELAY_MS = 1600;
+const BIG_MOVE_TYPES = new Set([
+  "play_royal_to_court",
+  "apply_club",
+  "play_joker",
+  "declare_attack",
+  "confirm_declare_blocks",
+]);
 /** Hard cap per kick — a full bot turn is typically < 20 actions. */
 const MAX_ACTIONS_PER_KICK = 300;
 
@@ -42,25 +54,28 @@ export function kickBotRunner(matchId: string, botUserIds: string[]): void {
 
 async function runBotLoop(matchId: string, botIds: Set<string>): Promise<void> {
   for (let i = 0; i < MAX_ACTIONS_PER_KICK; i++) {
-    const acted = await withMatchLock(matchId, () => runOneBotAction(matchId, botIds));
-    if (!acted) return;
-    await sleep(BOT_MOVE_DELAY_MS);
+    const actedType = await withMatchLock(matchId, () => runOneBotAction(matchId, botIds));
+    if (actedType === null) return;
+    await sleep(BIG_MOVE_TYPES.has(actedType) ? BIG_MOVE_DELAY_MS : BOT_MOVE_DELAY_MS);
   }
   logger.warn({ matchId }, "Bot runner hit per-kick action cap");
 }
 
-/** Returns true if a bot action was applied and the loop should continue. */
-async function runOneBotAction(matchId: string, botIds: Set<string>): Promise<boolean> {
+/**
+ * Returns the applied action's type when a bot move was made (so the loop can
+ * pace the pause to the move's weight), or null when the loop should stop.
+ */
+async function runOneBotAction(matchId: string, botIds: Set<string>): Promise<string | null> {
   const [data, state] = await Promise.all([
     getMatchWithPlayers(matchId),
     loadEngineState(matchId),
   ]);
 
-  if (!data || data.match.status !== "in_progress" || !state) return false;
-  if (isGameOver(state)) return false;
+  if (!data || data.match.status !== "in_progress" || !state) return null;
+  if (isGameOver(state)) return null;
 
   const holderId = getTurnHolderId(state);
-  if (!holderId || !botIds.has(holderId)) return false;
+  if (!holderId || !botIds.has(holderId)) return null;
 
   const persona = personaForMatch(matchId);
   const action = chooseBotAction(state, holderId, { persona });
@@ -80,12 +95,12 @@ async function runOneBotAction(matchId: string, botIds: Set<string>): Promise<bo
         { matchId, botId: holderId, fallback, phase: state.phase, error: result.error },
         "Bot fallback action rejected — stopping bot runner",
       );
-      return false;
+      return null;
     }
     await applyResultAndBroadcast(matchId, holderId, fallback, result.value);
-    return true;
+    return fallback.type;
   }
 
   await applyResultAndBroadcast(matchId, holderId, action, result.value);
-  return true;
+  return action.type;
 }
