@@ -177,6 +177,8 @@ export default function MatchScreen() {
   // 4-player board: which opponent seat is expanded ("in focus").
   const [focusedOpponentId, setFocusedOpponentId] = useState<string | null>(null);
   const [abyssPickerAction, setAbyssPickerAction] = useState<ValidAction | null>(null);
+  // Debug/testing: which opponent's revealed hand (AI seats only) is open.
+  const [revealedHandPlayerId, setRevealedHandPlayerId] = useState<string | null>(null);
   // A dock chip that needs a board target (e.g. Diamond boost) the player has
   // tapped — the board then highlights legal targets to finish the play.
   const [armedAction, setArmedAction] = useState<ValidAction | null>(null);
@@ -514,13 +516,37 @@ export default function MatchScreen() {
         case "discard_to_end_turn":
           text = `discarded ${lbl(a.cardId)} (hand limit)`;
           break;
+        case "end_turn":
+          text = "ended their turn";
+          break;
+        case "set_damage_order":
+          text = "chose the damage order";
+          break;
         default:
-          // declare_attack / end_turn / set_damage_order / interrupt_pass:
-          // covered by the diff log or pure bookkeeping.
+          // declare_attack is narrated by the diff log with full stat labels;
+          // interrupt_pass is a legacy no-op.
           break;
       }
 
-      if (text) pushEvent(colorOf(actor), `${nameOf(actor)} ${text}`);
+      if (text) {
+        // ⚡ marks card plays made while someone ELSE holds the turn —
+        // interrupts and combat/club reactions — so reactive play is
+        // instantly visible in the log.
+        const CARD_PLAY_TYPES = new Set([
+          "play_diamond_to_mine",
+          "discard_diamond_to_draw",
+          "discard_diamond_for_boost",
+          "discard_to_abyss",
+          "attach_heart",
+          "attach_spade",
+          "discard_heart_to_heal",
+          "discard_spade_to_return",
+          "apply_club",
+          "play_joker",
+        ]);
+        const offTurn = actor !== view.activePlayerId && CARD_PLAY_TYPES.has(a.type);
+        pushEvent(colorOf(actor), `${offTurn ? "⚡ " : ""}${nameOf(actor)} ${text}`);
+      }
     },
     [user, displayNames, colorOf, pushEvent],
   );
@@ -1738,6 +1764,11 @@ export default function MatchScreen() {
         attackingYouWith={attacksFrom(opp.id)}
         hitEffects={seatEffects[opp.id]}
         royalHitEffects={royalEffects}
+        onHandPress={
+          gameState.revealedHands?.[opp.id]
+            ? () => setRevealedHandPlayerId(opp.id)
+            : undefined
+        }
       />
     );
   };
@@ -2305,6 +2336,27 @@ export default function MatchScreen() {
         />
       )}
 
+      {/* Debug/testing: revealed hand viewer for AI seats. */}
+      {revealedHandPlayerId && gameState?.revealedHands?.[revealedHandPlayerId] && (
+        <Pressable style={styles.revealOverlay} onPress={() => setRevealedHandPlayerId(null)}>
+          <View style={styles.revealPanel}>
+            <View style={styles.revealHeader}>
+              <Text style={styles.revealTitle}>
+                {displayNames[revealedHandPlayerId] ?? revealedHandPlayerId.slice(0, 8)}'s hand (debug)
+              </Text>
+              <Pressable onPress={() => setRevealedHandPlayerId(null)} hitSlop={8}>
+                <Ionicons name="close" size={18} color={Colors.textMuted} />
+              </Pressable>
+            </View>
+            <View style={styles.revealCards}>
+              {gameState.revealedHands[revealedHandPlayerId]!.map((cardId) => (
+                <CardView key={cardId} cardId={cardId} size="sm" />
+              ))}
+            </View>
+          </View>
+        </Pressable>
+      )}
+
       {/* Cinematic overlays — decorative only, never intercept touches. */}
       <CardFlightHost flights={flights} />
       {turnFlare && <TurnFlare key={`flare-${turnFlare.key}`} color={turnFlare.color} />}
@@ -2316,6 +2368,40 @@ export default function MatchScreen() {
 }
 
 const styles = StyleSheet.create({
+  revealOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 40,
+    padding: 24,
+  },
+  revealPanel: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    gap: 12,
+    maxWidth: 420,
+    width: "100%",
+  },
+  revealHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  revealTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+  },
+  revealCards: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "center",
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.bgDeep,

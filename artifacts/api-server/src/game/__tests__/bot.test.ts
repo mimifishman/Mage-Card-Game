@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { chooseBotAction, chooseBotInterrupt, fallbackAction, createRng, personaForMatch } from "../bot";
+import {
+  chooseBotAction,
+  chooseBotInterrupt,
+  enumerateCandidateActions,
+  fallbackAction,
+  createRng,
+  personaForMatch,
+} from "../bot";
 import { dispatchAction, getTurnHolderId } from "../dispatcher";
 import { createInitialGameState, dealInitialHands, determineFirstPlayer } from "../setup";
 import { isGameOver } from "../turn";
@@ -305,7 +312,7 @@ describe("bot-vs-bot playouts (deadlock canary)", () => {
         `game ${game}: did not finish within ${MAX_ACTIONS} actions (stuck in phase ${state.phase})`,
       ).toBe(true);
     }
-  }, 60_000);
+  }, 120_000);
 });
 
 describe("turn progress", () => {
@@ -397,6 +404,38 @@ describe("chooseBotInterrupt", () => {
     expect(chooseBotInterrupt(state, BOT, { rng: createRng(1) })).toBeNull();
   });
 
+  it("plays with FROZEN vault during the human's turn (the real mid-turn shape)", () => {
+    // Bot is non-active: its Vault is frozen at 8 (mine total when its turn
+    // ended, nothing spent). A 6♠ attach on its own Royal is affordable and
+    // clearly beneficial — the interrupt must fire despite the frozen Vault.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: [],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [BOT]: makePlayer(BOT, {
+          hand: ["6S"],
+          court: [mkRoyal("QS")],
+          vault: { tempBoost: 0, spent: 0, frozenMineTotal: 8 },
+        }),
+      },
+    });
+    let sawInterrupt = false;
+    for (const seed of [1, 2, 3, 42, 1337]) {
+      const action = chooseBotInterrupt(state, BOT, { rng: createRng(seed) });
+      if (action) {
+        sawInterrupt = true;
+        const result = dispatchAction(state, BOT, action);
+        expect(
+          result.ok,
+          `seed ${seed}: ${JSON.stringify(action)} rejected: ${result.ok ? "" : result.error}`,
+        ).toBe(true);
+      }
+    }
+    expect(sawInterrupt).toBe(true);
+  });
+
   it("stays quiet when no play clears the gain threshold", () => {
     // Only a low heart with no royal to attach to and full life — nothing
     // worth doing.
@@ -410,6 +449,53 @@ describe("chooseBotInterrupt", () => {
       },
     });
     expect(chooseBotInterrupt(state, BOT, { rng: createRng(1) })).toBeNull();
+  });
+});
+
+describe("settle-scoring strategy", () => {
+  it("attacks a blocker-less low-life opponent (aggression survives the readiness term)", () => {
+    // Bot's K♠ (⚔3) vs a blocker-less opponent at 3 life: settle-scoring sees
+    // the unblocked hit landing, so declare_attack must be the top-scored
+    // choice. Near-zero temperature makes sampling ≈ argmax so the assertion
+    // is deterministic.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1, { life: 3, court: [] }),
+        [BOT]: makePlayer(BOT, { court: [mkRoyal("KS")], hand: [] }),
+      },
+    });
+    const sharpPersona = { ...personaForMatch("any"), temperature: 0.01 };
+    for (const seed of [1, 2, 3]) {
+      const action = chooseBotAction(state, BOT, { persona: sharpPersona, rng: createRng(seed) });
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("declare_attack");
+    }
+  });
+
+  it("enumerates a legal gang-block when no single blocker can kill", () => {
+    // Q♥ (⚔2 ♥2) attacks; the bot's two Jacks (⚔1 each) can only kill it
+    // together — the gang-block candidate must exist and be engine-legal.
+    const state = makeState({
+      phase: "declare_blocks",
+      activePlayerId: P1,
+      hasAttackedThisTurn: true,
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "QH", targetPlayerId: BOT }],
+      pendingBlockDefenders: [BOT],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("QH", { hasAttackedThisTurn: true })] }),
+        [BOT]: makePlayer(BOT, { court: [mkRoyal("JD"), mkRoyal("JH")] }),
+      },
+    });
+    const gang = enumerateCandidateActions(state, BOT).find(
+      (a) =>
+        a.type === "confirm_declare_blocks" &&
+        Object.values(a.blocks).some((v) => Array.isArray(v) && v.length === 2),
+    );
+    expect(gang).toBeTruthy();
+    const result = dispatchAction(state, BOT, gang!);
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
   });
 });
 

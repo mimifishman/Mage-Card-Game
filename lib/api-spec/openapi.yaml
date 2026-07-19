@@ -991,6 +991,16 @@ components:
             type: string
         interruptStack:
           $ref: "#/components/schemas/InterruptStack"
+        revealedHands:
+          type: object
+          description: >-
+            Debug/testing aid — full hands of AI seats, revealed to every
+            viewer so bot decisions can be inspected. Never populated for
+            human players.
+          additionalProperties:
+            type: array
+            items:
+              type: string
     MatchStateResponse:
       type: object
       required: [state]

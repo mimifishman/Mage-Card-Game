@@ -193,9 +193,15 @@ async function bootstrapActiveMatch(ws: WebSocket, client: WsClient): Promise<vo
 
 async function pushCurrentState(ws: WebSocket, userId: string, matchId: string): Promise<void> {
   try {
-    const engineState = await loadEngineState(matchId);
+    const [engineState, data] = await Promise.all([
+      loadEngineState(matchId),
+      getMatchWithPlayers(matchId),
+    ]);
     if (engineState && ws.readyState === WebSocket.OPEN) {
-      const view = buildPlayerView(engineState, userId);
+      const botIds = (data?.players ?? [])
+        .filter((p) => isBotProviderId(p.providerUserId))
+        .map((p) => p.userId);
+      const view = buildPlayerView(engineState, userId, botIds);
       ws.send(JSON.stringify({ type: "reconnect_state", state: view }));
     }
   } catch (err) {

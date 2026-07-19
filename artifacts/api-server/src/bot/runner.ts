@@ -36,6 +36,18 @@ const MAX_INTERRUPTS_PER_TURN = 2;
 const runningMatches = new Set<string>();
 /** Per-match interrupt budget, keyed by the game turn it was spent in. */
 const interruptBudget = new Map<string, { turn: number; used: number }>();
+/** Latest game turn in which a human took an action, per match. */
+const humanActivity = new Map<string, number>();
+
+/**
+ * Called by the action route after every successful human action. The bot
+ * only interrupts in turns where the human has actually done something —
+ * reacting to plays rather than preemptively burning its budget the moment
+ * a turn starts.
+ */
+export function markHumanActivity(matchId: string, turnNumber: number): void {
+  humanActivity.set(matchId, turnNumber);
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -111,11 +123,12 @@ async function runOneBotAction(matchId: string, botIds: Set<string>): Promise<st
       );
       return null;
     }
-    await applyResultAndBroadcast(matchId, holderId, fallback, result.value);
+    await applyResultAndBroadcast(matchId, holderId, fallback, result.value, [...botIds]);
     return fallback.type;
   }
 
-  await applyResultAndBroadcast(matchId, holderId, action, result.value);
+  logger.info({ matchId, botId: holderId, phase: state.phase, action }, "Bot action applied");
+  await applyResultAndBroadcast(matchId, holderId, action, result.value, [...botIds]);
   return action.type;
 }
 
@@ -133,11 +146,20 @@ async function tryBotInterrupt(
   const botId = [...botIds].find((id) => state.players[id] && !state.players[id]!.isEliminated);
   if (!botId) return null;
 
+  // React to plays, not to the clock: stay quiet until the human has done
+  // something this game turn.
+  if (humanActivity.get(matchId) !== state.turnNumber) return null;
+
   const budget = interruptBudget.get(matchId);
   const used = budget && budget.turn === state.turnNumber ? budget.used : 0;
   if (used >= MAX_INTERRUPTS_PER_TURN) return null;
 
-  const action = chooseBotInterrupt(state, botId, { persona: personaForMatch(matchId) });
+  const action = chooseBotInterrupt(state, botId, {
+    persona: personaForMatch(matchId),
+    debug: (info) => {
+      logger.info({ matchId, botId, ...info }, "Bot interrupt decision");
+    },
+  });
   if (!action) return null;
 
   const result = dispatchAction(state, botId, action);
@@ -151,6 +173,10 @@ async function tryBotInterrupt(
   }
 
   interruptBudget.set(matchId, { turn: state.turnNumber, used: used + 1 });
-  await applyResultAndBroadcast(matchId, botId, action, result.value);
+  logger.info(
+    { matchId, botId, phase: state.phase, action, interruptNumber: used + 1 },
+    "Bot interrupt applied",
+  );
+  await applyResultAndBroadcast(matchId, botId, action, result.value, [...botIds]);
   return action.type;
 }

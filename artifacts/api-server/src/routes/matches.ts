@@ -18,7 +18,7 @@ import { GameActionSchema } from "../game/actions";
 import { buildPlayerView } from "../game/serializer";
 import { sendToUser, broadcastToMatch } from "../ws/manager";
 import { initializeAndStartMatch, applyResultAndBroadcast } from "../services/matchStart";
-import { kickBotRunner } from "../bot/runner";
+import { kickBotRunner, markHumanActivity } from "../bot/runner";
 import { withMatchLock } from "../lib/matchLock";
 
 type MatchPlayersData = NonNullable<Awaited<ReturnType<typeof getMatchWithPlayers>>>;
@@ -243,8 +243,9 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
       }
 
       const newState = result.value;
-      const myView = buildPlayerView(newState, userId);
-      const winner = await applyResultAndBroadcast(id, userId, action, newState);
+      const bots = botUserIds(matchData);
+      const myView = buildPlayerView(newState, userId, bots);
+      const winner = await applyResultAndBroadcast(id, userId, action, newState, bots);
 
       if (winner !== undefined) {
         res.json({ ok: true, phase: newState.phase, state: myView, winnerUserId: winner });
@@ -252,8 +253,11 @@ router.post("/:id/actions", async (req: Request, res: Response) => {
         res.json({ ok: true, phase: newState.phase, state: myView });
       }
 
-      // If the action handed priority to the AI opponent, let it respond.
-      kickBotRunner(id, botUserIds(matchData));
+      // If the action handed priority to the AI opponent, let it respond —
+      // and note the human activity so the bot's interrupts react to plays
+      // rather than firing at turn start.
+      markHumanActivity(id, newState.turnNumber);
+      kickBotRunner(id, bots);
     });
   } catch (err) {
     req.log.error({ err }, "Failed to process action");
@@ -266,12 +270,12 @@ router.get("/:id/state", async (req: Request, res: Response) => {
   const { id } = req.params as { id: string };
 
   try {
-    const [member, engineState] = await Promise.all([
-      isMatchPlayer(id, userId),
+    const [data, engineState] = await Promise.all([
+      getMatchWithPlayers(id),
       loadEngineState(id),
     ]);
 
-    if (!member) {
+    if (!data || !data.players.some((p) => p.userId === userId)) {
       res.status(403).json({ error: "Not a member of this match" });
       return;
     }
@@ -280,7 +284,7 @@ router.get("/:id/state", async (req: Request, res: Response) => {
       return;
     }
 
-    const view = buildPlayerView(engineState, userId);
+    const view = buildPlayerView(engineState, userId, botUserIds(data));
     res.json({ state: view });
   } catch (err) {
     req.log.error({ err }, "Failed to get match state");

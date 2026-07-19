@@ -18,6 +18,7 @@ import { err, ok } from "../game/types";
 import type { GameAction } from "../game/actions";
 import { broadcastViews } from "../game/serializer";
 import { sendToUser } from "../ws/manager";
+import { isBotProviderId } from "../repositories/botRepository";
 
 /**
  * Builds the initial engine state for a match and marks it started. Performs
@@ -47,9 +48,18 @@ export async function initializeAndStartMatch(matchId: string): Promise<Result<G
   const engineState = withHands.value;
   await startMatch(matchId, engineState);
 
-  broadcastViews(engineState, playerIds, (uid, view) => {
-    sendToUser(matchId, uid, { type: "game_started", state: view });
-  });
+  const botIds = data.players
+    .filter((p) => isBotProviderId(p.providerUserId))
+    .map((p) => p.userId);
+
+  broadcastViews(
+    engineState,
+    playerIds,
+    (uid, view) => {
+      sendToUser(matchId, uid, { type: "game_started", state: view });
+    },
+    botIds,
+  );
 
   return ok(engineState);
 }
@@ -65,6 +75,7 @@ export async function applyResultAndBroadcast(
   actorUserId: string,
   action: GameAction,
   newState: GameState,
+  revealHandsFor?: string[],
 ): Promise<string | null | undefined> {
   const playerIds = Object.keys(newState.players);
 
@@ -83,14 +94,19 @@ export async function applyResultAndBroadcast(
       logAction(matchId, actorUserId, action, newState.turnNumber),
     ]);
 
-    broadcastViews(newState, playerIds, (uid, view) => {
-      sendToUser(matchId, uid, {
-        type: "game_over",
-        state: view,
-        winnerUserId: winner ?? null,
-        lastAction,
-      });
-    });
+    broadcastViews(
+      newState,
+      playerIds,
+      (uid, view) => {
+        sendToUser(matchId, uid, {
+          type: "game_over",
+          state: view,
+          winnerUserId: winner ?? null,
+          lastAction,
+        });
+      },
+      revealHandsFor,
+    );
 
     return winner ?? null;
   }
@@ -100,9 +116,14 @@ export async function applyResultAndBroadcast(
     logAction(matchId, actorUserId, action, newState.turnNumber),
   ]);
 
-  broadcastViews(newState, playerIds, (uid, view) => {
-    sendToUser(matchId, uid, { type: "state_update", state: view, lastAction });
-  });
+  broadcastViews(
+    newState,
+    playerIds,
+    (uid, view) => {
+      sendToUser(matchId, uid, { type: "state_update", state: view, lastAction });
+    },
+    revealHandsFor,
+  );
 
   return undefined;
 }

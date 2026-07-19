@@ -55,6 +55,8 @@ interface SeatProps {
   hitEffects?: HitEffectEvent[];
   /** Active suit hit effects per royal card in this seat's court. */
   royalHitEffects?: Record<string, HitEffectEvent[]>;
+  /** Debug/testing: tapping the ×N hand chip reveals this player's hand. */
+  onHandPress?: () => void;
 }
 
 export default function Seat({
@@ -83,6 +85,7 @@ export default function Seat({
   isDefender,
   hitEffects,
   royalHitEffects,
+  onHandPress,
 }: SeatProps) {
   // Life-change floater: when life changes, float a ±N over the heart stat.
   const prevLifeRef = useRef(player.life);
@@ -207,14 +210,20 @@ export default function Seat({
 
       {/* Secondary: Hand + Court, shown as counts (×N) so the icons read clearly. */}
       <View style={styles.statSecondaryGroup}>
-        <View style={styles.statSecondary}>
+        <Pressable
+          onPress={onHandPress}
+          disabled={!onHandPress}
+          hitSlop={8}
+          style={({ pressed }) => [styles.statSecondary, pressed && onHandPress ? { opacity: 0.6 } : null]}
+          testID={onHandPress ? `reveal-hand-${player.id}` : undefined}
+        >
           <MaterialCommunityIcons
             name="cards"
             size={compact ? 13 : 15}
-            color={Colors.textSecondary}
+            color={onHandPress ? Colors.brand : Colors.textSecondary}
           />
           <Text style={[styles.statSecondaryValue, compact && styles.statSecondaryValueCompact]}>×{player.handCount}</Text>
-        </View>
+        </Pressable>
         <View style={styles.statSecondary}>
           <Text style={[styles.statSecondaryIcon, compact && styles.statSecondaryIconCompact]}>👑</Text>
           <Text style={[styles.statSecondaryValue, compact && styles.statSecondaryValueCompact]}>×{player.court.length}</Text>

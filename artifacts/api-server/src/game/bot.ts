@@ -2,7 +2,7 @@ import { effectiveAttack, effectiveHealth, getCard } from "./cards";
 import type { GameAction } from "./actions";
 import type { CardId, GameState, PlayerState, TurnPhase } from "./types";
 import { availableVault } from "./vault";
-import { dispatchAction } from "./dispatcher";
+import { dispatchAction, getTurnHolderId } from "./dispatcher";
 import { isGameOver, getWinner } from "./turn";
 
 /**
@@ -32,6 +32,12 @@ export interface BotPersona {
   hand: number;
   /** Weight on available Vault. */
   economy: number;
+  /**
+   * Weight on KEEPING Vault unspent (capped at RESERVE_CAP) — interrupt money
+   * for reacting during opponents' turns, when Vault is frozen and whatever
+   * was spent stays spent until the bot's next turn.
+   */
+  reserve: number;
   /** Softmax temperature: higher = more erratic, lower = sharper. */
   temperature: number;
 }
@@ -45,6 +51,7 @@ const PERSONAS: BotPersona[] = [
     oppBoard: 0.9,
     hand: 0.5,
     economy: 0.25,
+    reserve: 0.5,
     temperature: 0.9,
   },
   {
@@ -55,6 +62,7 @@ const PERSONAS: BotPersona[] = [
     oppBoard: 1.5,
     hand: 0.7,
     economy: 0.35,
+    reserve: 0.9,
     temperature: 0.8,
   },
   {
@@ -65,6 +73,7 @@ const PERSONAS: BotPersona[] = [
     oppBoard: 1.0,
     hand: 0.9,
     economy: 0.6,
+    reserve: 1.1,
     temperature: 1.0,
   },
 ];
@@ -124,6 +133,8 @@ function handValue(player: PlayerState): number {
 
 const WIN_SCORE = 1_000_000;
 const ELIMINATION_BONUS = 300;
+/** Vault kept unspent counts toward the score only up to this much. */
+const RESERVE_CAP = 5;
 
 function evaluateState(state: GameState, botId: string, persona: BotPersona): number {
   const me = state.players[botId];
@@ -136,6 +147,19 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
   score += persona.hand * 0.5 * handValue(me);
   score += persona.economy * availableVault(state.mine, me);
 
+  // Interrupt money: value keeping a little Vault unspent (it is frozen and
+  // unrecoverable during opponents' turns). Worth less when the bot holds no
+  // reactive cards to spend it on.
+  const holdsReactiveCards = me.hand.some((c) => {
+    const card = getCard(c);
+    return !card.isRoyal && (card.suit === "H" || card.suit === "S" || card.suit === "C");
+  });
+  score +=
+    persona.reserve *
+    (holdsReactiveCards ? 1 : 0.5) *
+    Math.min(Math.max(availableVault(state.mine, me), 0), RESERVE_CAP);
+
+  let anyOpponentBoard = false;
   for (const id of state.turnOrder) {
     if (id === botId) continue;
     const opp = state.players[id];
@@ -144,8 +168,16 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
       score += ELIMINATION_BONUS;
       continue;
     }
+    if (opp.court.length > 0) anyOpponentBoard = true;
     score -= persona.aggression * opp.life;
     score -= persona.oppBoard * courtValue(opp);
+  }
+
+  // Defensive readiness: untapped Royals can block next turn. Only matters
+  // while an opponent has a board to attack with.
+  if (anyOpponentBoard) {
+    const untapped = me.court.filter((r) => !r.hasAttackedThisTurn).length;
+    score += persona.board * 0.25 * untapped;
   }
 
   return score;
@@ -287,17 +319,24 @@ function mainPhaseCandidates(state: GameState, botId: string): GameAction[] {
     const eligible = me.court.filter((r) => !r.hasteLocked && !r.hasAttackedThisTurn);
     if (eligible.length > 0 && opponents.length > 0) {
       const lowestLife = [...opponents].sort((a, b) => a.life - b.life)[0]!;
+      // All-in.
       candidates.push({
         type: "declare_attack",
         targets: [{ targetPlayerId: lowestLife.id, royalCardIds: eligible.map((r) => r.cardId) }],
       });
-      // Also consider a conservative attack with only the strongest Royal.
+      // Partial attacks: each single Royal (or just the strongest when the
+      // court is large) — settle-scoring weighs the trade of each option.
       if (eligible.length > 1) {
-        const strongest = [...eligible].sort((a, b) => effectiveAttack(b) - effectiveAttack(a))[0]!;
-        candidates.push({
-          type: "declare_attack",
-          targets: [{ targetPlayerId: lowestLife.id, royalCardIds: [strongest.cardId] }],
-        });
+        const singles =
+          eligible.length <= 4
+            ? eligible
+            : [[...eligible].sort((a, b) => effectiveAttack(b) - effectiveAttack(a))[0]!];
+        for (const royal of singles) {
+          candidates.push({
+            type: "declare_attack",
+            targets: [{ targetPlayerId: lowestLife.id, royalCardIds: [royal.cardId] }],
+          });
+        }
       }
     }
   }
@@ -379,6 +418,24 @@ function declareBlocksCandidates(state: GameState, botId: string): GameAction[] 
     }
   }
   candidates.push({ type: "confirm_declare_blocks", blocks: selective });
+
+  // Gang block: when no single blocker can kill the biggest attacker but the
+  // team can, pile every free blocker onto it and pass the rest.
+  const biggest = sortedIncoming[0];
+  const biggestRoyal = biggest
+    ? attackerRoyal(biggest.attackerPlayerId, biggest.attackerCardId)
+    : undefined;
+  if (biggest && biggestRoyal && availableBlockers.length >= 2) {
+    const atkHealth = effectiveHealth(biggestRoyal);
+    const noSingleKiller = !availableBlockers.some((b) => effectiveAttack(b) >= atkHealth);
+    const teamDamage = availableBlockers.reduce((s, b) => s + effectiveAttack(b), 0);
+    if (noSingleKiller && teamDamage >= atkHealth) {
+      const gang: Record<CardId, CardId[] | "pass"> = {};
+      for (const attack of incoming) gang[attack.attackerCardId] = "pass";
+      gang[biggest.attackerCardId] = availableBlockers.map((b) => b.cardId);
+      candidates.push({ type: "confirm_declare_blocks", blocks: gang });
+    }
+  }
 
   return candidates;
 }
@@ -472,15 +529,13 @@ function respondToClubCandidates(state: GameState, botId: string): GameAction[] 
     }
   }
 
-  const clubPip = getCard(pending.clubCardId).pipValue;
   const targetRoyal = me.court.find((r) => r.cardId === pending.targetRoyalId);
   if (!targetRoyal) return candidates;
 
-  // Attach buffs only when the Club would actually destroy the Royal —
-  // one-ply scoring can't see the pending debuff, so this gate stands in for
-  // "is spending a buff here worth it".
-  if (effectiveHealth(targetRoyal) > clubPip) return candidates;
-
+  // Attach options are always enumerated: settleForScoring auto-confirms the
+  // pending debuff during scoring, so "attach then eat the Club" is compared
+  // fairly against "just confirm" and the scorer decides when a save is worth
+  // the card.
   for (const cardId of me.hand) {
     const card = getCard(cardId);
     if (card.isRoyal || card.vaultCost > vault) continue;
@@ -554,22 +609,69 @@ function sampleByScore(
 }
 
 /**
- * Settles transient response windows before evaluating, so a play's score
- * reflects its actual outcome. A Club aimed at a Royal parks the game in
- * respond_to_club with the debuff still pending — scored as-is it looks like
- * pure cost (card + vault spent, board unchanged) and the bot would never
- * club a Royal. Peek ahead by letting the target confirm (the engine is the
- * simulator; a real target may respond better, so this is the pessimistic
- * floor for the defender / optimistic view for the caster).
+ * Settles transient windows before evaluating, so a play's score reflects its
+ * actual outcome rather than a half-resolved intermediate state:
+ *
+ * - A Club aimed at a Royal parks the game in respond_to_club with the debuff
+ *   pending — scored as-is it looks like pure cost and the bot would never
+ *   club a Royal. Let the target confirm.
+ * - declare_attack lands in declare_blocks with NO damage applied — scored
+ *   as-is attacking has zero visible upside (and with the defensive-readiness
+ *   term it would look strictly bad). Play combat forward with a simple
+ *   deterministic model: the defender answers with the greedy-block line,
+ *   damage order ascending, duel participants pass. The same settling makes
+ *   the bot's own block choices see their resolved trades.
+ *
+ * The model is only a prediction of the opponent (a real player may respond
+ * differently), but a plausible resolved outcome beats a blind intermediate
+ * one. Bounded steps; every dispatch is engine-validated.
  */
-function resolveForScoring(state: GameState): GameState {
+function settleForScoring(state: GameState): GameState {
   let current = state;
-  for (let i = 0; i < 2; i++) {
-    if (current.phase !== "respond_to_club" || !current.pendingClubDebuff) break;
-    const targetId = current.pendingClubDebuff.targetPlayerId;
-    const res = dispatchAction(current, targetId, { type: "confirm_club_response" });
-    if (!res.ok) break;
-    current = res.value;
+  for (let step = 0; step < 14; step++) {
+    if (isGameOver(current)) break;
+
+    if (current.phase === "respond_to_club" && current.pendingClubDebuff) {
+      const targetId = current.pendingClubDebuff.targetPlayerId;
+      const res = dispatchAction(current, targetId, { type: "confirm_club_response" });
+      if (!res.ok) break;
+      current = res.value;
+      continue;
+    }
+
+    if (current.phase === "declare_blocks") {
+      const holderId = getTurnHolderId(current);
+      if (!holderId) break;
+      const options = declareBlocksCandidates(current, holderId);
+      // options[1] is the greedy-block line when the defender has blockers;
+      // options[0] is all-pass.
+      const blocks = options[1] ?? options[0];
+      if (!blocks) break;
+      const res = dispatchAction(current, holderId, blocks);
+      if (!res.ok) break;
+      current = res.value;
+      continue;
+    }
+
+    if (current.phase === "assign_damage_order") {
+      const holderId = getTurnHolderId(current);
+      if (!holderId) break;
+      const res = dispatchAction(current, holderId, damageOrderCandidates(current, holderId)[0]!);
+      if (!res.ok) break;
+      current = res.value;
+      continue;
+    }
+
+    if (current.phase === "duel_attacker_turn" || current.phase === "duel_blocker_turn") {
+      const holderId = getTurnHolderId(current);
+      if (!holderId) break;
+      const res = dispatchAction(current, holderId, { type: "duel_pass" });
+      if (!res.ok) break;
+      current = res.value;
+      continue;
+    }
+
+    break;
   }
   return current;
 }
@@ -589,7 +691,7 @@ export function chooseBotAction(
   for (const action of candidates) {
     const result = dispatchAction(state, botId, action);
     if (!result.ok) continue;
-    scored.push({ action, score: evaluateState(resolveForScoring(result.value), botId, persona) });
+    scored.push({ action, score: evaluateState(settleForScoring(result.value), botId, persona) });
   }
 
   if (scored.length === 0) return fallback;
@@ -618,7 +720,7 @@ const INTERRUPT_PHASES: TurnPhase[] = [
 ];
 
 /** Minimum evaluation gain over "do nothing" before an interrupt is played. */
-const INTERRUPT_MIN_GAIN = 2;
+const INTERRUPT_MIN_GAIN = 1;
 
 /**
  * Interrupt-eligible candidate plays (no Royals-to-court, no attacks, no
@@ -694,12 +796,25 @@ export function enumerateInterruptCandidates(state: GameState, botId: string): G
       }
     }
 
-    if (card.suit === "D") {
+    // The engine allows one Diamond action per round; if the bot already used
+    // it on its own turn the draw would just be rejected — skip the noise.
+    if (card.suit === "D" && !me.hasPlayedDiamondThisTurn) {
       candidates.push({ type: "discard_diamond_to_draw", cardId });
     }
   }
 
   return candidates;
+}
+
+/** Introspection payload for the runner's decision logs. */
+export interface InterruptDecisionDebug {
+  phase: TurnPhase;
+  vaultAvailable: number;
+  candidateCount: number;
+  legalCount: number;
+  baseline: number;
+  bestScore: number | null;
+  threshold: number;
 }
 
 /**
@@ -711,22 +826,43 @@ export function enumerateInterruptCandidates(state: GameState, botId: string): G
 export function chooseBotInterrupt(
   state: GameState,
   botId: string,
-  options: { persona?: BotPersona; rng?: () => number } = {},
+  options: {
+    persona?: BotPersona;
+    rng?: () => number;
+    debug?: (info: InterruptDecisionDebug) => void;
+  } = {},
 ): GameAction | null {
   if (!INTERRUPT_PHASES.includes(state.phase)) return null;
   if (isGameOver(state)) return null;
 
   const persona = options.persona ?? personaForMatch(state.matchId);
   const rng = options.rng ?? Math.random;
-  const baseline = evaluateState(state, botId, persona);
+  // Settle the baseline with the same model as the candidates, so mid-combat
+  // comparisons are apples-to-apples.
+  const baseline = evaluateState(settleForScoring(state), botId, persona);
 
+  const candidates = enumerateInterruptCandidates(state, botId);
   const scored: Array<{ action: GameAction; score: number }> = [];
-  for (const action of enumerateInterruptCandidates(state, botId)) {
+  let legalCount = 0;
+  let bestScore: number | null = null;
+  for (const action of candidates) {
     const result = dispatchAction(state, botId, action);
     if (!result.ok) continue;
-    const score = evaluateState(resolveForScoring(result.value), botId, persona);
+    legalCount++;
+    const score = evaluateState(settleForScoring(result.value), botId, persona);
+    if (bestScore === null || score > bestScore) bestScore = score;
     if (score >= baseline + INTERRUPT_MIN_GAIN) scored.push({ action, score });
   }
+
+  options.debug?.({
+    phase: state.phase,
+    vaultAvailable: state.players[botId] ? availableVault(state.mine, state.players[botId]!) : 0,
+    candidateCount: candidates.length,
+    legalCount,
+    baseline,
+    bestScore,
+    threshold: INTERRUPT_MIN_GAIN,
+  });
 
   if (scored.length === 0) return null;
   return sampleByScore(scored, persona.temperature, rng);
