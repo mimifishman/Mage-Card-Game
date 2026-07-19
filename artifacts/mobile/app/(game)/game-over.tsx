@@ -70,7 +70,12 @@ export default function GameOverScreen() {
   };
 
   const { data: matchData } = useGetMatch(matchId ?? "", {
-    query: { queryKey: getGetMatchQueryKey(matchId ?? ""), enabled: !!matchId },
+    query: {
+      queryKey: getGetMatchQueryKey(matchId ?? ""),
+      enabled: !!matchId,
+      refetchOnMount: "always",
+      staleTime: 0,
+    },
   });
 
   const { data: myMatchesData } = useGetMyMatches({
@@ -247,7 +252,7 @@ export default function GameOverScreen() {
                   <View key={p.userId} style={[styles.playerRow, isWinner && styles.playerRowWinner]}>
                     <View style={[styles.playerDot, { backgroundColor: color }]} />
                     <Text style={styles.playerRowName} numberOfLines={1}>
-                      {p.displayName}
+                      {p.displayName || `Player ${p.seatIndex + 1}`}
                       {p.userId === user?.id ? <Text style={styles.youLabel}> (you)</Text> : ""}
                     </Text>
                     {isWinner && <Ionicons name="trophy" size={14} color={Colors.brand} />}

@@ -257,8 +257,9 @@ export default function MatchScreen() {
 
   // Always-current players snapshot stored in a ref so that closures with stale
   // deps (e.g. the WebSocket onmessage handler) can still read the latest value.
+  // Using useMemo with explicit deps so React Compiler cannot silently cache this.
   const playersParamRef = useRef("");
-  const _playersParam = (() => {
+  const _playersParam = React.useMemo(() => {
     if (matchData?.players?.length) {
       return JSON.stringify(
         matchData.players.map((p, i) => ({ userId: p.userId, displayName: p.displayName, seatIndex: i })),
@@ -271,7 +272,7 @@ export default function MatchScreen() {
       );
     }
     return "";
-  })();
+  }, [matchData?.players, gameState?.turnOrder, displayNames]);
   playersParamRef.current = _playersParam;
 
   useEffect(() => {
