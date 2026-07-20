@@ -556,6 +556,12 @@ export const SubmitGameActionResponse = zod.object({
         passedPlayerIds: zod.array(zod.string()),
       })
       .optional(),
+    revealedHands: zod
+      .record(zod.string(), zod.array(zod.string()))
+      .optional()
+      .describe(
+        "Debug\/testing aid — full hands of AI seats, revealed to every viewer so bot decisions can be inspected. Never populated for human players.",
+      ),
   }),
   winnerUserId: zod.string().nullish(),
 });
@@ -872,5 +878,11 @@ export const GetMatchStateResponse = zod.object({
         passedPlayerIds: zod.array(zod.string()),
       })
       .optional(),
+    revealedHands: zod
+      .record(zod.string(), zod.array(zod.string()))
+      .optional()
+      .describe(
+        "Debug\/testing aid — full hands of AI seats, revealed to every viewer so bot decisions can be inspected. Never populated for human players.",
+      ),
   }),
 });

@@ -357,6 +357,11 @@ export const PlayerGameViewPhase = {
 
 export type PlayerGameViewPlayers = { [key: string]: PublicPlayerState };
 
+/**
+ * Debug/testing aid — full hands of AI seats, revealed to every viewer so bot decisions can be inspected. Never populated for human players.
+ */
+export type PlayerGameViewRevealedHands = { [key: string]: string[] };
+
 export interface PlayerGameView {
   matchId: string;
   phase: PlayerGameViewPhase;
@@ -382,6 +387,8 @@ export interface PlayerGameView {
   /** Remaining defender player IDs still waiting to fight their duel, in resolution order, after the current duel finishes. */
   duelQueue?: string[];
   interruptStack?: InterruptStack;
+  /** Debug/testing aid — full hands of AI seats, revealed to every viewer so bot decisions can be inspected. Never populated for human players. */
+  revealedHands?: PlayerGameViewRevealedHands;
 }
 
 export interface MatchStateResponse {
