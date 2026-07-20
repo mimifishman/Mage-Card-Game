@@ -197,6 +197,19 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
     score += persona.board * 2;
   }
 
+  // Fragility penalty: a Royal that has taken damage and is down to ≤ 1
+  // health is one hit from elimination.  Without this, a post-attack state
+  // where the attacker survived at 1 health is overvalued relative to a state
+  // where the bot kept the Royal healthy by buffing it instead.
+  // We only penalise Royals that are actually *damaged* (damageTaken > 0) so
+  // that a naturally low-health Jack (base health = 1, no damage) is not
+  // incorrectly treated as critically wounded.
+  for (const royal of me.court) {
+    if (royal.damageTaken > 0 && effectiveHealth(royal) <= 1) {
+      score -= persona.board * 2;
+    }
+  }
+
   return score;
 }
 
