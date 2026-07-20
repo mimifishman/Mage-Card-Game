@@ -560,6 +560,255 @@ describe("abyss reclaim when rebuilding", () => {
   });
 });
 
+describe("strategy matrix — every card type gets played when clearly best", () => {
+  // Fixed persona + near-zero temperature ≈ argmax: deterministic choices,
+  // independent of which archetype a match id hashes to. Each test builds a
+  // state where one play is clearly correct and asserts the bot makes it.
+  const sharp = {
+    name: "test-sharp",
+    selfLife: 1,
+    aggression: 1,
+    board: 1.2,
+    oppBoard: 1,
+    hand: 0.7,
+    economy: 0.35,
+    reserve: 0.9,
+    temperature: 0.01,
+  };
+  const seeds = [1, 2, 3];
+
+  const choose = (state: GameState, seed: number) =>
+    chooseBotAction(state, BOT, { persona: sharp, rng: createRng(seed) });
+
+  it("Diamond: takes a Diamond action instead of wasting the turn", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { hand: ["9D"] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(
+        ["play_diamond_to_mine", "discard_diamond_to_draw"],
+        `seed ${seed} picked ${action.type}`,
+      ).toContain(action.type);
+    }
+  });
+
+  it.each(["JS", "QS", "KS"])("Royal %s: deploys onto an empty court when affordable", (royalId) => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("QH")] }),
+        [BOT]: makePlayer(BOT, { hand: [royalId], court: [] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("play_royal_to_court");
+    }
+  });
+
+  it("Heart: attaches to its Royal when at full life", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("QH")] }),
+        [BOT]: makePlayer(BOT, { hand: ["5H", "2D"], court: [mkRoyal("KS")], life: 20 }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("attach_heart");
+    }
+  });
+
+  it("Heart: heals itself when damaged with no court to buff", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { hand: ["6H"], court: [], life: 8 }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("discard_heart_to_heal");
+    }
+  });
+
+  it("Spade: attaches to its Royal (Abyss empty, so no reclaim option)", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2H"],
+      abyss: [],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("QH")] }),
+        [BOT]: makePlayer(BOT, { hand: ["6S"], court: [mkRoyal("KS")] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("attach_spade");
+    }
+  });
+
+  it("Club: kills a big opposing Royal over burning face damage", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH")] }),
+        [BOT]: makePlayer(BOT, { hand: ["3C"] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("apply_club");
+      if (action.type === "apply_club") expect(action.targetRoyalId).toBe("KH");
+    }
+  });
+
+  it("Club: burns for face damage when the opponent has no court", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1, { court: [] }),
+        [BOT]: makePlayer(BOT, { hand: ["5C"] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("apply_club");
+      if (action.type === "apply_club") expect(action.targetRoyalId).toBeUndefined();
+    }
+  });
+
+  it("Joker: destroys a buffed-up Royal threat", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D", "9D", "AD"],
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH", { buffAttack: 4, buffHealth: 4 })] }),
+        [BOT]: makePlayer(BOT, { hand: ["JOKER1"] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("play_joker");
+      if (action.type === "play_joker") expect(action.mode).toBe("destroy_royal");
+    }
+  });
+
+  it("Joker: goes to the face when the opponent has no court", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D", "9D", "AD"],
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1, { court: [] }),
+        [BOT]: makePlayer(BOT, { hand: ["JOKER1"] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("play_joker");
+      if (action.type === "play_joker") expect(action.mode).toBe("damage_player");
+    }
+  });
+
+  it("Duel: clubs the attacking Royal instead of passing (D1)", () => {
+    const state = makeState({
+      phase: "duel_blocker_turn",
+      activePlayerId: P1,
+      hasAttackedThisTurn: true,
+      mine: ["10D"],
+      deck: ["2H"],
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KS", targetPlayerId: BOT, blockerCardIds: ["JD"] },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: BOT,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+        resolvedPairAttackerIds: [],
+      },
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KS", { hasAttackedThisTurn: true })] }),
+        [BOT]: makePlayer(BOT, { hand: ["3C"], court: [mkRoyal("JD")] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("apply_club");
+      if (action.type === "apply_club") expect(action.targetRoyalId).toBe("KS");
+      const result = dispatchAction(state, BOT, action);
+      expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    }
+  });
+
+  it("Duel: Jokers a buffed attacker instead of passing (D1)", () => {
+    const state = makeState({
+      phase: "duel_blocker_turn",
+      activePlayerId: P1,
+      hasAttackedThisTurn: true,
+      mine: ["10D", "9D", "AD"],
+      deck: ["2H"],
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KS", targetPlayerId: BOT, blockerCardIds: ["JD"] },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: BOT,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+        resolvedPairAttackerIds: [],
+      },
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [mkRoyal("KS", { hasAttackedThisTurn: true, buffAttack: 4, buffHealth: 4 })],
+        }),
+        [BOT]: makePlayer(BOT, { hand: ["JOKER1"], court: [mkRoyal("JD")] }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("play_joker");
+      if (action.type === "play_joker") expect(action.targetRoyalId).toBe("KS");
+      const result = dispatchAction(state, BOT, action);
+      expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    }
+  });
+});
+
 describe("softmax variety", () => {
   it("returns more than one distinct action across seeds on a rich state", () => {
     const state = makeState({

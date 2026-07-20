@@ -180,13 +180,21 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
     score += persona.board * 0.25 * untapped;
   }
 
-  // Board access: with an empty court, holding at least one Royal is the only
-  // path back onto the board. A flat bonus for having that access makes Abyss
-  // reclaims (no Royal → a Royal) win scoring exactly when rebuilding
-  // matters, while leaving the play-the-Royal decision undistorted (playing
-  // it keeps access via the court, so the bonus doesn't move).
-  if (me.court.length === 0 && me.hand.some((c) => getCard(c).isRoyal)) {
+  // Board access, in two tiers. A single flat "court empty + Royal in hand"
+  // bonus was a bug: it vanished the moment the Royal was PLAYED (court no
+  // longer empty), which made playing small Royals score worse than sitting
+  // on them — the bot would never deploy a Jack it was holding.
+  //
+  // - Court presence (higher): having a Royal ON the board is what lets the
+  //   bot attack and block at all.
+  // - Recoverable access (lower): with an empty court, a Royal in hand is
+  //   the path back — this keeps Abyss reclaims (no Royal → a Royal in hand)
+  //   worth doing, and playing the Royal upgrades +2 access into +3 presence
+  //   plus its court value, so deployment is always a clear net gain.
+  if (me.court.length > 0) {
     score += persona.board * 3;
+  } else if (me.hand.some((c) => getCard(c).isRoyal)) {
+    score += persona.board * 2;
   }
 
   return score;
@@ -201,6 +209,26 @@ function nonEliminatedOpponents(state: GameState, botId: string): PlayerState[] 
 
 function botIncomingAttacks(state: GameState, botId: string) {
   return state.attacks.filter((a) => a.targetPlayerId === botId);
+}
+
+/**
+ * The most valuable Royal/Joker a Spade of the given pip can pull from the
+ * Abyss. Filters to Royals/Jokers FIRST — Royals have pip 1-3, so sorting the
+ * whole Abyss by value and then checking the top card would let any high-pip
+ * junk shadow them.
+ */
+function bestReclaimTarget(state: GameState, spadePip: number): CardId | undefined {
+  return state.abyss
+    .filter((abyssId) => {
+      const t = getCard(abyssId);
+      const value = t.isJoker ? 10 : t.pipValue;
+      return (t.isRoyal || t.isJoker) && value <= spadePip;
+    })
+    .sort((a, b) => {
+      const va = getCard(a).isJoker ? 10 : getCard(a).pipValue;
+      const vb = getCard(b).isJoker ? 10 : getCard(b).pipValue;
+      return vb - va;
+    })[0];
 }
 
 /**
@@ -277,21 +305,7 @@ function mainPhaseCandidates(state: GameState, botId: string): GameAction[] {
       for (const royal of me.court) {
         candidates.push({ type: "attach_spade", spadeCardId: cardId, targetRoyalId: royal.cardId });
       }
-      // Recover the most valuable Royal/Joker retrievable from the Abyss.
-      // Filter to Royals/Jokers FIRST — Royals have pip 1-3, so sorting the
-      // whole Abyss by value and then checking the top card lets any high-pip
-      // junk shadow them and the reclaim is never even considered.
-      const retrievable = state.abyss
-        .filter((abyssId) => {
-          const t = getCard(abyssId);
-          const value = t.isJoker ? 10 : t.pipValue;
-          return (t.isRoyal || t.isJoker) && value <= card.pipValue;
-        })
-        .sort((a, b) => {
-          const va = getCard(a).isJoker ? 10 : getCard(a).pipValue;
-          const vb = getCard(b).isJoker ? 10 : getCard(b).pipValue;
-          return vb - va;
-        })[0];
+      const retrievable = bestReclaimTarget(state, card.pipValue);
       if (retrievable) {
         candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: retrievable });
       }
@@ -484,8 +498,26 @@ function duelCandidates(state: GameState, botId: string): GameAction[] {
   if (!me || !ctx) return candidates;
 
   const isAttacker = botId === ctx.attackerPlayerId;
+  const opponentId = isAttacker ? ctx.defenderPlayerId : ctx.attackerPlayerId;
   const diamondUsed = isAttacker ? ctx.attackerDiamondUsed : ctx.defenderDiamondUsed;
   const vault = availableVault(state.mine, me);
+
+  // The Royals fighting in the current duel, split by side: buff mine,
+  // club/joker theirs — removing or shrinking the opposing dueler swings the
+  // trade, and settleForScoring sees the resolved outcome.
+  const myPairRoyalIds = new Set<CardId>();
+  const theirPairRoyalIds = new Set<CardId>();
+  for (const attack of state.attacks) {
+    if (attack.targetPlayerId !== ctx.defenderPlayerId) continue;
+    if (!attack.blockerCardIds?.length) continue;
+    if (isAttacker) {
+      myPairRoyalIds.add(attack.attackerCardId);
+      for (const b of attack.blockerCardIds) theirPairRoyalIds.add(b);
+    } else {
+      theirPairRoyalIds.add(attack.attackerCardId);
+      for (const b of attack.blockerCardIds) myPairRoyalIds.add(b);
+    }
+  }
 
   for (const cardId of me.hand) {
     const card = getCard(cardId);
@@ -499,21 +531,40 @@ function duelCandidates(state: GameState, botId: string): GameAction[] {
       candidates.push({ type: "discard_heart_to_heal", heartCardId: cardId });
     }
     if (card.suit === "H" || card.suit === "S") {
-      // Buff own Royals that are fighting in the current duel.
-      const pairRoyalIds = new Set<CardId>();
-      for (const attack of state.attacks) {
-        if (attack.targetPlayerId !== ctx.defenderPlayerId) continue;
-        if (!attack.blockerCardIds?.length) continue;
-        if (isAttacker) pairRoyalIds.add(attack.attackerCardId);
-        else for (const b of attack.blockerCardIds) pairRoyalIds.add(b);
-      }
       for (const royal of me.court) {
-        if (!pairRoyalIds.has(royal.cardId)) continue;
+        if (!myPairRoyalIds.has(royal.cardId)) continue;
         if (card.suit === "H") {
           candidates.push({ type: "attach_heart", heartCardId: cardId, targetRoyalId: royal.cardId });
         } else {
           candidates.push({ type: "attach_spade", spadeCardId: cardId, targetRoyalId: royal.cardId });
         }
+      }
+    }
+    if (card.suit === "S") {
+      const reclaim = bestReclaimTarget(state, card.pipValue);
+      if (reclaim) {
+        candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: reclaim });
+      }
+    }
+    if (card.suit === "C") {
+      for (const royalId of theirPairRoyalIds) {
+        candidates.push({
+          type: "apply_club",
+          clubCardId: cardId,
+          targetPlayerId: opponentId,
+          targetRoyalId: royalId,
+        });
+      }
+    }
+    if (card.isJoker) {
+      for (const royalId of theirPairRoyalIds) {
+        candidates.push({
+          type: "play_joker",
+          cardId,
+          mode: "destroy_royal",
+          targetPlayerId: opponentId,
+          targetRoyalId: royalId,
+        });
       }
     }
   }
@@ -763,17 +814,7 @@ export function enumerateInterruptCandidates(state: GameState, botId: string): G
       for (const royal of me.court) {
         candidates.push({ type: "attach_spade", spadeCardId: cardId, targetRoyalId: royal.cardId });
       }
-      const reclaim = state.abyss
-        .filter((abyssId) => {
-          const t = getCard(abyssId);
-          const value = t.isJoker ? 10 : t.pipValue;
-          return (t.isRoyal || t.isJoker) && value <= card.pipValue;
-        })
-        .sort((a, b) => {
-          const va = getCard(a).isJoker ? 10 : getCard(a).pipValue;
-          const vb = getCard(b).isJoker ? 10 : getCard(b).pipValue;
-          return vb - va;
-        })[0];
+      const reclaim = bestReclaimTarget(state, card.pipValue);
       if (reclaim) {
         candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: reclaim });
       }

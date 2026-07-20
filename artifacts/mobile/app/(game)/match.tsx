@@ -1496,26 +1496,46 @@ export default function MatchScreen() {
   const royalTargetAction = selectedActions.find((a) => !a.disabled && a.targetType === "any_royal");
   const playerTargetAction = selectedActions.find((a) => !a.disabled && a.targetType === "any_player");
 
+  // Spades: attach should be the DEFAULT (tap a glowing Royal, like Hearts /
+  // Clubs), with Reclaim as the only explicit chip. Without this carve-out
+  // the reclaim option's pick_abyss targetType flips the card into all-chips
+  // mode and attach needs an extra tap.
+  const abyssChipAction = selectedActions.find((a) => !a.disabled && a.targetType === "pick_abyss");
+  const isSpadeLike = !!royalTargetAction && !!abyssChipAction;
+
   // Cards that also offer instant (no-target) options — Diamonds (Mine/Draw),
   // Royals (to Court), or disabled info rows — surface EVERY option as a dock
   // chip so nothing hides behind a tap-a-target hint. Tapping a targeted chip
   // "arms" it (setArmedAction) and the board highlights its legal targets.
   // Pure-target cards (Hearts/Spades/Clubs/Joker) keep the faster model: no
   // chips, just tap a glowing target directly.
-  const hasInstantChips = selectedActions.some(
-    (a) => a.disabled || !a.requiresTarget || a.targetType === "pick_abyss",
-  );
+  const hasInstantChips =
+    !isSpadeLike &&
+    selectedActions.some(
+      (a) => a.disabled || !a.requiresTarget || a.targetType === "pick_abyss",
+    );
 
-  const dockChipActions = armedAction ? [] : hasInstantChips ? selectedActions : [];
+  const dockChipActions = armedAction
+    ? []
+    : isSpadeLike
+      ? // Reclaim only — and only when there is something in the Abyss to take.
+        (gameState.abyss.length > 0 && abyssChipAction ? [abyssChipAction] : [])
+      : hasInstantChips
+        ? selectedActions
+        : [];
 
   const dockTargetHints = armedAction
     ? [targetHintFor(armedAction, selectedCard?.pipValue ?? 0) ?? "Tap a target on the board"]
-    : hasInstantChips
-      ? []
-      : selectedActions
-          .filter((a) => !a.disabled && (a.targetType === "any_royal" || a.targetType === "any_player"))
-          .map((a) => targetHintFor(a, selectedCard?.pipValue ?? 0))
-          .filter((h): h is string => !!h);
+    : isSpadeLike
+      ? [targetHintFor(royalTargetAction!, selectedCard?.pipValue ?? 0)].filter(
+          (h): h is string => !!h,
+        )
+      : hasInstantChips
+        ? []
+        : selectedActions
+            .filter((a) => !a.disabled && (a.targetType === "any_royal" || a.targetType === "any_player"))
+            .map((a) => targetHintFor(a, selectedCard?.pipValue ?? 0))
+            .filter((h): h is string => !!h);
 
   // Which action a board tap resolves to: the armed chip if present, otherwise
   // the auto-derived target action (only for pure-target cards).
@@ -1992,6 +2012,18 @@ export default function MatchScreen() {
               attackerColor={colorOf(attacksTargetingMe[0].attackerPlayerId)}
               isSubmitting={isSubmitting}
               onConfirm={handleConfirmBlocks}
+              attachTargeting={
+                targetingRoyals &&
+                activeRoyalAction &&
+                (activeRoyalAction.action === "attach_spade" || activeRoyalAction.action === "attach_heart")
+                  ? {
+                      hint:
+                        targetHintFor(activeRoyalAction, selectedCard?.pipValue ?? 0) ??
+                        "Tap a Royal to attach",
+                      onAttach: (royalId) => dispatchRoyalTarget(myId, royalId),
+                    }
+                  : undefined
+              }
             />
           ) : showDuelStage && duelCtx ? (
             <DuelStage
