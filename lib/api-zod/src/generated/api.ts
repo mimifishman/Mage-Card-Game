@@ -417,6 +417,12 @@ export const SubmitGameActionResponse = zod.object({
             }),
           )
           .optional(),
+        autoResolved: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when blocked pairs resolved without any duel phase ever being shown to clients (both sides auto-passed instantly).",
+          ),
       })
       .optional(),
     lastDirectHit: zod
@@ -739,6 +745,12 @@ export const GetMatchStateResponse = zod.object({
             }),
           )
           .optional(),
+        autoResolved: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when blocked pairs resolved without any duel phase ever being shown to clients (both sides auto-passed instantly).",
+          ),
       })
       .optional(),
     lastDirectHit: zod

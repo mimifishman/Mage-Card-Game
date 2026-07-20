@@ -829,6 +829,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CombatPairOutcome"
+        autoResolved:
+          type: boolean
+          description: >-
+            True when blocked pairs resolved without any duel phase ever being
+            shown to clients (both sides auto-passed instantly).
     DuelContext:
       type: object
       required: [attackerPlayerId, defenderPlayerId, duelAttackerPassed, duelBlockerPassed, attackerDiamondUsed, defenderDiamondUsed]

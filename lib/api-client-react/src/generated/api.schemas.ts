@@ -191,6 +191,8 @@ export interface CombatSummary {
   pairs: CombatPairOutcome[];
   autoPassedPlayerIds?: string[];
   immediateHits?: CombatPairOutcome[];
+  /** True when blocked pairs resolved without any duel phase ever being shown to clients (both sides auto-passed instantly). */
+  autoResolved?: boolean;
 }
 
 export interface DuelContext {

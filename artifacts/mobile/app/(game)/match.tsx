@@ -786,7 +786,18 @@ export default function MatchScreen() {
       }
       if (lines.length === 0) lines.push("Both sides survived — no losses");
 
-      const header = anyBlocked ? "COMBAT" : "ATTACK — UNBLOCKED";
+      // Fully auto-resolved duel: the server resolved every blocked pair
+      // instantly because neither participant had a playable card, so no
+      // duel screen was ever shown. Say so explicitly.
+      if (summary.autoResolved) {
+        lines.push("Neither player had playable cards — the duel resolved automatically");
+      }
+
+      const header = summary.autoResolved
+        ? "DUEL AUTO-RESOLVED"
+        : anyBlocked
+          ? "COMBAT"
+          : "ATTACK — UNBLOCKED";
       const idn = idCounterRef.current++;
       setDuelNotice({ id: idn, header, title, lines });
       pushEvent(colorOf(attackerId), `${header} — ${title}: ${lines.join(" · ")}`);
