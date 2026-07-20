@@ -180,6 +180,15 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
     score += persona.board * 0.25 * untapped;
   }
 
+  // Board access: with an empty court, holding at least one Royal is the only
+  // path back onto the board. A flat bonus for having that access makes Abyss
+  // reclaims (no Royal → a Royal) win scoring exactly when rebuilding
+  // matters, while leaving the play-the-Royal decision undistorted (playing
+  // it keeps access via the court, so the bonus doesn't move).
+  if (me.court.length === 0 && me.hand.some((c) => getCard(c).isRoyal)) {
+    score += persona.board * 3;
+  }
+
   return score;
 }
 
@@ -268,19 +277,22 @@ function mainPhaseCandidates(state: GameState, botId: string): GameAction[] {
       for (const royal of me.court) {
         candidates.push({ type: "attach_spade", spadeCardId: cardId, targetRoyalId: royal.cardId });
       }
-      // Recover the single most valuable retrievable card from the Abyss.
+      // Recover the most valuable Royal/Joker retrievable from the Abyss.
+      // Filter to Royals/Jokers FIRST — Royals have pip 1-3, so sorting the
+      // whole Abyss by value and then checking the top card lets any high-pip
+      // junk shadow them and the reclaim is never even considered.
       const retrievable = state.abyss
         .filter((abyssId) => {
           const t = getCard(abyssId);
           const value = t.isJoker ? 10 : t.pipValue;
-          return value <= card.pipValue;
+          return (t.isRoyal || t.isJoker) && value <= card.pipValue;
         })
         .sort((a, b) => {
           const va = getCard(a).isJoker ? 10 : getCard(a).pipValue;
           const vb = getCard(b).isJoker ? 10 : getCard(b).pipValue;
           return vb - va;
         })[0];
-      if (retrievable && (getCard(retrievable).isRoyal || getCard(retrievable).isJoker)) {
+      if (retrievable) {
         candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: retrievable });
       }
     }

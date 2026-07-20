@@ -499,6 +499,67 @@ describe("settle-scoring strategy", () => {
   });
 });
 
+describe("abyss reclaim when rebuilding", () => {
+  // Fixed persona (hash-independent) + near-zero temperature ≈ argmax, so
+  // these choices are deterministic regardless of which archetype a match id
+  // would hash to.
+  const sharp = {
+    name: "test-sharp",
+    selfLife: 1,
+    aggression: 1,
+    board: 1.2,
+    oppBoard: 1,
+    hand: 0.7,
+    economy: 0.35,
+    reserve: 0.9,
+    temperature: 0.01,
+  };
+
+  it("reclaims a Royal from the Abyss with a Spade when its court is empty", () => {
+    // Court empty, no Royal in hand, K♥ in the Abyss, affordable 5♠ in hand
+    // (plus an inert 2♥ so the reactive-cards reserve factor doesn't flip).
+    // The 4♣ decoy (pip 4 > K's pip 3) guards the enumeration fix: royals
+    // must be preferred over higher-pip junk when picking the reclaim target.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2C"],
+      abyss: ["KH", "4C"],
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { hand: ["5S", "2H"], court: [] }),
+      },
+    });
+    for (const seed of [1, 2, 3]) {
+      const action = chooseBotAction(state, BOT, { persona: sharp, rng: createRng(seed) });
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("discard_spade_to_return");
+      if (action.type === "discard_spade_to_return") {
+        expect(action.targetCardId).toBe("KH");
+        const result = dispatchAction(state, BOT, action);
+        expect(result.ok, result.ok ? "" : result.error).toBe(true);
+      }
+    }
+  });
+
+  it("still plays a Royal from hand onto an empty court (access bonus must not distort it)", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2C"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("QH")] }),
+        [BOT]: makePlayer(BOT, { hand: ["KS"], court: [] }),
+      },
+    });
+    for (const seed of [1, 2, 3]) {
+      const action = chooseBotAction(state, BOT, { persona: sharp, rng: createRng(seed) });
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("play_royal_to_court");
+    }
+  });
+});
+
 describe("softmax variety", () => {
   it("returns more than one distinct action across seeds on a rich state", () => {
     const state = makeState({
