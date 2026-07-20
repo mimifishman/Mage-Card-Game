@@ -414,6 +414,9 @@ const styles = StyleSheet.create({
   },
   centerBlock: {
     flex: 1,
+    // Stretch to the full content width so full-width children (playersList)
+    // don't collapse to a narrow box and truncate player names.
+    alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",
     gap: 16,

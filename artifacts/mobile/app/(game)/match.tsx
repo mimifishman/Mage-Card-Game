@@ -78,6 +78,10 @@ export interface ActionParams {
 // Just the Royal fields the match log needs to name a card with its totals.
 type RoyalStats = { cardId: string; buffAttack: number; buffHealth: number; damageTaken: number };
 
+// How long the winner banner holds on the final board before auto-advancing
+// to the results screen (a tap skips it immediately).
+const GAME_OVER_REVEAL_MS = 5000;
+
 // e.g. "8♣" — rank + suit symbol only.
 function cardLabel(id: string): string {
   const c = parseCardId(id);
@@ -205,6 +209,11 @@ export default function MatchScreen() {
   const prevActivePlayerRef = useRef<string | null>(null);
   const prevPendingClubRef = useRef<string | null>(null);
   const hasNavigatedRef = useRef(false);
+  // Game-over reveal: hold on the final board with a winner banner for a beat
+  // before jumping to the results screen, so the player sees who won and why.
+  const revealShownRef = useRef(false);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [gameOverReveal, setGameOverReveal] = useState<{ winnerUserId: string | null } | null>(null);
 
   // Duel tracking: snapshot each duel when it starts so we can diff courts +
   // life when it ends and explain the outcome. completedDuels feeds the ✓
@@ -290,16 +299,55 @@ export default function MatchScreen() {
   }, [matchData?.players, gameState?.turnOrder, displayNames]);
   playersParamRef.current = _playersParam;
 
-  useEffect(() => {
-    if (hasNavigatedRef.current) return;
-    if (matchData?.match?.status === "finished" && matchId) {
+  const navigateToGameOver = useCallback(
+    (winnerUserId: string | null) => {
+      if (hasNavigatedRef.current) return;
       hasNavigatedRef.current = true;
+      if (revealTimerRef.current) {
+        clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
       router.replace({
         pathname: "/(game)/game-over",
-        params: { matchId, winnerUserId: matchData.match.winnerUserId ?? "", players: playersParamRef.current },
+        params: {
+          matchId: matchId ?? "",
+          winnerUserId: winnerUserId ?? "",
+          players: playersParamRef.current,
+        },
       });
+    },
+    [matchId, router],
+  );
+
+  // Single entry point for every "match ended" signal (WS game_over, the
+  // status poll, the winning-action response, abandon). A real winner gets a
+  // ~5s reveal on the board first; an abandon (no winner) exits immediately.
+  const beginGameOver = useCallback(
+    (winnerUserId: string | null) => {
+      if (revealShownRef.current) return;
+      revealShownRef.current = true;
+      if (!winnerUserId) {
+        navigateToGameOver(null);
+        return;
+      }
+      setGameOverReveal({ winnerUserId });
+      revealTimerRef.current = setTimeout(() => navigateToGameOver(winnerUserId), GAME_OVER_REVEAL_MS);
+    },
+    [navigateToGameOver],
+  );
+
+  useEffect(() => {
+    if (matchData?.match?.status === "finished") {
+      beginGameOver(matchData.match.winnerUserId ?? null);
     }
-  }, [matchData?.match?.status, matchData?.match?.winnerUserId, matchId]);
+  }, [matchData?.match?.status, matchData?.match?.winnerUserId, beginGameOver]);
+
+  // Clear a pending reveal timer if the screen unmounts first.
+  useEffect(() => {
+    return () => {
+      if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+    };
+  }, []);
 
   // Real-time state over WebSocket. The server already pushes a per-player
   // view on every action (state_update / game_started / game_over) plus a
@@ -359,12 +407,8 @@ export default function MatchScreen() {
           ) {
             setGameState(msg.state);
           }
-          if (msg.type === "game_over" && !hasNavigatedRef.current && matchId) {
-            hasNavigatedRef.current = true;
-            router.replace({
-              pathname: "/(game)/game-over",
-              params: { matchId, winnerUserId: msg.winnerUserId ?? "", players: playersParamRef.current },
-            });
+          if (msg.type === "game_over") {
+            beginGameOver(msg.winnerUserId ?? null);
           }
         } catch {
           // ignore malformed frames
@@ -1016,10 +1060,8 @@ export default function MatchScreen() {
   const { mutate: abandonMatchMutate } = useAbandonMatch({
     mutation: {
       onSuccess: () => {
-        router.replace({
-          pathname: "/(game)/game-over",
-          params: { matchId: matchId ?? "", players: playersParamRef.current },
-        });
+        // Abandon has no winner — exit straight to results, no reveal.
+        beginGameOver(null);
       },
       onError: () => {
         showToast("Couldn't end the game — please try again", "error");
@@ -1058,11 +1100,7 @@ export default function MatchScreen() {
         setTargetAssignments({});
         setActiveAssignRoyalId(null);
         if (data.winnerUserId) {
-          hasNavigatedRef.current = true;
-          router.replace({
-            pathname: "/(game)/game-over",
-            params: { matchId, winnerUserId: data.winnerUserId, players: playersParamRef.current },
-          });
+          beginGameOver(data.winnerUserId);
         }
       },
       onError: (err) => {
@@ -2362,6 +2400,40 @@ export default function MatchScreen() {
       {turnFlare && <TurnFlare key={`flare-${turnFlare.key}`} color={turnFlare.color} />}
       {yourTurnKey !== null && <YourTurnBanner key={`yourturn-${yourTurnKey}`} color={colorOf(myId)} />}
 
+      {/* Winner reveal: hold on the final board for a beat so the player sees
+          who won (and the killing blow via the ticker) before the results
+          screen. Tap anywhere to skip; auto-advances after GAME_OVER_REVEAL_MS. */}
+      {gameOverReveal && (() => {
+        const didWin = gameOverReveal.winnerUserId === myId;
+        const winnerName = gameOverReveal.winnerUserId
+          ? nameFor(gameOverReveal.winnerUserId)
+          : null;
+        return (
+          <Pressable
+            style={styles.gameOverOverlay}
+            onPress={() => navigateToGameOver(gameOverReveal.winnerUserId)}
+            testID="game-over-reveal"
+          >
+            <Animated.View entering={FadeIn.duration(400)} style={styles.gameOverCard}>
+              <Ionicons
+                name={didWin ? "trophy" : "skull"}
+                size={48}
+                color={didWin ? Colors.brand : Colors.accentRed}
+              />
+              <Text
+                style={[
+                  styles.gameOverTitle,
+                  { color: didWin ? Colors.brand : Colors.accentRed },
+                ]}
+              >
+                {didWin ? "You win!" : winnerName ? `${winnerName} wins!` : "Match over"}
+              </Text>
+              <Text style={styles.gameOverHint}>Tap to view results</Text>
+            </Animated.View>
+          </Pressable>
+        );
+      })()}
+
       <ToastHost toasts={toasts} />
     </View>
   );
@@ -2401,6 +2473,37 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
     justifyContent: "center",
+  },
+  gameOverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    // Dimmed, not opaque — the final board + ticker stay readable behind it.
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 60,
+    padding: 24,
+  },
+  gameOverCard: {
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 28,
+    paddingHorizontal: 40,
+  },
+  gameOverTitle: {
+    fontSize: 28,
+    fontFamily: "Cinzel_700Bold",
+    letterSpacing: 1,
+    textAlign: "center",
+  },
+  gameOverHint: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   container: {
     flex: 1,
