@@ -837,3 +837,87 @@ describe("softmax variety", () => {
     expect(personaForMatch("match-abc")).toBe(personaForMatch("match-abc"));
   });
 });
+
+describe("previously-missing card plays are now generated", () => {
+  it("offers attach_royal_support for a Royal in hand onto a Royal in Court", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D", "9D"],
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { hand: ["KD"], court: [mkRoyal("JS")] }),
+      },
+    });
+    const candidates = enumerateCandidateActions(state, BOT);
+    const support = candidates.find(
+      (a) =>
+        a.type === "attach_royal_support" &&
+        a.supportCardId === "KD" &&
+        a.targetRoyalId === "JS",
+    );
+    expect(support, "attach_royal_support should be enumerated").toBeDefined();
+    // play_royal_to_court is still offered alongside it.
+    expect(candidates.some((a) => a.type === "play_royal_to_court")).toBe(true);
+    expect(dispatchAction(state, BOT, support!).ok).toBe(true);
+  });
+
+  it("offers discard_diamond_for_boost while defending a duel with a frozen Vault", () => {
+    const state = makeState({
+      phase: "duel_blocker_turn",
+      activePlayerId: P1,
+      hasAttackedThisTurn: true,
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KS", targetPlayerId: BOT, blockerCardIds: ["JD"] },
+      ],
+      duelContext: {
+        attackerPlayerId: P1,
+        defenderPlayerId: BOT,
+        duelAttackerPassed: false,
+        duelBlockerPassed: false,
+        attackerDiamondUsed: false,
+        defenderDiamondUsed: false,
+        resolvedPairAttackerIds: [],
+      },
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KS", { hasAttackedThisTurn: true })] }),
+        [BOT]: makePlayer(BOT, {
+          hand: ["3D"],
+          court: [mkRoyal("JD")],
+          vault: { tempBoost: 0, spent: 0, frozenMineTotal: 5 },
+        }),
+      },
+    });
+    const candidates = enumerateCandidateActions(state, BOT);
+    const boost = candidates.find(
+      (a) => a.type === "discard_diamond_for_boost" && a.cardId === "3D",
+    );
+    expect(boost, "discard_diamond_for_boost should be enumerated in a duel").toBeDefined();
+    expect(dispatchAction(state, BOT, boost!).ok).toBe(true);
+  });
+
+  it("reclaims a high non-Royal from the Abyss when no Royal/Joker is available", () => {
+    // 8♥ (potential 4) and a 2♦ decoy (potential 1) in the Abyss, no Royal/Joker;
+    // an affordable 8♠ in hand. The reclaim must exist and prefer the 8♥.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["3C"],
+      abyss: ["8H", "2D"],
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { hand: ["8S"], court: [mkRoyal("KS")] }),
+      },
+    });
+    const candidates = enumerateCandidateActions(state, BOT);
+    const reclaim = candidates.find(
+      (a) => a.type === "discard_spade_to_return" && a.spadeCardId === "8S",
+    );
+    expect(reclaim, "discard_spade_to_return should be enumerated").toBeDefined();
+    if (reclaim && reclaim.type === "discard_spade_to_return") {
+      expect(reclaim.targetCardId).toBe("8H");
+      expect(dispatchAction(state, BOT, reclaim).ok).toBe(true);
+    }
+  });
+});

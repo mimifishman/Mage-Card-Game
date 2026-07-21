@@ -244,23 +244,20 @@ function botIncomingAttacks(state: GameState, botId: string) {
 }
 
 /**
- * The most valuable Royal/Joker a Spade of the given pip can pull from the
- * Abyss. Filters to Royals/Jokers FIRST — Royals have pip 1-3, so sorting the
- * whole Abyss by value and then checking the top card would let any high-pip
- * junk shadow them.
+ * The most useful card a Spade of the given pip can pull from the Abyss.
+ * Ranks every eligible card by cardPotential (not raw pip), which keeps Royals
+ * and Jokers on top — a King scores 6, a Joker 8, a 10 only 5 — while still
+ * letting a high-value non-Royal be reclaimed when no Royal/Joker is available.
+ * Eligibility uses the engine's discardSpadeToReturn rule (a Joker costs 10).
  */
 function bestReclaimTarget(state: GameState, spadePip: number): CardId | undefined {
   return state.abyss
     .filter((abyssId) => {
       const t = getCard(abyssId);
-      const value = t.isJoker ? 10 : t.pipValue;
-      return (t.isRoyal || t.isJoker) && value <= spadePip;
+      const reclaimCost = t.isJoker ? 10 : t.pipValue;
+      return reclaimCost <= spadePip;
     })
-    .sort((a, b) => {
-      const va = getCard(a).isJoker ? 10 : getCard(a).pipValue;
-      const vb = getCard(b).isJoker ? 10 : getCard(b).pipValue;
-      return vb - va;
-    })[0];
+    .sort((a, b) => cardPotential(b) - cardPotential(a))[0];
 }
 
 /**
@@ -318,10 +315,24 @@ function mainPhaseCandidates(state: GameState, botId: string): GameAction[] {
     if (card.suit === "D" && !card.isRoyal && !me.hasPlayedDiamondThisTurn) {
       candidates.push({ type: "play_diamond_to_mine", cardId });
       candidates.push({ type: "discard_diamond_to_draw", cardId });
+      // No discard_diamond_for_boost here: for the ACTIVE player it gives the
+      // same immediate Vault as play_diamond_to_mine (which also banks the card
+      // permanently), so it is a redundant candidate. The boost is offered only
+      // where Vault is frozen — duels, club-responses, interrupts.
     }
 
     if (card.isRoyal && card.vaultCost <= vault) {
       candidates.push({ type: "play_royal_to_court", cardId });
+      // A Royal in hand can instead be spent as a support attachment on a
+      // Royal already in Court (bigger than a Spade: J +1/+2, Q +2/+3,
+      // K +3/+4). Offer both — scoring picks a new body vs. a bigger threat.
+      for (const royal of me.court) {
+        candidates.push({
+          type: "attach_royal_support",
+          supportCardId: cardId,
+          targetRoyalId: royal.cardId,
+        });
+      }
     }
 
     if (card.suit === "H" && !card.isRoyal && card.vaultCost <= vault) {
@@ -558,6 +569,9 @@ function duelCandidates(state: GameState, botId: string): GameAction[] {
 
     if (card.suit === "D" && !diamondUsed) {
       candidates.push({ type: "discard_diamond_to_draw", cardId });
+      // The Vault temp-boost is the only way to raise a frozen (non-active)
+      // Vault mid-duel, so the bot can afford to pump the fighting Royal.
+      candidates.push({ type: "discard_diamond_for_boost", cardId });
     }
     if (card.suit === "H" && me.life < 20) {
       candidates.push({ type: "discard_heart_to_heal", heartCardId: cardId });
@@ -619,6 +633,7 @@ function respondToClubCandidates(state: GameState, botId: string): GameAction[] 
       const card = getCard(cardId);
       if (card.suit === "D" && !card.isRoyal) {
         candidates.push({ type: "discard_diamond_to_draw", cardId });
+        candidates.push({ type: "discard_diamond_for_boost", cardId });
         break;
       }
     }
@@ -885,6 +900,7 @@ export function enumerateInterruptCandidates(state: GameState, botId: string): G
     // it on its own turn the draw would just be rejected — skip the noise.
     if (card.suit === "D" && !me.hasPlayedDiamondThisTurn) {
       candidates.push({ type: "discard_diamond_to_draw", cardId });
+      candidates.push({ type: "discard_diamond_for_boost", cardId });
     }
   }
 
