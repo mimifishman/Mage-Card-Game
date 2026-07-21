@@ -21,6 +21,7 @@ export const matchesTable = pgTable("matches", {
   ),
   turnNumber: integer("turn_number").notNull().default(0),
   winnerUserId: varchar("winner_user_id").references(() => usersTable.id),
+  botPersona: varchar("bot_persona", { length: 32 }),
   startedAt: timestamp("started_at", { withTimezone: true }),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -78,6 +79,7 @@ export const gameActionsLogTable = pgTable("game_actions_log", {
   actionType: text("action_type").notNull(),
   payload: jsonb("payload").notNull().default({}),
   turnNumber: integer("turn_number").notNull(),
+  handsSnapshot: jsonb("hands_snapshot"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

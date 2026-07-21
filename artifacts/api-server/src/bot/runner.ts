@@ -5,7 +5,14 @@ import {
   loadEngineState,
 } from "../repositories/matchRepository";
 import { dispatchAction, getTurnHolderId } from "../game/dispatcher";
-import { chooseBotAction, chooseBotInterrupt, fallbackAction, personaForMatch } from "../game/bot";
+import {
+  chooseBotAction,
+  chooseBotInterrupt,
+  fallbackAction,
+  personaByName,
+  personaForMatch,
+  type BotPersona,
+} from "../game/bot";
 import type { GameState } from "../game/types";
 import { isGameOver } from "../game";
 import { applyResultAndBroadcast } from "../services/matchStart";
@@ -95,15 +102,23 @@ async function runOneBotAction(matchId: string, botIds: Set<string>): Promise<st
   if (!data || data.match.status !== "in_progress" || !state) return null;
   if (isGameOver(state)) return null;
 
+  // The player-chosen persona (stored on the match) wins; matches created
+  // without a choice keep the legacy hash-derived persona. botPersona="random"
+  // also lands in the hash fallback (personaByName returns null for it), which
+  // is exactly the intent: stable within a match, re-rolled on every rematch
+  // because rematches get a fresh match id.
+  const persona =
+    (data.match.botPersona ? personaByName(data.match.botPersona) : null) ??
+    personaForMatch(matchId);
+
   const holderId = getTurnHolderId(state);
   if (!holderId || !botIds.has(holderId)) {
     // Someone else holds priority — the bot may still react with an
     // interrupt (heal, buff, club…), exactly like a human playing during
     // an opponent's turn.
-    return tryBotInterrupt(matchId, state, botIds);
+    return tryBotInterrupt(matchId, state, botIds, persona);
   }
 
-  const persona = personaForMatch(matchId);
   const action = chooseBotAction(state, holderId, { persona });
   let result = dispatchAction(state, holderId, action);
 
@@ -142,6 +157,7 @@ async function tryBotInterrupt(
   matchId: string,
   state: GameState,
   botIds: Set<string>,
+  persona: BotPersona,
 ): Promise<string | null> {
   const botId = [...botIds].find((id) => state.players[id] && !state.players[id]!.isEliminated);
   if (!botId) return null;
@@ -155,7 +171,7 @@ async function tryBotInterrupt(
   if (used >= MAX_INTERRUPTS_PER_TURN) return null;
 
   const action = chooseBotInterrupt(state, botId, {
-    persona: personaForMatch(matchId),
+    persona,
     debug: (info) => {
       logger.info({ matchId, botId, ...info }, "Bot interrupt decision");
     },

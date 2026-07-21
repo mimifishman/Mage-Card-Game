@@ -138,6 +138,12 @@ export const CreateMatchBody = zod.object({
     .describe(
       "When true, creates a solo match against the AI opponent: the bot is seated automatically and the match starts immediately (status will be in_progress in the response).",
     ),
+  botPersona: zod
+    .enum(["aggressor", "controller", "economist", "random"])
+    .optional()
+    .describe(
+      'Optional bot style for vs-AI matches. \"random\" picks one of the concrete personas per match — rematches roll a fresh persona. When omitted, the server falls back to its legacy per-match persona selection. Ignored for multiplayer matches.',
+    ),
 });
 
 /**
@@ -185,6 +191,18 @@ export const GetMatchResponse = zod.object({
     turnNumber: zod.number(),
     currentTurnPlayerId: zod.string().nullish(),
     winnerUserId: zod.string().nullish(),
+    botPersona: zod
+      .enum(["aggressor", "controller", "economist", "random"])
+      .nullish()
+      .describe(
+        "The bot style chosen for this vs-AI match, or null when unset (multiplayer matches, or legacy hash-based persona selection).",
+      ),
+    botPersonaResolved: zod
+      .enum(["aggressor", "controller", "economist"])
+      .nullish()
+      .describe(
+        'The concrete persona actually playing this match. Equal to botPersona for direct choices; for botPersona=\"random\" this is the per-match resolved persona (re-rolled on each rematch).',
+      ),
     startedAt: zod.date().nullish(),
     finishedAt: zod.date().nullish(),
   }),
