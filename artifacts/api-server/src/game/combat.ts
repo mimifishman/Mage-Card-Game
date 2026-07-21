@@ -618,6 +618,7 @@ function executeResolveCombat(state: GameState): Result<GameState> {
   const accumulatedAutoPassed = Array.from(
     new Set([...(state.combatAutoPassedAccum ?? []), ...(ctx?.autoPassedPlayerIds ?? [])]),
   );
+  const anyDuelShown = !!state.combatDuelShownAccum || !!ctx?.duelPhaseShown;
 
   const queue = state.duelQueue ?? [];
 
@@ -630,6 +631,7 @@ function executeResolveCombat(state: GameState): Result<GameState> {
         abyss,
         combatPairsAccumulator: accumulatedPairs,
         combatAutoPassedAccum: accumulatedAutoPassed,
+        combatDuelShownAccum: anyDuelShown,
       },
       ctx.attackerPlayerId,
       nextDefenderId!,
@@ -641,6 +643,9 @@ function executeResolveCombat(state: GameState): Result<GameState> {
     pairs: accumulatedPairs,
     autoPassedPlayerIds: accumulatedAutoPassed.length ? accumulatedAutoPassed : undefined,
     immediateHits: ctx?.immediateHits?.length ? ctx.immediateHits : undefined,
+    // Blocked pairs existed (we're in executeResolveCombat via a duel context)
+    // yet no duel phase ever reached clients — the whole fight auto-resolved.
+    autoResolved: ctx && !anyDuelShown ? true : undefined,
   };
 
   return ok({
@@ -653,6 +658,7 @@ function executeResolveCombat(state: GameState): Result<GameState> {
     duelQueue: undefined,
     combatPairsAccumulator: undefined,
     combatAutoPassedAccum: undefined,
+    combatDuelShownAccum: undefined,
     lastCombatSummary: finalSummary,
   });
 }
@@ -832,7 +838,11 @@ export function autoAdvanceDuelIfNeeded(state: GameState): Result<GameState> {
   const currentPlayer = state.players[currentPlayerId];
   if (!currentPlayer) return ok(state);
 
-  if (hasDuelPlayableCard(currentPlayer, state)) return ok(state);
+  if (hasDuelPlayableCard(currentPlayer, state)) {
+    // This duel-phase state persists and reaches clients — the duel is visible.
+    if (ctx.duelPhaseShown) return ok(state);
+    return ok({ ...state, duelContext: { ...ctx, duelPhaseShown: true } });
+  }
 
   const existingAutoPassedIds = ctx.autoPassedPlayerIds ?? [];
   const updatedAutoPassedIds = existingAutoPassedIds.includes(currentPlayerId)
@@ -853,7 +863,12 @@ export function autoAdvanceDuelIfNeeded(state: GameState): Result<GameState> {
   const nextPhase: "duel_blocker_turn" | "duel_attacker_turn" = isAttackerTurn ? "duel_blocker_turn" : "duel_attacker_turn";
   const nextPlayerId = nextPhase === "duel_attacker_turn" ? ctx.attackerPlayerId : ctx.defenderPlayerId;
   const nextPlayer = state.players[nextPlayerId];
-  const nextState: GameState = { ...state, phase: nextPhase, duelContext: newCtx };
+  const nextState: GameState = {
+    ...state,
+    phase: nextPhase,
+    // This duel-phase state persists and reaches clients — the duel is visible.
+    duelContext: { ...newCtx, duelPhaseShown: true },
+  };
   if (!nextPlayer || !hasDuelPlayableCard(nextPlayer, nextState)) {
     const nextAutoPassedIds = updatedAutoPassedIds.includes(nextPlayerId)
       ? updatedAutoPassedIds

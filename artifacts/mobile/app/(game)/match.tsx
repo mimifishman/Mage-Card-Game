@@ -78,6 +78,7 @@ export interface ActionParams {
 // Just the Royal fields the match log needs to name a card with its totals.
 type RoyalStats = { cardId: string; buffAttack: number; buffHealth: number; damageTaken: number };
 
+
 // e.g. "8♣" — rank + suit symbol only.
 function cardLabel(id: string): string {
   const c = parseCardId(id);
@@ -161,6 +162,12 @@ export default function MatchScreen() {
   // to a slow safety-net interval. When it's down we poll fast (as before).
   const wsRef = useRef<WebSocket | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  // Narrates each resolved action into the match log. Kept in a ref (assigned
+  // every render, like playersParamRef) so the long-lived WebSocket onmessage
+  // closure always calls the freshest version.
+  const logActionRef = useRef<
+    ((la: { actorUserId: string; action: GameActionRequest }, view: PlayerGameView) => void) | null
+  >(null);
 
   const [attackSelectMode, setAttackSelectMode] = useState(false);
   const [selectedAttackRoyalIds, setSelectedAttackRoyalIds] = useState<Set<string>>(new Set());
@@ -171,6 +178,8 @@ export default function MatchScreen() {
   // 4-player board: which opponent seat is expanded ("in focus").
   const [focusedOpponentId, setFocusedOpponentId] = useState<string | null>(null);
   const [abyssPickerAction, setAbyssPickerAction] = useState<ValidAction | null>(null);
+  // Debug/testing: which opponent's revealed hand (AI seats only) is open.
+  const [revealedHandPlayerId, setRevealedHandPlayerId] = useState<string | null>(null);
   // A dock chip that needs a board target (e.g. Diamond boost) the player has
   // tapped — the board then highlights legal targets to finish the play.
   const [armedAction, setArmedAction] = useState<ValidAction | null>(null);
@@ -197,6 +206,15 @@ export default function MatchScreen() {
   const prevActivePlayerRef = useRef<string | null>(null);
   const prevPendingClubRef = useRef<string | null>(null);
   const hasNavigatedRef = useRef(false);
+  // Game-over reveal: stay on the final board with a compact winner banner so
+  // the player can review what happened (expand the ticker, inspect courts).
+  // Navigation to the results screen only happens via the banner's button —
+  // no auto-advance.
+  const revealShownRef = useRef(false);
+  // Winner mirrored in a ref so long-lived closures (the WS handler) can read
+  // it without going stale.
+  const revealWinnerRef = useRef<string | null>(null);
+  const [gameOverReveal, setGameOverReveal] = useState<{ winnerUserId: string | null } | null>(null);
 
   // Duel tracking: snapshot each duel when it starts so we can diff courts +
   // life when it ends and explain the outcome. completedDuels feeds the ✓
@@ -211,7 +229,7 @@ export default function MatchScreen() {
     stats: Record<string, RoyalStats>;
   } | null>(null);
   const [completedDuels, setCompletedDuels] = useState<{ id: number; text: string }[]>([]);
-  const [duelNotice, setDuelNotice] = useState<{ id: number; title: string; lines: string[] } | null>(null);
+  const [duelNotice, setDuelNotice] = useState<{ id: number; header?: string; title: string; lines: string[] } | null>(null);
 
   // The result panel informs without blocking: it auto-clears after ~9s.
   useEffect(() => {
@@ -255,6 +273,13 @@ export default function MatchScreen() {
     }
   }, [matchData]);
 
+  // The AI opponent's seat (vs-AI matches only) — used to phrase waiting
+  // states as "thinking" rather than "waiting", since the bot never idles.
+  const botPlayerId = useMemo(
+    () => matchData?.players?.find((p) => p.isBot)?.userId ?? null,
+    [matchData?.players],
+  );
+
   // Always-current players snapshot stored in a ref so that closures with stale
   // deps (e.g. the WebSocket onmessage handler) can still read the latest value.
   // Using useMemo with explicit deps so React Compiler cannot silently cache this.
@@ -275,16 +300,45 @@ export default function MatchScreen() {
   }, [matchData?.players, gameState?.turnOrder, displayNames]);
   playersParamRef.current = _playersParam;
 
-  useEffect(() => {
-    if (hasNavigatedRef.current) return;
-    if (matchData?.match?.status === "finished" && matchId) {
+  const navigateToGameOver = useCallback(
+    (winnerUserId: string | null) => {
+      if (hasNavigatedRef.current) return;
       hasNavigatedRef.current = true;
       router.replace({
         pathname: "/(game)/game-over",
-        params: { matchId, winnerUserId: matchData.match.winnerUserId ?? "", players: playersParamRef.current },
+        params: {
+          matchId: matchId ?? "",
+          winnerUserId: winnerUserId ?? "",
+          players: playersParamRef.current,
+        },
       });
+    },
+    [matchId, router],
+  );
+
+  // Single entry point for every "match ended" signal (WS game_over, the
+  // status poll, the winning-action response, abandon). A real winner shows
+  // the review banner and waits for the player; an abandon (no winner) exits
+  // immediately — there's nothing to review.
+  const beginGameOver = useCallback(
+    (winnerUserId: string | null) => {
+      if (revealShownRef.current) return;
+      revealShownRef.current = true;
+      if (!winnerUserId) {
+        navigateToGameOver(null);
+        return;
+      }
+      revealWinnerRef.current = winnerUserId;
+      setGameOverReveal({ winnerUserId });
+    },
+    [navigateToGameOver],
+  );
+
+  useEffect(() => {
+    if (matchData?.match?.status === "finished") {
+      beginGameOver(matchData.match.winnerUserId ?? null);
     }
-  }, [matchData?.match?.status, matchData?.match?.winnerUserId, matchId]);
+  }, [matchData?.match?.status, matchData?.match?.winnerUserId, beginGameOver]);
 
   // Real-time state over WebSocket. The server already pushes a per-player
   // view on every action (state_update / game_started / game_over) plus a
@@ -326,7 +380,15 @@ export default function MatchScreen() {
             type: string;
             state?: PlayerGameView;
             winnerUserId?: string | null;
+            lastAction?: { actorUserId: string; action: GameActionRequest };
           };
+          if (
+            (msg.type === "state_update" || msg.type === "game_over") &&
+            msg.lastAction &&
+            msg.state
+          ) {
+            logActionRef.current?.(msg.lastAction, msg.state);
+          }
           if (
             (msg.type === "state_update" ||
               msg.type === "game_started" ||
@@ -336,12 +398,14 @@ export default function MatchScreen() {
           ) {
             setGameState(msg.state);
           }
-          if (msg.type === "game_over" && !hasNavigatedRef.current && matchId) {
-            hasNavigatedRef.current = true;
-            router.replace({
-              pathname: "/(game)/game-over",
-              params: { matchId, winnerUserId: msg.winnerUserId ?? "", players: playersParamRef.current },
-            });
+          if (msg.type === "game_over") {
+            beginGameOver(msg.winnerUserId ?? null);
+          }
+          // If the other player starts a rematch while we're lingering on the
+          // final board, move along to the results screen — its existing
+          // rematch-room discovery takes over from there.
+          if (msg.type === "rematch" && revealShownRef.current) {
+            navigateToGameOver(revealWinnerRef.current);
           }
         } catch {
           // ignore malformed frames
@@ -401,6 +465,134 @@ export default function MatchScreen() {
     [seatColors],
   );
 
+  // Turns a server-reported action into a match-log line. This narrates the
+  // steps the diff-based log below can't see (Diamonds banked, Royals
+  // summoned, attachments, blocks, discards…) — without it, most of the AI
+  // Mage's turn is invisible. Action types the diff log already covers well
+  // (attacks, Royal-targeted Clubs, turn changes) are skipped to avoid
+  // double entries.
+  const describeLastAction = useCallback(
+    (la: { actorUserId: string; action: GameActionRequest }, view: PlayerGameView) => {
+      const actor = la.actorUserId;
+      const a = la.action as GameActionRequest & { blocks?: Record<string, unknown> };
+      const selfId = user?.id ?? "";
+      const nameOf = (id: string) => (id === selfId ? "You" : (displayNames[id] ?? id.slice(0, 8)));
+      const lbl = (id?: string) => (id ? cardLabel(id) : "a card");
+      // Name a Royal with its totals from the fresh view; a Royal already gone
+      // from the court (destroyed by this very action) falls back to its card.
+      const royalIn = (ownerId: string, royalId?: string) => {
+        if (!royalId) return "a Royal";
+        const r = view.players[ownerId]?.court?.find((x) => x.cardId === royalId);
+        return r ? royalStatLabel(r) : cardLabel(royalId);
+      };
+      const tgt = a.targetPlayerId ?? actor;
+
+      let text: string | null = null;
+      switch (a.type) {
+        case "play_diamond_to_mine":
+          text = `banked ${lbl(a.cardId)} into the Mine`;
+          break;
+        case "discard_diamond_to_draw":
+          text = `discarded ${lbl(a.cardId)} to draw a card`;
+          break;
+        case "discard_diamond_for_boost":
+          text =
+            tgt === actor
+              ? `burned ${lbl(a.cardId)} for a Vault boost`
+              : `burned ${lbl(a.cardId)} to boost ${nameOf(tgt)}'s Vault`;
+          break;
+        case "discard_to_abyss":
+          text = `discarded ${lbl(a.cardId)}`;
+          break;
+        case "play_royal_to_court":
+          text = `summoned ${royalIn(actor, a.cardId)}`;
+          break;
+        case "attach_heart":
+          text = `attached ${lbl(a.heartCardId)} to ${royalIn(tgt, a.targetRoyalId)}`;
+          break;
+        case "attach_spade":
+          text = `attached ${lbl(a.spadeCardId)} to ${royalIn(tgt, a.targetRoyalId)}`;
+          break;
+        case "discard_heart_to_heal":
+          text =
+            tgt === actor
+              ? `used ${lbl(a.heartCardId)} to heal`
+              : `used ${lbl(a.heartCardId)} to heal ${nameOf(tgt)}`;
+          break;
+        case "discard_spade_to_return":
+          text = `used ${lbl(a.spadeCardId)} to reclaim ${lbl(a.targetCardId)} from the Abyss`;
+          break;
+        case "apply_club":
+          // Royal-targeted Clubs are narrated by the pendingClubDebuff diff.
+          if (!a.targetRoyalId && a.clubCardId) {
+            text = `burned ${lbl(a.clubCardId)} — ${parseCardId(a.clubCardId).pipValue} damage to ${nameOf(tgt)}`;
+          }
+          break;
+        case "play_joker":
+          text =
+            a.mode === "destroy_royal" && a.targetRoyalId
+              ? `played a Joker — destroyed ${royalIn(tgt, a.targetRoyalId)}`
+              : `played a Joker — 10 damage to ${nameOf(tgt)}`;
+          break;
+        case "confirm_declare_blocks": {
+          const entries = Object.entries(a.blocks ?? {});
+          const blocked = entries.filter(([, v]) => Array.isArray(v) && v.length > 0);
+          text =
+            blocked.length === 0
+              ? "chose not to block"
+              : blocked
+                  .map(
+                    ([atkId, v]) =>
+                      `blocked ${cardLabel(atkId)} with ${(v as string[]).map(cardLabel).join(" + ")}`,
+                  )
+                  .join("; ");
+          break;
+        }
+        case "duel_pass":
+          text = "passed";
+          break;
+        case "confirm_club_response":
+          text = "let the Club resolve";
+          break;
+        case "discard_to_end_turn":
+          text = `discarded ${lbl(a.cardId)} (hand limit)`;
+          break;
+        case "end_turn":
+          text = "ended their turn";
+          break;
+        case "set_damage_order":
+          text = "chose the damage order";
+          break;
+        default:
+          // declare_attack is narrated by the diff log with full stat labels;
+          // interrupt_pass is a legacy no-op.
+          break;
+      }
+
+      if (text) {
+        // ⚡ marks card plays made while someone ELSE holds the turn —
+        // interrupts and combat/club reactions — so reactive play is
+        // instantly visible in the log.
+        const CARD_PLAY_TYPES = new Set([
+          "play_diamond_to_mine",
+          "discard_diamond_to_draw",
+          "discard_diamond_for_boost",
+          "discard_to_abyss",
+          "attach_heart",
+          "attach_spade",
+          "discard_heart_to_heal",
+          "discard_spade_to_return",
+          "apply_club",
+          "play_joker",
+        ]);
+        const offTurn = actor !== view.activePlayerId && CARD_PLAY_TYPES.has(a.type);
+        pushEvent(colorOf(actor), `${offTurn ? "⚡ " : ""}${nameOf(actor)} ${text}`);
+      }
+    },
+    [user, displayNames, colorOf, pushEvent],
+  );
+  logActionRef.current = describeLastAction;
+
   // Snapshot the duel when it starts; when it ends (or hands off to the next
   // defender in the queue), diff courts + life against the snapshot to
   // produce a human-readable outcome.
@@ -450,8 +642,10 @@ export default function MatchScreen() {
 
     const snap = duelSnapshotRef.current;
     const ctx = gameState.duelContext;
+    let handledByDuelTracker = false;
 
     if (isDuelTurnPhase(gameState.phase) && ctx) {
+      handledByDuelTracker = true;
       const sameDuel =
         snap && snap.attackerId === ctx.attackerPlayerId && snap.defenderId === ctx.defenderPlayerId;
       if (!sameDuel) {
@@ -491,12 +685,122 @@ export default function MatchScreen() {
     } else if (snap) {
       // Combat left the duel phases — the last duel is over. Show the result
       // panel (non-blocking, auto-clears) and log it permanently.
+      handledByDuelTracker = true;
       const res = finalize(snap);
       duelSnapshotRef.current = null;
       const idn = idCounterRef.current++;
       setDuelNotice({ id: idn, title: res.title, lines: res.lines });
       pushEvent(colorOf(snap.attackerId), `Duel over — ${res.title}: ${res.lines.join(" · ")}`);
       setCompletedDuels([]);
+    }
+
+    // Combat that resolved WITHOUT the client ever rendering a duel phase.
+    // Three cases produce no duelNotice from the snapshot tracker above:
+    //   A) the defender let every attacker through unblocked (no duel exists),
+    //   B) blocks were made but both sides had no duel cards, so the engine
+    //      auto-resolved the whole fight inside one action, and
+    //   C) a mix of the two.
+    // In all three the state jumps declare_blocks → main in a single update.
+    // Synthesize the same auto-clearing panel from lastCombatSummary so the
+    // player always sees what happened. A duel that WAS rendered is skipped
+    // here (handledByDuelTracker) — that path already showed the panel.
+    // Gate on the phase transition, NOT on lastCombatSummary changing:
+    // lastCombatSummary lingers in state across turns, so diffing it would
+    // replay the previous combat at the start of a new turn. "We were in a
+    // combat phase last render and aren't now" is the reliable signal that a
+    // fight just resolved. prevPhaseRef still holds the previous phase here —
+    // it's updated by the diff effect, which runs after this one.
+    const summary = gameState.lastCombatSummary;
+    const prevPhase = prevPhaseRef.current;
+    const cameFromCombat =
+      prevPhase === "declare_blocks" ||
+      prevPhase === "assign_damage_order" ||
+      isDuelTurnPhase(prevPhase ?? "");
+    const combatResolvedNow =
+      gameState.phase !== "declare_blocks" &&
+      gameState.phase !== "assign_damage_order" &&
+      !isDuelTurnPhase(gameState.phase);
+    if (
+      cameFromCombat &&
+      combatResolvedNow &&
+      !handledByDuelTracker &&
+      summary &&
+      summary.pairs.length > 0
+    ) {
+      // Pre-combat stats come from the previous snapshot (this effect runs
+      // before the diff effect updates prevPlayersRef), so destroyed Royals
+      // are still named with the values they died with.
+      const prevPlayers = prevPlayersRef.current;
+      // Combat always resolves within the attacker's turn.
+      const attackerId = gameState.activePlayerId;
+      const royalName = (ownerId: string, cardId: string) => {
+        const before = prevPlayers[ownerId]?.court.find((r) => r.cardId === cardId);
+        return before ? royalStatLabel(before) : cardLabel(cardId);
+      };
+
+      const blockedPairs = summary.pairs.filter((p) => (p.blockerCardIds?.length ?? 0) > 0);
+      const unblockedPairs = summary.pairs.filter(
+        (p) => (p.blockerCardIds?.length ?? 0) === 0 && p.directDamage > 0,
+      );
+      const anyBlocked = blockedPairs.length > 0;
+
+      const defenderIds = [...new Set(summary.pairs.map((p) => p.targetPlayerId))];
+      const atkRoyals = [...new Set(summary.pairs.map((p) => p.attackerCardId))].map((c) =>
+        royalName(attackerId, c),
+      );
+      const title = `${nameOf(attackerId)} ${atkRoyals.join(", ")} → ${defenderIds
+        .map(nameOf)
+        .join(", ")}`;
+
+      const lines: string[] = [];
+      // Per-pair narration: how each attacking Royal fared.
+      for (const p of blockedPairs) {
+        const blockers = p.blockerCardIds.map((b) => royalName(p.targetPlayerId, b)).join(" + ");
+        lines.push(`${royalName(attackerId, p.attackerCardId)} — blocked by ${blockers}`);
+      }
+      for (const p of unblockedPairs) {
+        lines.push(
+          `${royalName(attackerId, p.attackerCardId)} hit ${nameOf(p.targetPlayerId)} for ${p.directDamage} (unblocked)`,
+        );
+      }
+      // Losses (from court diffs) and life deltas.
+      for (const p of blockedPairs) {
+        if (p.attackerDestroyed) {
+          lines.push(`${nameOf(attackerId)} lost Royal ${royalName(attackerId, p.attackerCardId)}`);
+        }
+        for (const b of p.blockerCardIds) {
+          const survived = gameState.players[p.targetPlayerId]?.court.some((r) => r.cardId === b);
+          if (!survived) lines.push(`${nameOf(p.targetPlayerId)} lost Royal ${royalName(p.targetPlayerId, b)}`);
+        }
+      }
+      for (const pid of [attackerId, ...defenderIds]) {
+        const beforeLife = prevPlayers[pid]?.life;
+        const nowLife = gameState.players[pid]?.life;
+        if (beforeLife !== undefined && nowLife !== undefined && nowLife !== beforeLife) {
+          lines.push(
+            nowLife < beforeLife
+              ? `${nameOf(pid)} took ${beforeLife - nowLife} damage (❤ ${nowLife})`
+              : `${nameOf(pid)} healed +${nowLife - beforeLife} (❤ ${nowLife})`,
+          );
+        }
+      }
+      if (lines.length === 0) lines.push("Both sides survived — no losses");
+
+      // Fully auto-resolved duel: the server resolved every blocked pair
+      // instantly because neither participant had a playable card, so no
+      // duel screen was ever shown. Say so explicitly.
+      if (summary.autoResolved) {
+        lines.push("Neither player had playable cards — the duel resolved automatically");
+      }
+
+      const header = summary.autoResolved
+        ? "DUEL AUTO-RESOLVED"
+        : anyBlocked
+          ? "COMBAT"
+          : "ATTACK — UNBLOCKED";
+      const idn = idCounterRef.current++;
+      setDuelNotice({ id: idn, header, title, lines });
+      pushEvent(colorOf(attackerId), `${header} — ${title}: ${lines.join(" · ")}`);
     }
   }, [gameState]);
 
@@ -764,10 +1068,8 @@ export default function MatchScreen() {
   const { mutate: abandonMatchMutate } = useAbandonMatch({
     mutation: {
       onSuccess: () => {
-        router.replace({
-          pathname: "/(game)/game-over",
-          params: { matchId: matchId ?? "", players: playersParamRef.current },
-        });
+        // Abandon has no winner — exit straight to results, no reveal.
+        beginGameOver(null);
       },
       onError: () => {
         showToast("Couldn't end the game — please try again", "error");
@@ -806,11 +1108,7 @@ export default function MatchScreen() {
         setTargetAssignments({});
         setActiveAssignRoyalId(null);
         if (data.winnerUserId) {
-          hasNavigatedRef.current = true;
-          router.replace({
-            pathname: "/(game)/game-over",
-            params: { matchId, winnerUserId: data.winnerUserId, players: playersParamRef.current },
-          });
+          beginGameOver(data.winnerUserId);
         }
       },
       onError: (err) => {
@@ -1209,26 +1507,46 @@ export default function MatchScreen() {
   const royalTargetAction = selectedActions.find((a) => !a.disabled && a.targetType === "any_royal");
   const playerTargetAction = selectedActions.find((a) => !a.disabled && a.targetType === "any_player");
 
+  // Spades: attach should be the DEFAULT (tap a glowing Royal, like Hearts /
+  // Clubs), with Reclaim as the only explicit chip. Without this carve-out
+  // the reclaim option's pick_abyss targetType flips the card into all-chips
+  // mode and attach needs an extra tap.
+  const abyssChipAction = selectedActions.find((a) => !a.disabled && a.targetType === "pick_abyss");
+  const isSpadeLike = !!royalTargetAction && !!abyssChipAction;
+
   // Cards that also offer instant (no-target) options — Diamonds (Mine/Draw),
   // Royals (to Court), or disabled info rows — surface EVERY option as a dock
   // chip so nothing hides behind a tap-a-target hint. Tapping a targeted chip
   // "arms" it (setArmedAction) and the board highlights its legal targets.
   // Pure-target cards (Hearts/Spades/Clubs/Joker) keep the faster model: no
   // chips, just tap a glowing target directly.
-  const hasInstantChips = selectedActions.some(
-    (a) => a.disabled || !a.requiresTarget || a.targetType === "pick_abyss",
-  );
+  const hasInstantChips =
+    !isSpadeLike &&
+    selectedActions.some(
+      (a) => a.disabled || !a.requiresTarget || a.targetType === "pick_abyss",
+    );
 
-  const dockChipActions = armedAction ? [] : hasInstantChips ? selectedActions : [];
+  const dockChipActions = armedAction
+    ? []
+    : isSpadeLike
+      ? // Reclaim only — and only when there is something in the Abyss to take.
+        (gameState.abyss.length > 0 && abyssChipAction ? [abyssChipAction] : [])
+      : hasInstantChips
+        ? selectedActions
+        : [];
 
   const dockTargetHints = armedAction
     ? [targetHintFor(armedAction, selectedCard?.pipValue ?? 0) ?? "Tap a target on the board"]
-    : hasInstantChips
-      ? []
-      : selectedActions
-          .filter((a) => !a.disabled && (a.targetType === "any_royal" || a.targetType === "any_player"))
-          .map((a) => targetHintFor(a, selectedCard?.pipValue ?? 0))
-          .filter((h): h is string => !!h);
+    : isSpadeLike
+      ? [targetHintFor(royalTargetAction!, selectedCard?.pipValue ?? 0)].filter(
+          (h): h is string => !!h,
+        )
+      : hasInstantChips
+        ? []
+        : selectedActions
+            .filter((a) => !a.disabled && (a.targetType === "any_royal" || a.targetType === "any_player"))
+            .map((a) => targetHintFor(a, selectedCard?.pipValue ?? 0))
+            .filter((h): h is string => !!h);
 
   // Which action a board tap resolves to: the armed chip if present, otherwise
   // the auto-derived target action (only for pure-target cards).
@@ -1512,6 +1830,11 @@ export default function MatchScreen() {
         attackingYouWith={attacksFrom(opp.id)}
         hitEffects={seatEffects[opp.id]}
         royalHitEffects={royalEffects}
+        onHandPress={
+          gameState.revealedHands?.[opp.id]
+            ? () => setRevealedHandPlayerId(opp.id)
+            : undefined
+        }
       />
     );
   };
@@ -1680,7 +2003,7 @@ export default function MatchScreen() {
             <Animated.View entering={FadeInDown.duration(250)} style={styles.duelResultPanel}>
               <View style={styles.duelResultHeader}>
                 <Ionicons name="flash" size={13} color="#C89B3C" />
-                <Text style={styles.duelResultTitle}>DUEL OVER — {duelNotice.title}</Text>
+                <Text style={styles.duelResultTitle}>{duelNotice.header ?? "DUEL OVER"} — {duelNotice.title}</Text>
                 <Pressable onPress={() => setDuelNotice(null)} hitSlop={8}>
                   <Ionicons name="close" size={16} color={Colors.textMuted} />
                 </Pressable>
@@ -1700,6 +2023,18 @@ export default function MatchScreen() {
               attackerColor={colorOf(attacksTargetingMe[0].attackerPlayerId)}
               isSubmitting={isSubmitting}
               onConfirm={handleConfirmBlocks}
+              attachTargeting={
+                targetingRoyals &&
+                activeRoyalAction &&
+                (activeRoyalAction.action === "attach_spade" || activeRoyalAction.action === "attach_heart")
+                  ? {
+                      hint:
+                        targetHintFor(activeRoyalAction, selectedCard?.pipValue ?? 0) ??
+                        "Tap a Royal to attach",
+                      onAttach: (royalId) => dispatchRoyalTarget(myId, royalId),
+                    }
+                  : undefined
+              }
             />
           ) : showDuelStage && duelCtx ? (
             <DuelStage
@@ -1816,7 +2151,11 @@ export default function MatchScreen() {
           {!isMyTurn && !inDeclareBlocks && !inRespondToClub && !inDuel && !inAssignDamageOrder && !inInterrupt && (
             <View style={styles.waitingInlineCentered}>
               <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.waitingText}>Waiting for {activePlayerName}…</Text>
+              <Text style={styles.waitingText}>
+                {gameState.activePlayerId === botPlayerId
+                  ? `${activePlayerName} is thinking…`
+                  : `Waiting for ${activePlayerName}…`}
+              </Text>
             </View>
           )}
           {!isMyTurn && inDeclareBlocks && attacksTargetingMe.length === 0 && (
@@ -1914,7 +2253,7 @@ export default function MatchScreen() {
       )}
 
       {/* Action bar */}
-      {(showAttackButton || canEndTurn || attackSelectMode || assigningTargets) && (
+      {!gameOverReveal && (showAttackButton || canEndTurn || attackSelectMode || assigningTargets) && (
         <View style={styles.actionBar}>
           {attackSelectMode && !assigningTargets ? (
             <>
@@ -2017,7 +2356,7 @@ export default function MatchScreen() {
       )}
 
       {/* Selected-card dock / abyss picker */}
-      {selectedCardId && abyssPickerAction ? (
+      {gameOverReveal ? null : selectedCardId && abyssPickerAction ? (
         <AbyssPicker
           abyss={gameState.abyss}
           maxValue={selectedCard?.pipValue ?? 0}
@@ -2046,6 +2385,7 @@ export default function MatchScreen() {
         />
       ) : null}
 
+      {!gameOverReveal && (
       <HandTray
         cards={gameState.myHand}
         selectedCardId={selectedCardId}
@@ -2061,6 +2401,7 @@ export default function MatchScreen() {
         canPlayCard={canPlayHandCard}
         onCardPress={handleCardPress}
       />
+      )}
 
       <View style={{ height: bottomInset }} />
 
@@ -2075,10 +2416,66 @@ export default function MatchScreen() {
         />
       )}
 
+      {/* Debug/testing: revealed hand viewer for AI seats. */}
+      {revealedHandPlayerId && gameState?.revealedHands?.[revealedHandPlayerId] && (
+        <Pressable style={styles.revealOverlay} onPress={() => setRevealedHandPlayerId(null)}>
+          <View style={styles.revealPanel}>
+            <View style={styles.revealHeader}>
+              <Text style={styles.revealTitle}>
+                {displayNames[revealedHandPlayerId] ?? revealedHandPlayerId.slice(0, 8)}'s hand (debug)
+              </Text>
+              <Pressable onPress={() => setRevealedHandPlayerId(null)} hitSlop={8}>
+                <Ionicons name="close" size={18} color={Colors.textMuted} />
+              </Pressable>
+            </View>
+            <View style={styles.revealCards}>
+              {gameState.revealedHands[revealedHandPlayerId]!.map((cardId) => (
+                <CardView key={cardId} cardId={cardId} size="sm" />
+              ))}
+            </View>
+          </View>
+        </Pressable>
+      )}
+
       {/* Cinematic overlays — decorative only, never intercept touches. */}
       <CardFlightHost flights={flights} />
       {turnFlare && <TurnFlare key={`flare-${turnFlare.key}`} color={turnFlare.color} />}
       {yourTurnKey !== null && <YourTurnBanner key={`yourturn-${yourTurnKey}`} color={colorOf(myId)} />}
+
+      {/* Winner banner: docked at the top with NO backdrop, so the final
+          board and ticker stay fully interactive for reviewing what
+          happened. The only way forward is the explicit View Results button
+          (or a rematch signal) — no auto-advance. */}
+      {gameOverReveal && (() => {
+        const didWin = gameOverReveal.winnerUserId === myId;
+        const winnerName = gameOverReveal.winnerUserId
+          ? nameFor(gameOverReveal.winnerUserId)
+          : null;
+        const accent = didWin ? Colors.brand : Colors.accentRed;
+        return (
+          <Animated.View
+            entering={FadeInDown.duration(400)}
+            style={[styles.gameOverBanner, { top: topInset + 8, borderColor: accent }]}
+            testID="game-over-reveal"
+          >
+            <Ionicons name={didWin ? "trophy" : "skull"} size={22} color={accent} />
+            <View style={styles.gameOverBannerTextCol}>
+              <Text style={[styles.gameOverBannerTitle, { color: accent }]} numberOfLines={1}>
+                {didWin ? "You win!" : winnerName ? `${winnerName} wins!` : "Match over"}
+              </Text>
+              <Text style={styles.gameOverBannerHint}>Review the board, then continue</Text>
+            </View>
+            <Pressable
+              onPress={() => navigateToGameOver(gameOverReveal.winnerUserId)}
+              style={({ pressed }) => [styles.gameOverResultsBtn, pressed && { opacity: 0.8 }]}
+              testID="view-results-button"
+            >
+              <Text style={styles.gameOverResultsBtnText}>View Results</Text>
+              <Ionicons name="arrow-forward" size={14} color="#0A0A0F" />
+            </Pressable>
+          </Animated.View>
+        );
+      })()}
 
       <ToastHost toasts={toasts} />
     </View>
@@ -2086,6 +2483,88 @@ export default function MatchScreen() {
 }
 
 const styles = StyleSheet.create({
+  revealOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 40,
+    padding: 24,
+  },
+  revealPanel: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+    gap: 12,
+    maxWidth: 420,
+    width: "100%",
+  },
+  revealHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  revealTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+  },
+  revealCards: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "center",
+  },
+  gameOverBanner: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    zIndex: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    // Float above the board without a full backdrop.
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  gameOverBannerTextCol: {
+    flex: 1,
+    gap: 1,
+  },
+  gameOverBannerTitle: {
+    fontSize: 18,
+    fontFamily: "Cinzel_700Bold",
+    letterSpacing: 0.5,
+  },
+  gameOverBannerHint: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  gameOverResultsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.brand,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  gameOverResultsBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: "#0A0A0F",
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.bgDeep,

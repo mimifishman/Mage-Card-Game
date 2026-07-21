@@ -36,6 +36,8 @@ export interface PlayerGameView {
   pendingBlockDefenders?: string[];
   duelQueue?: string[];
   interruptStack?: InterruptStackState;
+  /** Debug/testing aid: full hands of AI seats, revealed to every viewer. */
+  revealedHands?: Record<string, CardId[]>;
 }
 
 function serializePlayer(player: PlayerState, mine: CardId[]): PublicPlayerState {
@@ -54,7 +56,11 @@ function serializePlayer(player: PlayerState, mine: CardId[]): PublicPlayerState
   };
 }
 
-export function buildPlayerView(state: GameState, viewerUserId: string): PlayerGameView {
+export function buildPlayerView(
+  state: GameState,
+  viewerUserId: string,
+  revealHandsFor?: string[],
+): PlayerGameView {
   const players: Record<string, PublicPlayerState> = {};
   for (const [id, p] of Object.entries(state.players)) {
     players[id] = serializePlayer(p, state.mine);
@@ -62,6 +68,16 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
 
   const myPlayer = state.players[viewerUserId];
   const myHand = myPlayer?.hand ?? [];
+
+  // Debug/testing aid: expose the listed players' (AI seats') full hands.
+  let revealedHands: Record<string, CardId[]> | undefined;
+  if (revealHandsFor?.length) {
+    revealedHands = {};
+    for (const id of revealHandsFor) {
+      const p = state.players[id];
+      if (p) revealedHands[id] = p.hand;
+    }
+  }
 
   return {
     matchId: state.matchId,
@@ -84,6 +100,7 @@ export function buildPlayerView(state: GameState, viewerUserId: string): PlayerG
     pendingBlockDefenders: state.pendingBlockDefenders,
     duelQueue: state.duelQueue,
     interruptStack: state.interruptStack,
+    revealedHands,
   };
 }
 
@@ -91,8 +108,9 @@ export function broadcastViews(
   state: GameState,
   playerIds: string[],
   broadcastFn: (userId: string, view: PlayerGameView) => void,
+  revealHandsFor?: string[],
 ): void {
   for (const userId of playerIds) {
-    broadcastFn(userId, buildPlayerView(state, userId));
+    broadcastFn(userId, buildPlayerView(state, userId, revealHandsFor));
   }
 }

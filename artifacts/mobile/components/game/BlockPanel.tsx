@@ -17,6 +17,13 @@ interface BlockPanelProps {
   attackerColor: string;
   isSubmitting: boolean;
   onConfirm: (blocks: Record<string, string[]>) => void;
+  /**
+   * When the player has a card armed that targets their own Royals (e.g. a
+   * Spade/Heart attach while blocking), tapping a Royal chip attaches to it
+   * instead of toggling the block — so buffs can be played without leaving
+   * the block window.
+   */
+  attachTargeting?: { hint: string; onAttach: (royalId: string) => void };
 }
 
 /** Inline blocking panel rendered in the table center — the board, your court
@@ -31,6 +38,7 @@ export default function BlockPanel({
   attackerColor,
   isSubmitting,
   onConfirm,
+  attachTargeting,
 }: BlockPanelProps) {
   const incomingAttacks = useMemo(
     () => attacks.filter((a) => a.targetPlayerId === myId),
@@ -177,11 +185,20 @@ export default function BlockPanel({
         })}
       </ScrollView>
 
+      {/* Attach mode: a selected Spade/Heart re-purposes the Royal chips as
+          attach targets so buffs can be played without leaving this panel. */}
+      {attachTargeting && (
+        <View style={styles.attachBanner}>
+          <Text style={styles.attachBannerText}>{attachTargeting.hint}</Text>
+        </View>
+      )}
+
       {activeAttackerId && (
         <View style={styles.blockerSection}>
           <Text style={styles.blockerLabel}>
-            Block {parseCardId(activeAttackerId).displayRank}
-            {parseCardId(activeAttackerId).suitSymbol} with:
+            {attachTargeting
+              ? "Your Royals — tap one to attach:"
+              : `Block ${parseCardId(activeAttackerId).displayRank}${parseCardId(activeAttackerId).suitSymbol} with:`}
           </Text>
           {eligibleCourt.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockerRow}>
@@ -196,11 +213,16 @@ export default function BlockPanel({
                 return (
                   <Pressable
                     key={royal.cardId}
-                    onPress={() => toggleBlock(activeAttackerId, royal.cardId)}
+                    onPress={() =>
+                      attachTargeting
+                        ? attachTargeting.onAttach(royal.cardId)
+                        : toggleBlock(activeAttackerId, royal.cardId)
+                    }
                     style={({ pressed }) => [
                       styles.blockerChip,
                       usedHere && styles.blockerChipSelected,
-                      usedElsewhere && styles.blockerChipUsedElsewhere,
+                      usedElsewhere && !attachTargeting && styles.blockerChipUsedElsewhere,
+                      attachTargeting && styles.blockerChipAttachTarget,
                       pressed && { opacity: 0.75 },
                     ]}
                   >
@@ -210,7 +232,7 @@ export default function BlockPanel({
                     <Text style={[styles.blockerChipStats, usedHere && { color: Colors.bgDeep }]}>
                       ⚔{atkV} ♥{hpV}
                     </Text>
-                    {usedElsewhere && <Text style={styles.movedLabel}>↺ move</Text>}
+                    {usedElsewhere && !attachTargeting && <Text style={styles.movedLabel}>↺ move</Text>}
                   </Pressable>
                 );
               })}
@@ -363,6 +385,22 @@ const styles = StyleSheet.create({
   },
   blockerChipUsedElsewhere: {
     opacity: 0.6,
+  },
+  blockerChipAttachTarget: {
+    borderColor: Colors.brand,
+  },
+  attachBanner: {
+    backgroundColor: "rgba(200,155,60,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(200,155,60,0.35)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  attachBannerText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.brand,
   },
   blockerChipCard: {
     fontSize: 14,

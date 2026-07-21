@@ -81,6 +81,11 @@ export interface MatchSummary {
   status: MatchSummaryStatus;
 }
 
+export interface CreateMatchRequest {
+  /** When true, creates a solo match against the AI opponent: the bot is seated automatically and the match starts immediately (status will be in_progress in the response). */
+  vsAi?: boolean;
+}
+
 export interface CreateMatchResponse {
   match: MatchSummary;
 }
@@ -97,6 +102,8 @@ export interface MatchPlayer {
   life: number;
   isEliminated: boolean;
   joinedAt: string;
+  /** True when this seat is occupied by the AI opponent. */
+  isBot?: boolean;
 }
 
 export type MatchDetailsStatus =
@@ -184,6 +191,8 @@ export interface CombatSummary {
   pairs: CombatPairOutcome[];
   autoPassedPlayerIds?: string[];
   immediateHits?: CombatPairOutcome[];
+  /** True when blocked pairs resolved without any duel phase ever being shown to clients (both sides auto-passed instantly). */
+  autoResolved?: boolean;
 }
 
 export interface DuelContext {
@@ -197,6 +206,16 @@ export interface DuelContext {
   autoPassedPlayerIds?: string[];
   preResolvedUnblockedAttackerIds?: string[];
   immediateHits?: CombatPairOutcome[];
+}
+
+/**
+ * Attribution record for direct (non-combat) damage — a Club burned for face damage or a Joker's damage mode. seq increases monotonically per match so clients can detect a new hit even when the same card/target repeats.
+ */
+export interface DirectHit {
+  sourceCardId: string;
+  targetPlayerId: string;
+  amount: number;
+  seq: number;
 }
 
 export type PendingClubDebuffReturnPhase =
@@ -340,6 +359,11 @@ export const PlayerGameViewPhase = {
 
 export type PlayerGameViewPlayers = { [key: string]: PublicPlayerState };
 
+/**
+ * Debug/testing aid — full hands of AI seats, revealed to every viewer so bot decisions can be inspected. Never populated for human players.
+ */
+export type PlayerGameViewRevealedHands = { [key: string]: string[] };
+
 export interface PlayerGameView {
   matchId: string;
   phase: PlayerGameViewPhase;
@@ -358,12 +382,15 @@ export interface PlayerGameView {
   hasAttackedThisTurn: boolean;
   duelContext?: DuelContext;
   lastCombatSummary?: CombatSummary;
+  lastDirectHit?: DirectHit;
   pendingClubDebuff?: PendingClubDebuff;
   /** Opponents targeted by the current attack who have not yet submitted their block declarations. */
   pendingBlockDefenders?: string[];
   /** Remaining defender player IDs still waiting to fight their duel, in resolution order, after the current duel finishes. */
   duelQueue?: string[];
   interruptStack?: InterruptStack;
+  /** Debug/testing aid — full hands of AI seats, revealed to every viewer so bot decisions can be inspected. Never populated for human players. */
+  revealedHands?: PlayerGameViewRevealedHands;
 }
 
 export interface MatchStateResponse {

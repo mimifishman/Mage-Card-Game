@@ -1418,3 +1418,73 @@ describe("setDamageOrder (Rule 2 validation)", () => {
     expect(qs?.blockerDamageOrder).toBeUndefined();
   });
 });
+
+describe("autoResolved flag on lastCombatSummary", () => {
+  it("sets autoResolved when both duelists have no playable cards (duel never shown)", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 },
+      ],
+      players: {
+        [P1]: makePlayer(P1, { hand: [], court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { hand: [], court: [mkRoyal("JD")], life: 20 }),
+      },
+    });
+    const result = confirmDeclareBlocks(state, P2, { KH: ["JD"] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Resolved instantly inside the block confirmation
+    expect(result.value.phase).toBe("main");
+    const summary = result.value.lastCombatSummary;
+    expect(summary?.autoResolved).toBe(true);
+    expect(summary?.autoPassedPlayerIds).toEqual(expect.arrayContaining([P1, P2]));
+    // KH (atk 3) kills JD (hp 1); JD (atk 1) can't kill KH (hp 3)
+    expect(result.value.players[P2]!.court.find((r) => r.cardId === "JD")).toBeUndefined();
+  });
+
+  it("does not set autoResolved when a duel phase was actually shown", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 },
+      ],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["2D"], court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { hand: ["3D"], court: [mkRoyal("JD")], life: 20 }),
+      },
+    });
+    const afterBlocks = confirmDeclareBlocks(state, P2, { KH: ["JD"] });
+    expect(afterBlocks.ok).toBe(true);
+    if (!afterBlocks.ok) return;
+    expect(afterBlocks.value.phase).toBe("duel_blocker_turn");
+
+    const afterP2Pass = duelPass(afterBlocks.value, P2);
+    expect(afterP2Pass.ok).toBe(true);
+    if (!afterP2Pass.ok) return;
+    const afterP1Pass = duelPass(afterP2Pass.value, P1);
+    expect(afterP1Pass.ok).toBe(true);
+    if (!afterP1Pass.ok) return;
+
+    expect(afterP1Pass.value.phase).toBe("main");
+    expect(afterP1Pass.value.lastCombatSummary?.autoResolved).toBeUndefined();
+  });
+
+  it("does not set autoResolved for a purely unblocked attack (no duel exists)", () => {
+    const state = makeState({
+      phase: "declare_blocks",
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KH", targetPlayerId: P2 },
+      ],
+      players: {
+        [P1]: makePlayer(P1, { hand: [], court: [mkRoyal("KH")] }),
+        [P2]: makePlayer(P2, { hand: [], court: [], life: 20 }),
+      },
+    });
+    const result = confirmDeclareBlocks(state, P2, { KH: "pass" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("main");
+    expect(result.value.lastCombatSummary?.autoResolved).toBeUndefined();
+  });
+});

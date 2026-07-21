@@ -114,6 +114,7 @@ export const GetMyMatchesResponse = zod.object({
       inviteCode: zod.string(),
       status: zod.enum(["waiting", "in_progress"]),
       playerCount: zod.number(),
+      playerNames: zod.array(zod.string()),
     }),
   ),
 });
@@ -126,6 +127,17 @@ export const CreateMatchHeader = zod.object({
     .string()
     .optional()
     .describe("Bearer session token for mobile clients."),
+});
+
+export const createMatchBodyVsAiDefault = false;
+
+export const CreateMatchBody = zod.object({
+  vsAi: zod
+    .boolean()
+    .default(createMatchBodyVsAiDefault)
+    .describe(
+      "When true, creates a solo match against the AI opponent: the bot is seated automatically and the match starts immediately (status will be in_progress in the response).",
+    ),
 });
 
 /**
@@ -184,6 +196,10 @@ export const GetMatchResponse = zod.object({
       life: zod.number(),
       isEliminated: zod.boolean(),
       joinedAt: zod.date(),
+      isBot: zod
+        .boolean()
+        .optional()
+        .describe("True when this seat is occupied by the AI opponent."),
     }),
   ),
 });
@@ -401,8 +417,25 @@ export const SubmitGameActionResponse = zod.object({
             }),
           )
           .optional(),
+        autoResolved: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when blocked pairs resolved without any duel phase ever being shown to clients (both sides auto-passed instantly).",
+          ),
       })
       .optional(),
+    lastDirectHit: zod
+      .object({
+        sourceCardId: zod.string(),
+        targetPlayerId: zod.string(),
+        amount: zod.number(),
+        seq: zod.number(),
+      })
+      .optional()
+      .describe(
+        "Attribution record for direct (non-combat) damage — a Club burned for face damage or a Joker's damage mode. seq increases monotonically per match so clients can detect a new hit even when the same card\/target repeats.",
+      ),
     pendingClubDebuff: zod
       .object({
         attackerPlayerId: zod.string(),
@@ -529,6 +562,12 @@ export const SubmitGameActionResponse = zod.object({
         passedPlayerIds: zod.array(zod.string()),
       })
       .optional(),
+    revealedHands: zod
+      .record(zod.string(), zod.array(zod.string()))
+      .optional()
+      .describe(
+        "Debug\/testing aid — full hands of AI seats, revealed to every viewer so bot decisions can be inspected. Never populated for human players.",
+      ),
   }),
   winnerUserId: zod.string().nullish(),
 });
@@ -706,8 +745,25 @@ export const GetMatchStateResponse = zod.object({
             }),
           )
           .optional(),
+        autoResolved: zod
+          .boolean()
+          .optional()
+          .describe(
+            "True when blocked pairs resolved without any duel phase ever being shown to clients (both sides auto-passed instantly).",
+          ),
       })
       .optional(),
+    lastDirectHit: zod
+      .object({
+        sourceCardId: zod.string(),
+        targetPlayerId: zod.string(),
+        amount: zod.number(),
+        seq: zod.number(),
+      })
+      .optional()
+      .describe(
+        "Attribution record for direct (non-combat) damage — a Club burned for face damage or a Joker's damage mode. seq increases monotonically per match so clients can detect a new hit even when the same card\/target repeats.",
+      ),
     pendingClubDebuff: zod
       .object({
         attackerPlayerId: zod.string(),
@@ -834,5 +890,11 @@ export const GetMatchStateResponse = zod.object({
         passedPlayerIds: zod.array(zod.string()),
       })
       .optional(),
+    revealedHands: zod
+      .record(zod.string(), zod.array(zod.string()))
+      .optional()
+      .describe(
+        "Debug\/testing aid — full hands of AI seats, revealed to every viewer so bot decisions can be inspected. Never populated for human players.",
+      ),
   }),
 });

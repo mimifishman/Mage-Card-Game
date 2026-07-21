@@ -92,6 +92,8 @@ export interface DuelContext {
   autoPassedPlayerIds?: string[];
   preResolvedUnblockedAttackerIds?: CardId[];
   immediateHits?: CombatPairOutcome[];
+  /** Set once a duel_* phase state has actually been returned to clients for this duel. Absent = the duel is (so far) invisible to players. */
+  duelPhaseShown?: boolean;
 }
 
 export interface CombatPairOutcome {
@@ -107,6 +109,8 @@ export interface CombatSummary {
   pairs: CombatPairOutcome[];
   autoPassedPlayerIds?: string[];
   immediateHits?: CombatPairOutcome[];
+  /** True when blocked pairs resolved without any duel phase ever being shown to clients (both sides auto-passed instantly). */
+  autoResolved?: boolean;
 }
 
 /**
@@ -193,6 +197,8 @@ export interface GameState {
   combatPairsAccumulator?: CombatPairOutcome[];
   /** Accumulates auto-passed player IDs across every opponent fought this combat. */
   combatAutoPassedAccum?: string[];
+  /** True once any duel phase in this combat has been shown to clients (across the whole duel queue). */
+  combatDuelShownAccum?: boolean;
   interruptStack?: InterruptStackState;
 }
 

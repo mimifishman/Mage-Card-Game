@@ -86,12 +86,33 @@ export async function getMatchWithPlayers(matchId: string) {
       isEliminated: matchPlayersTable.isEliminated,
       joinedAt: matchPlayersTable.joinedAt,
       displayName: usersTable.displayName,
+      providerUserId: usersTable.providerUserId,
     })
     .from(matchPlayersTable)
     .innerJoin(usersTable, eq(matchPlayersTable.userId, usersTable.id))
     .where(eq(matchPlayersTable.matchId, matchId));
 
   return { match, players: rows };
+}
+
+/**
+ * Creates a solo match: the human host at turnOrder 0 and the AI opponent at
+ * turnOrder 1. The caller is expected to start the match immediately.
+ */
+export async function createVsAiMatch(hostUserId: string, botUserId: string) {
+  const inviteCode = generateInviteCode();
+  const [match] = await db
+    .insert(matchesTable)
+    .values({ createdBy: hostUserId, inviteCode })
+    .returning();
+  if (!match) throw new Error("Failed to create match");
+
+  await db.insert(matchPlayersTable).values([
+    { matchId: match.id, userId: hostUserId, turnOrder: 0 },
+    { matchId: match.id, userId: botUserId, turnOrder: 1 },
+  ]);
+
+  return match;
 }
 
 export async function isMatchHost(matchId: string, userId: string): Promise<boolean> {

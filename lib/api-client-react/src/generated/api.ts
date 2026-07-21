@@ -21,6 +21,7 @@ import type {
   ActionResponse,
   AuthUserEnvelope,
   BeginBrowserLoginParams,
+  CreateMatchRequest,
   CreateMatchResponse,
   ErrorEnvelope,
   GameActionRequest,
@@ -730,11 +731,14 @@ export const getCreateMatchUrl = () => {
 };
 
 export const createMatch = async (
+  createMatchRequest?: CreateMatchRequest,
   options?: RequestInit,
 ): Promise<CreateMatchResponse> => {
   return customFetch<CreateMatchResponse>(getCreateMatchUrl(), {
     ...options,
     method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createMatchRequest),
   });
 };
 
@@ -745,14 +749,14 @@ export const getCreateMatchMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createMatch>>,
     TError,
-    void,
+    { data: BodyType<CreateMatchRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createMatch>>,
   TError,
-  void,
+  { data: BodyType<CreateMatchRequest> },
   TContext
 > => {
   const mutationKey = ["createMatch"];
@@ -766,9 +770,11 @@ export const getCreateMatchMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createMatch>>,
-    void
-  > = () => {
-    return createMatch(requestOptions);
+    { data: BodyType<CreateMatchRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createMatch(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -777,7 +783,7 @@ export const getCreateMatchMutationOptions = <
 export type CreateMatchMutationResult = NonNullable<
   Awaited<ReturnType<typeof createMatch>>
 >;
-
+export type CreateMatchMutationBody = BodyType<CreateMatchRequest>;
 export type CreateMatchMutationError = ErrorType<ErrorEnvelope>;
 
 /**
@@ -790,14 +796,14 @@ export const useCreateMatch = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createMatch>>,
     TError,
-    void,
+    { data: BodyType<CreateMatchRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof createMatch>>,
   TError,
-  void,
+  { data: BodyType<CreateMatchRequest> },
   TContext
 > => {
   return useMutation(getCreateMatchMutationOptions(options));

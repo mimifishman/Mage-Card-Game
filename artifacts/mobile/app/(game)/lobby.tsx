@@ -39,8 +39,10 @@ export default function LobbyScreen() {
 
   const createScale = useSharedValue(1);
   const joinScale = useSharedValue(1);
+  const vsAiScale = useSharedValue(1);
   const createStyle = useAnimatedStyle(() => ({ transform: [{ scale: createScale.value }] }));
   const joinStyle = useAnimatedStyle(() => ({ transform: [{ scale: joinScale.value }] }));
+  const vsAiStyle = useAnimatedStyle(() => ({ transform: [{ scale: vsAiScale.value }] }));
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom;
@@ -59,16 +61,24 @@ export default function LobbyScreen() {
     }, [refetchMyMatches]),
   );
 
-  const { mutate: createMatch, isPending: isCreating } = useCreateMatch({
+  const { mutate: createMatch, isPending: isCreating, variables: createVars } = useCreateMatch({
     mutation: {
       onSuccess: (data) => {
-        router.push({
-          pathname: "/(game)/waiting-room",
-          params: {
-            matchId: data.match.id,
-            inviteCode: data.match.inviteCode,
-          },
-        });
+        if (data.match.status === "in_progress") {
+          // Vs-AI matches start immediately — skip the waiting room.
+          router.push({
+            pathname: "/(game)/match",
+            params: { matchId: data.match.id },
+          });
+        } else {
+          router.push({
+            pathname: "/(game)/waiting-room",
+            params: {
+              matchId: data.match.id,
+              inviteCode: data.match.inviteCode,
+            },
+          });
+        }
       },
       onError: (err) => {
         const message = (err as { data?: { error?: string } })?.data?.error ?? "Failed to create match";
@@ -76,6 +86,8 @@ export default function LobbyScreen() {
       },
     },
   });
+  const isCreatingVsAi = isCreating && createVars?.data?.vsAi === true;
+  const isCreatingMultiplayer = isCreating && !isCreatingVsAi;
 
   const { mutate: joinMatch, isPending: isJoining } = useJoinMatch({
     mutation: {
@@ -108,7 +120,16 @@ export default function LobbyScreen() {
       withTiming(0.95, { duration: 100 }),
       withTiming(1, { duration: 100 }),
     );
-    createMatch();
+    createMatch({ data: {} });
+  };
+
+  const handlePlayVsAi = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    vsAiScale.value = withSequence(
+      withTiming(0.95, { duration: 100 }),
+      withTiming(1, { duration: 100 }),
+    );
+    createMatch({ data: { vsAi: true } });
   };
 
   const handleJoinMatch = () => {
@@ -212,7 +233,7 @@ export default function LobbyScreen() {
                 style={styles.actionCardGradient}
               >
                 <View style={[styles.actionIconBg, { backgroundColor: "rgba(200,155,60,0.15)" }]}>
-                  {isCreating ? (
+                  {isCreatingMultiplayer ? (
                     <ActivityIndicator color={Colors.brand} size="small" />
                   ) : (
                     <Ionicons name="add-circle" size={32} color={Colors.brand} />
@@ -249,6 +270,30 @@ export default function LobbyScreen() {
               </LinearGradient>
             </Pressable>
           </Animated.View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(320).duration(600)} style={vsAiStyle}>
+          <Pressable
+            onPress={handlePlayVsAi}
+            disabled={isCreating}
+            style={({ pressed }) => [styles.actionCardInner, pressed && { opacity: 0.85 }]}
+            testID="play-vs-ai-button"
+          >
+            <LinearGradient colors={Gradients.panel} style={styles.vsAiCardGradient}>
+              <View style={[styles.actionIconBg, styles.vsAiIconBg, { backgroundColor: "rgba(155,89,182,0.15)" }]}>
+                {isCreatingVsAi ? (
+                  <ActivityIndicator color="#9B59B6" size="small" />
+                ) : (
+                  <MaterialCommunityIcons name="robot" size={28} color="#9B59B6" />
+                )}
+              </View>
+              <View style={styles.vsAiTextCol}>
+                <Text style={[styles.actionTitle, { color: "#9B59B6" }]}>Play vs AI</Text>
+                <Text style={styles.actionDesc}>Battle the AI Mage in an instant solo match</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+            </LinearGradient>
+          </Pressable>
         </Animated.View>
 
         {showJoinInput && (
@@ -438,6 +483,20 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.textSecondary,
     lineHeight: 18,
+  },
+  vsAiCardGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    padding: 16,
+  },
+  vsAiIconBg: {
+    width: 48,
+    height: 48,
+  },
+  vsAiTextCol: {
+    flex: 1,
+    gap: 4,
   },
   joinInputSection: {
     gap: 12,
