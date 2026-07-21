@@ -142,6 +142,36 @@ export interface EliminationEvent {
   seq: number;
 }
 
+/**
+ * One entry in the per-match feed of life-total changes. Every event that
+ * changes a player's life (or eliminates them) appends one entry with the
+ * amount and the resulting life, so clients can render a self-explanatory
+ * log line for each hit — even when several land back-to-back. `seq`
+ * increases monotonically per match so clients can dedup across snapshots
+ * and never merge rapid consecutive events.
+ */
+export type LifeEventKind =
+  | "club_damage"
+  | "joker_damage"
+  | "attack_damage"
+  | "heal"
+  | "elimination";
+
+export interface LifeEvent {
+  seq: number;
+  kind: LifeEventKind;
+  /** Player whose life changed (or who was eliminated). */
+  targetPlayerId: string;
+  /** Life lost or gained, always positive; 0 for eliminations. */
+  amount: number;
+  /** The target's life total after this event (never below 0). */
+  resultingLife: number;
+  /** Player who caused the event, when attributable. */
+  actorPlayerId?: string;
+  /** The card responsible: the Club/Joker/Heart played, or the attacking Royal. */
+  sourceCardId?: CardId;
+}
+
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";
 
 export type TurnPhase =
@@ -203,6 +233,8 @@ export interface GameState {
   lastDirectHit?: DirectHit;
   /** Elimination announcements, for client banners explaining court sweeps. */
   lastEliminations?: EliminationEvent[];
+  /** Rolling feed of life-total changes (capped), for detailed client logs. */
+  lifeEvents?: LifeEvent[];
   pendingClubDebuff?: PendingClubDebuff;
   /** Targeted opponents who still need to submit (or pass on) blocks during "declare_blocks". Cleared once all have submitted. */
   pendingBlockDefenders?: string[];

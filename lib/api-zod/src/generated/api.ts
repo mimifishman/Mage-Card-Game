@@ -471,6 +471,50 @@ export const SubmitGameActionResponse = zod.object({
           ),
       )
       .optional(),
+    lifeEvents: zod
+      .array(
+        zod
+          .object({
+            seq: zod.number(),
+            kind: zod.enum([
+              "club_damage",
+              "joker_damage",
+              "attack_damage",
+              "heal",
+              "elimination",
+            ]),
+            targetPlayerId: zod
+              .string()
+              .describe("Player whose life changed (or who was eliminated)"),
+            amount: zod
+              .number()
+              .describe(
+                "Life lost or gained, always positive; 0 for eliminations",
+              ),
+            resultingLife: zod
+              .number()
+              .describe(
+                "The target's life total after this event (never below 0)",
+              ),
+            actorPlayerId: zod
+              .string()
+              .optional()
+              .describe("Player who caused the event, when attributable"),
+            sourceCardId: zod
+              .string()
+              .optional()
+              .describe(
+                "The card responsible: the Club\/Joker\/Heart played, or the attacking Royal",
+              ),
+          })
+          .describe(
+            "One entry in the per-match feed of life-total changes. Every event that changes a player's life (or eliminates them) appends one entry with the amount and the resulting life. seq increases monotonically per match so clients can dedup across snapshots and never merge rapid consecutive events.",
+          ),
+      )
+      .optional()
+      .describe(
+        "Rolling feed of life-total changes with amounts and resulting life",
+      ),
     pendingClubDebuff: zod
       .object({
         attackerPlayerId: zod.string(),
@@ -816,6 +860,50 @@ export const GetMatchStateResponse = zod.object({
           ),
       )
       .optional(),
+    lifeEvents: zod
+      .array(
+        zod
+          .object({
+            seq: zod.number(),
+            kind: zod.enum([
+              "club_damage",
+              "joker_damage",
+              "attack_damage",
+              "heal",
+              "elimination",
+            ]),
+            targetPlayerId: zod
+              .string()
+              .describe("Player whose life changed (or who was eliminated)"),
+            amount: zod
+              .number()
+              .describe(
+                "Life lost or gained, always positive; 0 for eliminations",
+              ),
+            resultingLife: zod
+              .number()
+              .describe(
+                "The target's life total after this event (never below 0)",
+              ),
+            actorPlayerId: zod
+              .string()
+              .optional()
+              .describe("Player who caused the event, when attributable"),
+            sourceCardId: zod
+              .string()
+              .optional()
+              .describe(
+                "The card responsible: the Club\/Joker\/Heart played, or the attacking Royal",
+              ),
+          })
+          .describe(
+            "One entry in the per-match feed of life-total changes. Every event that changes a player's life (or eliminates them) appends one entry with the amount and the resulting life. seq increases monotonically per match so clients can dedup across snapshots and never merge rapid consecutive events.",
+          ),
+      )
+      .optional()
+      .describe(
+        "Rolling feed of life-total changes with amounts and resulting life",
+      ),
     pendingClubDebuff: zod
       .object({
         attackerPlayerId: zod.string(),

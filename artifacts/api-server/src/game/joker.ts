@@ -3,6 +3,7 @@ import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { availableVault, spendVault } from "./vault";
 import { canPlayCard } from "./validation";
+import { pushLifeEvent } from "./lifeEvents";
 
 const JOKER_COST = 10;
 
@@ -113,21 +114,33 @@ export function playJokerDamagePlayer(
     life: targetBase.life - JOKER_COST,
   };
 
-  return ok({
-    ...state,
-    abyss: [...state.abyss, jokerCardId],
-    lastDirectHit: {
-      sourceCardId: jokerCardId,
-      targetPlayerId,
-      amount: JOKER_COST,
-      seq: (state.lastDirectHit?.seq ?? 0) + 1,
-    },
-    players: {
-      ...state.players,
-      [playerId]: afterSpend,
-      [targetPlayerId]: updatedTarget,
-    },
-  });
+  return ok(
+    pushLifeEvent(
+      {
+        ...state,
+        abyss: [...state.abyss, jokerCardId],
+        lastDirectHit: {
+          sourceCardId: jokerCardId,
+          targetPlayerId,
+          amount: JOKER_COST,
+          seq: (state.lastDirectHit?.seq ?? 0) + 1,
+        },
+        players: {
+          ...state.players,
+          [playerId]: afterSpend,
+          [targetPlayerId]: updatedTarget,
+        },
+      },
+      {
+        kind: "joker_damage",
+        targetPlayerId,
+        amount: JOKER_COST,
+        resultingLife: Math.max(0, updatedTarget.life),
+        actorPlayerId: playerId,
+        sourceCardId: jokerCardId,
+      },
+    ),
+  );
 }
 
 export type JokerMode = "destroy_royal" | "damage_player";

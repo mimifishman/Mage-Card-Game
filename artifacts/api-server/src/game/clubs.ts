@@ -5,6 +5,7 @@ import { spendVault } from "./vault";
 import { canPlayCard, isDuelPhase, effectiveDuelPhase } from "./validation";
 import { checkAndApplyCancellation } from "./attachments";
 import { findPairAttackerIdForRoyal, markDuelPairResolved } from "./combat";
+import { pushLifeEvent } from "./lifeEvents";
 
 function destroyRoyalToAbyss(
   player: PlayerState,
@@ -109,21 +110,33 @@ export function applyClub(
       ...baseTarget,
       life: Math.max(0, baseTarget.life - card.pipValue),
     };
-    return ok({
-      ...state,
-      abyss: [...state.abyss, cardId],
-      lastDirectHit: {
-        sourceCardId: cardId,
-        targetPlayerId,
-        amount: card.pipValue,
-        seq: (state.lastDirectHit?.seq ?? 0) + 1,
-      },
-      players: {
-        ...state.players,
-        [playerId]: afterSpend,
-        [targetPlayerId]: damagedTarget,
-      },
-    });
+    return ok(
+      pushLifeEvent(
+        {
+          ...state,
+          abyss: [...state.abyss, cardId],
+          lastDirectHit: {
+            sourceCardId: cardId,
+            targetPlayerId,
+            amount: card.pipValue,
+            seq: (state.lastDirectHit?.seq ?? 0) + 1,
+          },
+          players: {
+            ...state.players,
+            [playerId]: afterSpend,
+            [targetPlayerId]: damagedTarget,
+          },
+        },
+        {
+          kind: "club_damage",
+          targetPlayerId,
+          amount: card.pipValue,
+          resultingLife: damagedTarget.life,
+          actorPlayerId: playerId,
+          sourceCardId: cardId,
+        },
+      ),
+    );
   }
 
   const royalIdx = targetPlayer.court.findIndex((r) => r.cardId === targetCardId);

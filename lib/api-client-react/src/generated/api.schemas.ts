@@ -274,6 +274,34 @@ export interface EliminationEvent {
   seq: number;
 }
 
+export type LifeEventKind = (typeof LifeEventKind)[keyof typeof LifeEventKind];
+
+export const LifeEventKind = {
+  club_damage: "club_damage",
+  joker_damage: "joker_damage",
+  attack_damage: "attack_damage",
+  heal: "heal",
+  elimination: "elimination",
+} as const;
+
+/**
+ * One entry in the per-match feed of life-total changes. Every event that changes a player's life (or eliminates them) appends one entry with the amount and the resulting life. seq increases monotonically per match so clients can dedup across snapshots and never merge rapid consecutive events.
+ */
+export interface LifeEvent {
+  seq: number;
+  kind: LifeEventKind;
+  /** Player whose life changed (or who was eliminated) */
+  targetPlayerId: string;
+  /** Life lost or gained, always positive; 0 for eliminations */
+  amount: number;
+  /** The target's life total after this event (never below 0) */
+  resultingLife: number;
+  /** Player who caused the event, when attributable */
+  actorPlayerId?: string;
+  /** The card responsible: the Club/Joker/Heart played, or the attacking Royal */
+  sourceCardId?: string;
+}
+
 export type PendingClubDebuffReturnPhase =
   (typeof PendingClubDebuffReturnPhase)[keyof typeof PendingClubDebuffReturnPhase];
 
@@ -440,6 +468,8 @@ export interface PlayerGameView {
   lastCombatSummary?: CombatSummary;
   lastDirectHit?: DirectHit;
   lastEliminations?: EliminationEvent[];
+  /** Rolling feed of life-total changes with amounts and resulting life */
+  lifeEvents?: LifeEvent[];
   pendingClubDebuff?: PendingClubDebuff;
   /** Opponents targeted by the current attack who have not yet submitted their block declarations. */
   pendingBlockDefenders?: string[];

@@ -7,12 +7,14 @@ import type {
   CombatSummary,
   DuelContext,
   GameState,
+  LifeEvent,
   PlayerState,
   Result,
   RoyalInCourt,
 } from "./types";
 import { err, ok } from "./types";
 import { availableVault } from "./vault";
+import { pushLifeEvent } from "./lifeEvents";
 
 
 export function activePlayers(state: GameState): string[] {
@@ -208,14 +210,17 @@ function beginCombatResolution(state: GameState): Result<GameState> {
     return ok({ ...state, phase: "main", attacks: [], pendingBlockDefenders: undefined, lastCombatSummary: undefined });
   }
 
-  const { players, immediateHits, preResolvedIds } = computeImmediateUnblockedHits(state);
+  const { players, immediateHits, preResolvedIds, lifeEvents } = computeImmediateUnblockedHits(state);
 
-  const stateWithImmediateHits: GameState = {
+  let stateWithImmediateHits: GameState = {
     ...state,
     players,
     pendingBlockDefenders: undefined,
     lastCombatSummary: undefined,
   };
+  for (const ev of lifeEvents) {
+    stateWithImmediateHits = pushLifeEvent(stateWithImmediateHits, ev);
+  }
 
   const blockedDefenderIds: string[] = [];
   for (const attack of state.attacks) {
@@ -418,12 +423,14 @@ function computeImmediateUnblockedHits(state: GameState): {
   players: Record<string, PlayerState>;
   immediateHits: CombatPairOutcome[];
   preResolvedIds: CardId[];
+  lifeEvents: Omit<LifeEvent, "seq">[];
 } {
   const unblockedAttacks = state.attacks.filter((a) => a.passed && !a.blockerCardIds?.length);
 
   let players = { ...state.players };
   const immediateHits: CombatPairOutcome[] = [];
   const preResolvedIds: CardId[] = [];
+  const lifeEvents: Omit<LifeEvent, "seq">[] = [];
 
   for (const attack of unblockedAttacks) {
     const attacker = players[attack.attackerPlayerId];
@@ -446,9 +453,17 @@ function computeImmediateUnblockedHits(state: GameState): {
       targetPlayerId: attack.targetPlayerId,
     });
     preResolvedIds.push(attack.attackerCardId);
+    lifeEvents.push({
+      kind: "attack_damage",
+      targetPlayerId: attack.targetPlayerId,
+      amount: atkPower,
+      resultingLife: Math.max(0, players[attack.targetPlayerId]!.life),
+      actorPlayerId: attack.attackerPlayerId,
+      sourceCardId: attack.attackerCardId,
+    });
   }
 
-  return { players, immediateHits, preResolvedIds };
+  return { players, immediateHits, preResolvedIds, lifeEvents };
 }
 
 /**
@@ -548,6 +563,7 @@ function executeResolveCombat(state: GameState): Result<GameState> {
 
   let players = { ...state.players };
   let abyss = [...state.abyss];
+  const newLifeEvents: Omit<LifeEvent, "seq">[] = [];
 
   const resolvedPairs = ctx?.resolvedPairAttackerIds ?? [];
   const preResolvedUnblocked = ctx?.preResolvedUnblockedAttackerIds ?? [];
@@ -605,7 +621,20 @@ function executeResolveCombat(state: GameState): Result<GameState> {
         ...players[attack.targetPlayerId]!,
         life: players[attack.targetPlayerId]!.life - atkPower,
       };
+      newLifeEvents.push({
+        kind: "attack_damage",
+        targetPlayerId: attack.targetPlayerId,
+        amount: atkPower,
+        resultingLife: Math.max(0, players[attack.targetPlayerId]!.life),
+        actorPlayerId: attack.attackerPlayerId,
+        sourceCardId: attack.attackerCardId,
+      });
     }
+  }
+
+  let stateWithEvents: GameState = state;
+  for (const ev of newLifeEvents) {
+    stateWithEvents = pushLifeEvent(stateWithEvents, ev);
   }
 
   for (const playerId of activePlayers(state)) {
@@ -626,7 +655,7 @@ function executeResolveCombat(state: GameState): Result<GameState> {
     const [nextDefenderId, ...restQueue] = queue;
     return enterNextDuel(
       {
-        ...state,
+        ...stateWithEvents,
         players,
         abyss,
         combatPairsAccumulator: accumulatedPairs,
@@ -649,7 +678,7 @@ function executeResolveCombat(state: GameState): Result<GameState> {
   };
 
   return ok({
-    ...state,
+    ...stateWithEvents,
     phase: "main",
     players,
     abyss,

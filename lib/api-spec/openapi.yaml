@@ -923,6 +923,36 @@ components:
             type: string
         seq:
           type: integer
+    LifeEvent:
+      type: object
+      description: >-
+        One entry in the per-match feed of life-total changes. Every event
+        that changes a player's life (or eliminates them) appends one entry
+        with the amount and the resulting life. seq increases monotonically
+        per match so clients can dedup across snapshots and never merge
+        rapid consecutive events.
+      required: [seq, kind, targetPlayerId, amount, resultingLife]
+      properties:
+        seq:
+          type: integer
+        kind:
+          type: string
+          enum: [club_damage, joker_damage, attack_damage, heal, elimination]
+        targetPlayerId:
+          type: string
+          description: Player whose life changed (or who was eliminated)
+        amount:
+          type: integer
+          description: Life lost or gained, always positive; 0 for eliminations
+        resultingLife:
+          type: integer
+          description: The target's life total after this event (never below 0)
+        actorPlayerId:
+          type: string
+          description: Player who caused the event, when attributable
+        sourceCardId:
+          type: string
+          description: "The card responsible: the Club/Joker/Heart played, or the attacking Royal"
     PendingClubDebuff:
       type: object
       required: [attackerPlayerId, clubCardId, targetPlayerId, targetRoyalId]
@@ -1022,6 +1052,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EliminationEvent"
+        lifeEvents:
+          type: array
+          description: Rolling feed of life-total changes with amounts and resulting life
+          items:
+            $ref: "#/components/schemas/LifeEvent"
         pendingClubDebuff:
           $ref: "#/components/schemas/PendingClubDebuff"
         pendingBlockDefenders:

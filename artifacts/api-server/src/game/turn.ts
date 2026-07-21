@@ -2,6 +2,7 @@ import type { GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { drawCard } from "./draw";
 import { resetVaultForTurn, calculateVaultFromMine } from "./vault";
+import { pushLifeEvent } from "./lifeEvents";
 
 const MAX_HAND_SIZE = 7;
 
@@ -25,15 +26,23 @@ export function eliminatePlayerIfNeeded(
 
   const prevSeq = Math.max(0, ...(state.lastEliminations ?? []).map((e) => e.seq));
 
-  return {
-    ...state,
-    players: { ...state.players, [playerId]: eliminated },
-    abyss: [...state.abyss, ...allCards],
-    lastEliminations: [
-      ...(state.lastEliminations ?? []),
-      { playerId, sweptCardIds: allCards, seq: prevSeq + 1 },
-    ],
-  };
+  return pushLifeEvent(
+    {
+      ...state,
+      players: { ...state.players, [playerId]: eliminated },
+      abyss: [...state.abyss, ...allCards],
+      lastEliminations: [
+        ...(state.lastEliminations ?? []),
+        { playerId, sweptCardIds: allCards, seq: prevSeq + 1 },
+      ],
+    },
+    {
+      kind: "elimination",
+      targetPlayerId: playerId,
+      amount: 0,
+      resultingLife: Math.max(0, player.life),
+    },
+  );
 }
 
 export function advanceTurn(state: GameState): Result<GameState> {

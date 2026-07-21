@@ -3,6 +3,7 @@ import type { CardId, GameState, PlayerState, Result, RoyalInCourt } from "./typ
 import { err, ok } from "./types";
 import { spendVault } from "./vault";
 import { canPlayCard } from "./validation";
+import { pushLifeEvent } from "./lifeEvents";
 
 function removeFromHand(player: PlayerState, cardId: CardId): PlayerState {
   return { ...player, hand: player.hand.filter((c) => c !== cardId) };
@@ -283,11 +284,23 @@ export function discardHeartToHeal(
       life: player.life + card.pipValue,
     };
 
-    return ok({
-      ...state,
-      abyss: [...state.abyss, heartCardId],
-      players: { ...state.players, [playerId]: healed },
-    });
+    return ok(
+      pushLifeEvent(
+        {
+          ...state,
+          abyss: [...state.abyss, heartCardId],
+          players: { ...state.players, [playerId]: healed },
+        },
+        {
+          kind: "heal",
+          targetPlayerId: playerId,
+          amount: card.pipValue,
+          resultingLife: healed.life,
+          actorPlayerId: playerId,
+          sourceCardId: heartCardId,
+        },
+      ),
+    );
   }
 
   const player = state.players[playerId]!;
@@ -297,15 +310,27 @@ export function discardHeartToHeal(
     life: targetPlayer.life + card.pipValue,
   };
 
-  return ok({
-    ...state,
-    abyss: [...state.abyss, heartCardId],
-    players: {
-      ...state.players,
-      [playerId]: afterSpend,
-      [targetPlayerId]: healed,
-    },
-  });
+  return ok(
+    pushLifeEvent(
+      {
+        ...state,
+        abyss: [...state.abyss, heartCardId],
+        players: {
+          ...state.players,
+          [playerId]: afterSpend,
+          [targetPlayerId]: healed,
+        },
+      },
+      {
+        kind: "heal",
+        targetPlayerId,
+        amount: card.pipValue,
+        resultingLife: healed.life,
+        actorPlayerId: playerId,
+        sourceCardId: heartCardId,
+      },
+    ),
+  );
 }
 
 export function discardSpadeToReturn(

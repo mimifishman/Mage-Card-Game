@@ -264,6 +264,7 @@ export default function MatchScreen() {
   // Direct-hit dedup: lastDirectHit.seq is monotonic per match; remember the
   // last seq we toasted so rejoining mid-match doesn't replay an old hit.
   const seenDirectHitSeqRef = useRef<number | null>(null);
+  const seenLifeEventSeqRef = useRef<number | null>(null);
 
   const { data: stateData, isLoading } = useGetMatchState(matchId ?? "", {
     query: {
@@ -1016,6 +1017,52 @@ export default function MatchScreen() {
         gameState.phase === "duel_attacker_turn" ||
         gameState.phase === "assign_damage_order");
 
+    // Detailed life-event feed from the server: one ticker line per hit or
+    // heal, with the source card, amount, and resulting life. Because each
+    // event carries its own seq, back-to-back hits on the same player are
+    // never merged into one confusing delta.
+    const allLifeEvents = gameState.lifeEvents ?? [];
+    const maxLifeEventSeq = allLifeEvents.length
+      ? allLifeEvents[allLifeEvents.length - 1]!.seq
+      : 0;
+    let newLifeEvents: typeof allLifeEvents = [];
+    if (seenLifeEventSeqRef.current === null) {
+      // First snapshot (or rejoin): don't replay events from before we joined.
+      seenLifeEventSeqRef.current = maxLifeEventSeq;
+    } else {
+      const watermark = seenLifeEventSeqRef.current;
+      newLifeEvents = allLifeEvents.filter((ev) => ev.seq > watermark);
+      seenLifeEventSeqRef.current = Math.max(watermark, maxLifeEventSeq);
+    }
+    // Players whose life changes this snapshot are already covered by
+    // detailed event lines — skip the generic fallback diff for them.
+    const detailedLifeIds = new Set<string>();
+    for (const ev of newLifeEvents) {
+      if (ev.kind === "elimination") continue; // elimination flow below handles it
+      detailedLifeIds.add(ev.targetPlayerId);
+      const source = ev.sourceCardId ? cardLabel(ev.sourceCardId) : undefined;
+      if (ev.kind === "heal") {
+        const healer =
+          ev.actorPlayerId && ev.actorPlayerId !== ev.targetPlayerId
+            ? ` by ${nameOf(ev.actorPlayerId)}`
+            : "";
+        pushEvent(
+          colorOf(ev.targetPlayerId),
+          `healed +${ev.amount}${source ? ` with ${source}` : ""}${healer} (❤ ${ev.resultingLife})`,
+          { actor: nameOf(ev.targetPlayerId) },
+        );
+      } else {
+        const from = source
+          ? ` from ${ev.actorPlayerId ? `${possOf(ev.actorPlayerId)} ` : ""}${source}`
+          : "";
+        pushEvent(
+          colorOf(ev.targetPlayerId),
+          `took ${ev.amount} damage${from} (❤ ${ev.resultingLife})`,
+          { actor: nameOf(ev.targetPlayerId) },
+        );
+      }
+    }
+
     // Life / court / elimination diffs → ticker (+ toast for big combat hits).
     const damageParts: string[] = [];
     for (const [id, p] of Object.entries(gameState.players)) {
@@ -1023,10 +1070,14 @@ export default function MatchScreen() {
       if (!before) continue;
       const lifeDelta = p.life - before.life;
       if (lifeDelta < 0) {
-        pushEvent(colorOf(id), `took ${-lifeDelta} damage (❤ ${p.life})`, { actor: nameOf(id) });
+        if (!detailedLifeIds.has(id)) {
+          pushEvent(colorOf(id), `took ${-lifeDelta} damage (❤ ${p.life})`, { actor: nameOf(id) });
+        }
         damageParts.push(`${nameOf(id)} took ${-lifeDelta} damage`);
       } else if (lifeDelta > 0) {
-        pushEvent(colorOf(id), `healed +${lifeDelta} (❤ ${p.life})`, { actor: nameOf(id) });
+        if (!detailedLifeIds.has(id)) {
+          pushEvent(colorOf(id), `healed +${lifeDelta} (❤ ${p.life})`, { actor: nameOf(id) });
+        }
       }
       const nowCourtIds = new Set(p.court.map((r) => r.cardId));
       const lostRoyals = before.court.filter((r) => !nowCourtIds.has(r.cardId));
