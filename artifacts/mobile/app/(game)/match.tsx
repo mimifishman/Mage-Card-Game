@@ -39,6 +39,7 @@ import SanctumBackground from "@/components/game/SanctumBackground";
 import TableCenter from "@/components/game/TableCenter";
 import EventTicker from "@/components/game/EventTicker";
 import type { GameEvent } from "@/components/game/EventTicker";
+import { RichLine } from "@/components/game/EventTicker";
 import ActionDock from "@/components/game/ActionDock";
 import AbyssPicker from "@/components/game/AbyssPicker";
 import BlockPanel from "@/components/game/BlockPanel";
@@ -197,10 +198,17 @@ export default function MatchScreen() {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3200);
   }, []);
 
-  const pushEvent = useCallback((color: string, text: string) => {
-    const id = idCounterRef.current++;
-    setEvents((prev) => [...prev.slice(-60), { id, color, text }]);
-  }, []);
+  const pushEvent = useCallback(
+    (
+      color: string,
+      text: string,
+      extra?: { actor?: string; sublines?: string[]; tag?: string },
+    ) => {
+      const id = idCounterRef.current++;
+      setEvents((prev) => [...prev.slice(-60), { id, color, text, ...extra }]);
+    },
+    [],
+  );
 
   const prevPhaseRef = useRef<string | null>(null);
   const prevPlayersRef = useRef<Record<string, { life: number; court: RoyalStats[]; eliminated: boolean }>>({});
@@ -594,7 +602,10 @@ export default function MatchScreen() {
           "play_joker",
         ]);
         const offTurn = actor !== view.activePlayerId && CARD_PLAY_TYPES.has(a.type);
-        pushEvent(colorOf(actor), `${offTurn ? "⚡ " : ""}${nameOf(actor)} ${text}`);
+        pushEvent(colorOf(actor), text, {
+          actor: nameOf(actor),
+          tag: offTurn ? "⚡" : undefined,
+        });
       }
     },
     [user, displayNames, colorOf, pushEvent],
@@ -625,8 +636,6 @@ export default function MatchScreen() {
       // shows what both duelers were worth going into the fight.
       const atkRoyals = [...new Set(snap.pairs.map((p) => p.attackerCardId))].map(royalName);
       const defRoyals = [...new Set(snap.pairs.flatMap((p) => p.blockerIds))].map(royalName);
-      const atkSide = atkRoyals.length ? `${atkName} ${atkRoyals.join(", ")}` : atkName;
-      const defSide = defRoyals.length ? `${defName} ${defRoyals.join(", ")}` : defName;
 
       const deadAtk: string[] = [];
       const deadDef: string[] = [];
@@ -637,6 +646,9 @@ export default function MatchScreen() {
         }
       }
       const lines: string[] = [];
+      if (atkRoyals.length > 0 || defRoyals.length > 0) {
+        lines.push(`${atkRoyals.join(", ") || atkName} vs ${defRoyals.join(", ") || defName}`);
+      }
       if (deadDef.length > 0) lines.push(`${defName} lost Royal${deadDef.length > 1 ? "s" : ""} ${deadDef.join(", ")}`);
       if (deadAtk.length > 0) lines.push(`${atkName} lost Royal${deadAtk.length > 1 ? "s" : ""} ${deadAtk.join(", ")}`);
       for (const [pid, prevLife] of Object.entries(snap.lives)) {
@@ -645,7 +657,7 @@ export default function MatchScreen() {
         else if (nowLife > prevLife) lines.push(`${nameOf(pid)} healed +${nowLife - prevLife} (❤ ${nowLife})`);
       }
       if (lines.length === 0) lines.push("Both sides survived — no losses");
-      return { title: `${atkSide} vs ${defSide}`, lines };
+      return { title: `${atkName} vs ${defName}`, lines };
     };
 
     const snap = duelSnapshotRef.current;
@@ -662,7 +674,9 @@ export default function MatchScreen() {
           const res = finalize(snap);
           const idn = idCounterRef.current++;
           setCompletedDuels((prev) => [...prev.slice(-3), { id: idn, text: `${res.title}: ${res.lines.join(" · ")}` }]);
-          pushEvent(colorOf(snap.attackerId), `Duel over — ${res.title}: ${res.lines.join(" · ")}`);
+          pushEvent(colorOf(snap.attackerId), `Duel resolved — ${res.title}`, {
+            sublines: res.lines,
+          });
         }
         duelSnapshotRef.current = {
           attackerId: ctx.attackerPlayerId,
@@ -697,8 +711,10 @@ export default function MatchScreen() {
       const res = finalize(snap);
       duelSnapshotRef.current = null;
       const idn = idCounterRef.current++;
-      setDuelNotice({ id: idn, title: res.title, lines: res.lines });
-      pushEvent(colorOf(snap.attackerId), `Duel over — ${res.title}: ${res.lines.join(" · ")}`);
+      setDuelNotice({ id: idn, header: "Duel resolved", title: res.title, lines: res.lines });
+      pushEvent(colorOf(snap.attackerId), `Duel resolved — ${res.title}`, {
+        sublines: res.lines,
+      });
       setCompletedDuels([]);
     }
 
@@ -753,12 +769,7 @@ export default function MatchScreen() {
       const anyBlocked = blockedPairs.length > 0;
 
       const defenderIds = [...new Set(summary.pairs.map((p) => p.targetPlayerId))];
-      const atkRoyals = [...new Set(summary.pairs.map((p) => p.attackerCardId))].map((c) =>
-        royalName(attackerId, c),
-      );
-      const title = `${nameOf(attackerId)} ${atkRoyals.join(", ")} → ${defenderIds
-        .map(nameOf)
-        .join(", ")}`;
+      const title = `${nameOf(attackerId)} vs ${defenderIds.map(nameOf).join(", ")}`;
 
       const lines: string[] = [];
       // Per-pair narration: how each attacking Royal fared.
@@ -768,7 +779,7 @@ export default function MatchScreen() {
       }
       for (const p of unblockedPairs) {
         lines.push(
-          `${royalName(attackerId, p.attackerCardId)} hit ${nameOf(p.targetPlayerId)} for ${p.directDamage} (unblocked)`,
+          `${royalName(attackerId, p.attackerCardId)} hit ${nameOf(p.targetPlayerId)} for ${p.directDamage} — unblocked`,
         );
       }
       // Losses (from court diffs) and life deltas.
@@ -802,13 +813,13 @@ export default function MatchScreen() {
       }
 
       const header = summary.autoResolved
-        ? "DUEL AUTO-RESOLVED"
+        ? "Duel resolved — auto"
         : anyBlocked
-          ? "COMBAT"
-          : "ATTACK — UNBLOCKED";
+          ? "Combat resolved"
+          : "Attack landed — unblocked";
       const idn = idCounterRef.current++;
       setDuelNotice({ id: idn, header, title, lines });
-      pushEvent(colorOf(attackerId), `${header} — ${title}: ${lines.join(" · ")}`);
+      pushEvent(colorOf(attackerId), `${header} — ${title}`, { sublines: lines });
     }
   }, [gameState]);
 
@@ -923,7 +934,9 @@ export default function MatchScreen() {
 
     // Turn changes.
     if (prevActivePlayerRef.current && prevActivePlayerRef.current !== gameState.activePlayerId) {
-      pushEvent(colorOf(gameState.activePlayerId), `${nameOf(gameState.activePlayerId)} — turn ${gameState.turnNumber}`);
+      pushEvent(colorOf(gameState.activePlayerId), `— turn ${gameState.turnNumber}`, {
+        actor: nameOf(gameState.activePlayerId),
+      });
       const flareKey = gameState.turnNumber * 100 + gameState.turnOrder.indexOf(gameState.activePlayerId);
       setTurnFlare({ key: flareKey, color: colorOf(gameState.activePlayerId) });
       if (gameState.activePlayerId === effectMyId) {
@@ -951,10 +964,9 @@ export default function MatchScreen() {
       for (const [atkId, targets] of byAttacker) {
         for (const [tgtId, cardIds] of targets) {
           const royals = cardIds.map((cid) => royalLabel(atkId, cid)).join(", ");
-          pushEvent(
-            colorOf(atkId),
-            `${nameOf(atkId)} attacked ${nameOf(tgtId)} with ${royals}`,
-          );
+          pushEvent(colorOf(atkId), `attacked ${nameOf(tgtId)} with ${royals}`, {
+            actor: nameOf(atkId),
+          });
         }
       }
     }
@@ -971,7 +983,8 @@ export default function MatchScreen() {
       const clubPip = parseCardId(c.clubCardId).pipValue;
       pushEvent(
         colorOf(c.attackerPlayerId),
-        `${nameOf(c.attackerPlayerId)} played ${cardLabel(c.clubCardId)} (−${clubPip}) on ${clubTargetPoss} Royal ${royalLabel(c.targetPlayerId, c.targetRoyalId)}`,
+        `played ${cardLabel(c.clubCardId)} (−${clubPip}) on ${clubTargetPoss} Royal ${royalLabel(c.targetPlayerId, c.targetRoyalId)}`,
+        { actor: nameOf(c.attackerPlayerId) },
       );
     }
     prevPendingClubRef.current = pendingClubKey;
@@ -992,20 +1005,25 @@ export default function MatchScreen() {
       if (!before) continue;
       const lifeDelta = p.life - before.life;
       if (lifeDelta < 0) {
-        pushEvent(colorOf(id), `${nameOf(id)} took ${-lifeDelta} damage (❤ ${p.life})`);
+        pushEvent(colorOf(id), `took ${-lifeDelta} damage (❤ ${p.life})`, { actor: nameOf(id) });
         damageParts.push(`${nameOf(id)} took ${-lifeDelta} damage`);
       } else if (lifeDelta > 0) {
-        pushEvent(colorOf(id), `${nameOf(id)} healed +${lifeDelta} (❤ ${p.life})`);
+        pushEvent(colorOf(id), `healed +${lifeDelta} (❤ ${p.life})`, { actor: nameOf(id) });
       }
       const nowCourtIds = new Set(p.court.map((r) => r.cardId));
       const lostRoyals = before.court.filter((r) => !nowCourtIds.has(r.cardId));
       if (lostRoyals.length > 0) {
         const lostNames = lostRoyals.map(royalStatLabel).join(", ");
-        pushEvent(colorOf(id), `${nameOf(id)} lost Royal${lostRoyals.length > 1 ? "s" : ""} ${lostNames}`);
+        pushEvent(colorOf(id), `lost Royal${lostRoyals.length > 1 ? "s" : ""} ${lostNames}`, {
+          actor: nameOf(id),
+        });
         damageParts.push(`${nameOf(id)} lost ${lostNames}`);
       }
       if (!before.eliminated && p.isEliminated) {
-        pushEvent(colorOf(id), `☠ ${nameOf(id)} ${id === effectMyId ? "were" : "was"} eliminated!`);
+        pushEvent(colorOf(id), `${id === effectMyId ? "were" : "was"} eliminated!`, {
+          actor: nameOf(id),
+          tag: "☠",
+        });
         showToast(`☠ ${nameOf(id)} ${id === effectMyId ? "were" : "was"} eliminated`, "info");
       }
     }
@@ -2011,13 +2029,16 @@ export default function MatchScreen() {
             <Animated.View entering={FadeInDown.duration(250)} style={styles.duelResultPanel}>
               <View style={styles.duelResultHeader}>
                 <Ionicons name="flash" size={13} color="#C89B3C" />
-                <Text style={styles.duelResultTitle}>{duelNotice.header ?? "DUEL OVER"} — {duelNotice.title}</Text>
+                <Text style={styles.duelResultTitle}>{duelNotice.header ?? "Duel resolved"}</Text>
                 <Pressable onPress={() => setDuelNotice(null)} hitSlop={8}>
                   <Ionicons name="close" size={16} color={Colors.textMuted} />
                 </Pressable>
               </View>
-              {duelNotice.lines.map((line) => (
-                <Text key={line} style={styles.duelResultLine}>• {line}</Text>
+              <Text style={styles.duelResultSub}>{duelNotice.title}</Text>
+              {duelNotice.lines.map((line, i) => (
+                <View key={`${i}-${line}`} style={styles.duelResultLineRow}>
+                  <RichLine text={line} textStyle={styles.duelResultLine} />
+                </View>
               ))}
             </Animated.View>
           )}
@@ -2712,6 +2733,18 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: "#C89B3C",
     letterSpacing: 0.5,
+  },
+  duelResultSub: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textPrimary,
+  },
+  duelResultLineRow: {
+    flexDirection: "row",
+    paddingLeft: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: "rgba(200,155,60,0.4)",
+    marginLeft: 2,
   },
   duelResultLine: {
     fontSize: 12,
