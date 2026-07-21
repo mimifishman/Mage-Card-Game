@@ -99,11 +99,15 @@ export async function getMatchWithPlayers(matchId: string) {
  * Creates a solo match: the human host at turnOrder 0 and the AI opponent at
  * turnOrder 1. The caller is expected to start the match immediately.
  */
-export async function createVsAiMatch(hostUserId: string, botUserId: string) {
+export async function createVsAiMatch(
+  hostUserId: string,
+  botUserId: string,
+  botPersona?: string,
+) {
   const inviteCode = generateInviteCode();
   const [match] = await db
     .insert(matchesTable)
-    .values({ createdBy: hostUserId, inviteCode })
+    .values({ createdBy: hostUserId, inviteCode, botPersona: botPersona ?? null })
     .returning();
   if (!match) throw new Error("Failed to create match");
 
@@ -223,12 +227,18 @@ export async function createRematch(matchId: string): Promise<string> {
 
   if (players.length === 0) throw new Error("No players found for match");
 
+  const [oldMatch] = await db
+    .select({ botPersona: matchesTable.botPersona })
+    .from(matchesTable)
+    .where(eq(matchesTable.id, matchId));
+
   const hostUserId = players[0]!.userId;
   const inviteCode = generateInviteCode();
 
   const [newMatch] = await db
     .insert(matchesTable)
-    .values({ createdBy: hostUserId, inviteCode })
+    // Rematches keep the same bot persona the player originally chose.
+    .values({ createdBy: hostUserId, inviteCode, botPersona: oldMatch?.botPersona ?? null })
     .returning();
   if (!newMatch) throw new Error("Failed to create rematch");
 
@@ -309,6 +319,7 @@ export async function logAction(
   userId: string,
   action: GameAction,
   turnNumber: number,
+  handsSnapshot?: Record<string, string[]>,
 ): Promise<void> {
   await db.insert(gameActionsLogTable).values({
     matchId,
@@ -316,5 +327,7 @@ export async function logAction(
     actionType: action.type,
     payload: action as unknown as Record<string, unknown>,
     turnNumber,
+    // Server-side audit trail only — never exposed through any client API.
+    handsSnapshot: (handsSnapshot ?? null) as unknown as Record<string, unknown>,
   });
 }

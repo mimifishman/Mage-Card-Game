@@ -81,9 +81,24 @@ export interface MatchSummary {
   status: MatchSummaryStatus;
 }
 
+/**
+ * Optional bot style for vs-AI matches. "random" picks one of the concrete personas per match — rematches roll a fresh persona. When omitted, the server falls back to its legacy per-match persona selection. Ignored for multiplayer matches.
+ */
+export type CreateMatchRequestBotPersona =
+  (typeof CreateMatchRequestBotPersona)[keyof typeof CreateMatchRequestBotPersona];
+
+export const CreateMatchRequestBotPersona = {
+  aggressor: "aggressor",
+  controller: "controller",
+  economist: "economist",
+  random: "random",
+} as const;
+
 export interface CreateMatchRequest {
   /** When true, creates a solo match against the AI opponent: the bot is seated automatically and the match starts immediately (status will be in_progress in the response). */
   vsAi?: boolean;
+  /** Optional bot style for vs-AI matches. "random" picks one of the concrete personas per match — rematches roll a fresh persona. When omitted, the server falls back to its legacy per-match persona selection. Ignored for multiplayer matches. */
+  botPersona?: CreateMatchRequestBotPersona;
 }
 
 export interface CreateMatchResponse {
@@ -115,6 +130,33 @@ export const MatchDetailsStatus = {
   finished: "finished",
 } as const;
 
+/**
+ * The bot style chosen for this vs-AI match, or null when unset (multiplayer matches, or legacy hash-based persona selection).
+ */
+export type MatchDetailsBotPersona =
+  | (typeof MatchDetailsBotPersona)[keyof typeof MatchDetailsBotPersona]
+  | null;
+
+export const MatchDetailsBotPersona = {
+  aggressor: "aggressor",
+  controller: "controller",
+  economist: "economist",
+  random: "random",
+} as const;
+
+/**
+ * The concrete persona actually playing this match. Equal to botPersona for direct choices; for botPersona="random" this is the per-match resolved persona (re-rolled on each rematch).
+ */
+export type MatchDetailsBotPersonaResolved =
+  | (typeof MatchDetailsBotPersonaResolved)[keyof typeof MatchDetailsBotPersonaResolved]
+  | null;
+
+export const MatchDetailsBotPersonaResolved = {
+  aggressor: "aggressor",
+  controller: "controller",
+  economist: "economist",
+} as const;
+
 export interface MatchDetails {
   id: string;
   status: MatchDetailsStatus;
@@ -123,6 +165,10 @@ export interface MatchDetails {
   turnNumber: number;
   currentTurnPlayerId?: string | null;
   winnerUserId?: string | null;
+  /** The bot style chosen for this vs-AI match, or null when unset (multiplayer matches, or legacy hash-based persona selection). */
+  botPersona?: MatchDetailsBotPersona;
+  /** The concrete persona actually playing this match. Equal to botPersona for direct choices; for botPersona="random" this is the per-match resolved persona (re-rolled on each rematch). */
+  botPersonaResolved?: MatchDetailsBotPersonaResolved;
   startedAt?: string | null;
   finishedAt?: string | null;
 }

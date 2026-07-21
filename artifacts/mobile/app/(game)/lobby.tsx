@@ -29,6 +29,14 @@ import type { MyMatchItem } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
 import { Gradients } from "@/constants/theme";
+import { BOT_PERSONAS, type BotPersonaOption } from "@/constants/botPersonas";
+
+const PERSONA_ICONS: Record<BotPersonaOption["icon"], keyof typeof MaterialCommunityIcons.glyphMap> = {
+  fire: "fire",
+  snowflake: "snowflake",
+  gold: "gold",
+  dice: "dice-multiple",
+};
 
 export default function LobbyScreen() {
   const { user, logout } = useAuth();
@@ -36,6 +44,8 @@ export default function LobbyScreen() {
   const insets = useSafeAreaInsets();
   const [inviteCode, setInviteCode] = useState("");
   const [showJoinInput, setShowJoinInput] = useState(false);
+  const [showPersonaPicker, setShowPersonaPicker] = useState(false);
+  const [pendingPersona, setPendingPersona] = useState<BotPersonaOption["key"] | null>(null);
 
   const createScale = useSharedValue(1);
   const joinScale = useSharedValue(1);
@@ -129,7 +139,14 @@ export default function LobbyScreen() {
       withTiming(0.95, { duration: 100 }),
       withTiming(1, { duration: 100 }),
     );
-    createMatch({ data: { vsAi: true } });
+    setShowPersonaPicker((v) => !v);
+  };
+
+  const handlePickPersona = (persona: BotPersonaOption) => {
+    if (isCreating) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPendingPersona(persona.key);
+    createMatch({ data: { vsAi: true, botPersona: persona.key } });
   };
 
   const handleJoinMatch = () => {
@@ -291,10 +308,55 @@ export default function LobbyScreen() {
                 <Text style={[styles.actionTitle, { color: "#9B59B6" }]}>Play vs AI</Text>
                 <Text style={styles.actionDesc}>Battle the AI Mage in an instant solo match</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              <Ionicons
+                name={showPersonaPicker ? "chevron-down" : "chevron-forward"}
+                size={20}
+                color={Colors.textMuted}
+              />
             </LinearGradient>
           </Pressable>
         </Animated.View>
+
+        {showPersonaPicker && (
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.personaSection}>
+            <Text style={styles.personaTitle}>Choose your opponent</Text>
+            {BOT_PERSONAS.map((persona) => {
+              const isPending = isCreatingVsAi && pendingPersona === persona.key;
+              return (
+                <Pressable
+                  key={persona.key}
+                  onPress={() => handlePickPersona(persona)}
+                  disabled={isCreating}
+                  style={({ pressed }) => [
+                    styles.personaCard,
+                    { borderColor: `${persona.accent}55` },
+                    pressed && { opacity: 0.85 },
+                  ]}
+                  testID={`bot-persona-${persona.key}`}
+                >
+                  <View style={[styles.personaIconBg, { backgroundColor: persona.accentBg }]}>
+                    {isPending ? (
+                      <ActivityIndicator color={persona.accent} size="small" />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name={PERSONA_ICONS[persona.icon]}
+                        size={26}
+                        color={persona.accent}
+                      />
+                    )}
+                  </View>
+                  <View style={styles.personaTextCol}>
+                    <Text style={[styles.personaName, { color: persona.accent }]}>
+                      {persona.mageName}
+                    </Text>
+                    <Text style={styles.personaDesc}>{persona.description}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                </Pressable>
+              );
+            })}
+          </Animated.View>
+        )}
 
         {showJoinInput && (
           <Animated.View entering={FadeInDown.duration(400)} style={styles.joinInputSection}>
@@ -500,6 +562,49 @@ const styles = StyleSheet.create({
   },
   joinInputSection: {
     gap: 12,
+  },
+  personaSection: {
+    gap: 10,
+    marginTop: -16,
+  },
+  personaTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+  personaCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  personaIconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  personaTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  personaName: {
+    fontSize: 16,
+    fontFamily: "Inter_700Bold",
+  },
+  personaDesc: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textSecondary,
+    lineHeight: 17,
   },
   joinInputWrapper: {
     borderWidth: 1,
