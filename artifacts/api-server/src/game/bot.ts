@@ -78,6 +78,25 @@ const PERSONAS: BotPersona[] = [
   },
 ];
 
+/** Concrete persona keys ("aggressor", "controller", "economist"). */
+export const PERSONA_NAMES = PERSONAS.map((p) => p.name);
+
+/**
+ * Sentinel a client may choose instead of a concrete persona: the match is
+ * stored with botPersona="random" and the actual persona is derived from the
+ * match id (personaForMatch). Because every rematch gets a fresh match id,
+ * "random" re-rolls the persona on each rematch.
+ */
+export const RANDOM_PERSONA_KEY = "random";
+
+/** All values accepted as botPersona when creating a vs-AI match. */
+export const SELECTABLE_PERSONA_KEYS = [...PERSONA_NAMES, RANDOM_PERSONA_KEY];
+
+/** Looks up a persona by its internal key ("aggressor", …), or null. */
+export function personaByName(name: string): BotPersona | null {
+  return PERSONAS.find((p) => p.name === name) ?? null;
+}
+
 /** Deterministic 32-bit hash (FNV-1a) so persona choice is stable per match. */
 function hashString(input: string): number {
   let h = 0x811c9dc5;

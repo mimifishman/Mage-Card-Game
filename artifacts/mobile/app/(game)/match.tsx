@@ -31,6 +31,7 @@ import type {
 import { useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useAuth } from "@/lib/auth";
 import Colors, { seatColorFor } from "@/constants/colors";
+import { personaMageName } from "@/constants/botPersonas";
 import { Gradients } from "@/constants/theme";
 import HandTray from "@/components/game/HandTray";
 import Seat from "@/components/game/Seat";
@@ -265,9 +266,16 @@ export default function MatchScreen() {
 
   useEffect(() => {
     if (matchData?.players) {
+      // Prefer the resolved persona so "random" shows the mage actually playing.
+      const mageName = personaMageName(
+        matchData.match?.botPersonaResolved ?? matchData.match?.botPersona ?? null,
+      );
       const names: Record<string, string> = {};
       for (const p of matchData.players) {
-        names[p.userId] = p.displayName;
+        // Show the chosen bot style alongside the AI Mage's name so the
+        // player always knows which persona they're facing.
+        names[p.userId] =
+          p.isBot && mageName ? `${p.displayName} · ${mageName}` : p.displayName;
       }
       setDisplayNames(names);
     }
