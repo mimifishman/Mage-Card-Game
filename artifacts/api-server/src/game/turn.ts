@@ -23,10 +23,16 @@ export function eliminatePlayerIfNeeded(
     ...player.court.flatMap((r) => [r.cardId, ...r.attachedCards]),
   ];
 
+  const prevSeq = Math.max(0, ...(state.lastEliminations ?? []).map((e) => e.seq));
+
   return {
     ...state,
     players: { ...state.players, [playerId]: eliminated },
     abyss: [...state.abyss, ...allCards],
+    lastEliminations: [
+      ...(state.lastEliminations ?? []),
+      { playerId, sweptCardIds: allCards, seq: prevSeq + 1 },
+    ],
   };
 }
 

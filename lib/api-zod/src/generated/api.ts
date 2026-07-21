@@ -454,6 +454,23 @@ export const SubmitGameActionResponse = zod.object({
       .describe(
         "Attribution record for direct (non-combat) damage — a Club burned for face damage or a Joker's damage mode. seq increases monotonically per match so clients can detect a new hit even when the same card\/target repeats.",
       ),
+    lastEliminations: zod
+      .array(
+        zod
+          .object({
+            playerId: zod.string(),
+            sweptCardIds: zod
+              .array(zod.string())
+              .describe(
+                "Every card (Royals + attachments) swept from their court to the Abyss",
+              ),
+            seq: zod.number(),
+          })
+          .describe(
+            "Announcement record for a player elimination — life reached 0 and their whole court was swept to the Abyss. seq increases monotonically per match so clients can dedup across snapshots.",
+          ),
+      )
+      .optional(),
     pendingClubDebuff: zod
       .object({
         attackerPlayerId: zod.string(),
@@ -782,6 +799,23 @@ export const GetMatchStateResponse = zod.object({
       .describe(
         "Attribution record for direct (non-combat) damage — a Club burned for face damage or a Joker's damage mode. seq increases monotonically per match so clients can detect a new hit even when the same card\/target repeats.",
       ),
+    lastEliminations: zod
+      .array(
+        zod
+          .object({
+            playerId: zod.string(),
+            sweptCardIds: zod
+              .array(zod.string())
+              .describe(
+                "Every card (Royals + attachments) swept from their court to the Abyss",
+              ),
+            seq: zod.number(),
+          })
+          .describe(
+            "Announcement record for a player elimination — life reached 0 and their whole court was swept to the Abyss. seq increases monotonically per match so clients can dedup across snapshots.",
+          ),
+      )
+      .optional(),
     pendingClubDebuff: zod
       .object({
         attackerPlayerId: zod.string(),

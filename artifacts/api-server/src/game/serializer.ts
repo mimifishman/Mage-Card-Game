@@ -1,4 +1,4 @@
-import type { AttackDeclaration, CardId, CombatSummary, DirectHit, DuelContext, GameState, InterruptStackState, PendingClubDebuff, PlayerState, RoyalInCourt } from "./types";
+import type { AttackDeclaration, CardId, CombatSummary, DirectHit, DuelContext, EliminationEvent, GameState, InterruptStackState, PendingClubDebuff, PlayerState, RoyalInCourt } from "./types";
 import { availableVault } from "./vault";
 
 export interface PublicPlayerState {
@@ -32,6 +32,7 @@ export interface PlayerGameView {
   duelContext?: DuelContext;
   lastCombatSummary?: CombatSummary;
   lastDirectHit?: DirectHit;
+  lastEliminations?: EliminationEvent[];
   pendingClubDebuff?: PendingClubDebuff;
   pendingBlockDefenders?: string[];
   duelQueue?: string[];
@@ -96,6 +97,7 @@ export function buildPlayerView(
     duelContext: state.duelContext,
     lastCombatSummary: state.lastCombatSummary,
     lastDirectHit: state.lastDirectHit,
+    lastEliminations: state.lastEliminations,
     pendingClubDebuff: state.pendingClubDebuff,
     pendingBlockDefenders: state.pendingBlockDefenders,
     duelQueue: state.duelQueue,

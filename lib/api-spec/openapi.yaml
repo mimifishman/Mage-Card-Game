@@ -906,6 +906,23 @@ components:
           type: integer
         seq:
           type: integer
+    EliminationEvent:
+      type: object
+      description: >-
+        Announcement record for a player elimination — life reached 0 and
+        their whole court was swept to the Abyss. seq increases monotonically
+        per match so clients can dedup across snapshots.
+      required: [playerId, sweptCardIds, seq]
+      properties:
+        playerId:
+          type: string
+        sweptCardIds:
+          type: array
+          description: Every card (Royals + attachments) swept from their court to the Abyss
+          items:
+            type: string
+        seq:
+          type: integer
     PendingClubDebuff:
       type: object
       required: [attackerPlayerId, clubCardId, targetPlayerId, targetRoyalId]
@@ -1001,6 +1018,10 @@ components:
           $ref: "#/components/schemas/CombatSummary"
         lastDirectHit:
           $ref: "#/components/schemas/DirectHit"
+        lastEliminations:
+          type: array
+          items:
+            $ref: "#/components/schemas/EliminationEvent"
         pendingClubDebuff:
           $ref: "#/components/schemas/PendingClubDebuff"
         pendingBlockDefenders:

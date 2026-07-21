@@ -129,6 +129,19 @@ export interface DirectHit {
   seq: number;
 }
 
+/**
+ * Announcement record for a player elimination — life reached 0 and their
+ * whole court was swept to the Abyss. Kept on state (like lastDirectHit) so
+ * clients can show a clear "why did all those Royals vanish?" banner. `seq`
+ * increases monotonically per match for client-side dedup across snapshots.
+ */
+export interface EliminationEvent {
+  playerId: string;
+  /** Every card (Royals + attachments) swept from their court to the Abyss. */
+  sweptCardIds: CardId[];
+  seq: number;
+}
+
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";
 
 export type TurnPhase =
@@ -188,6 +201,8 @@ export interface GameState {
   lastCombatSummary?: CombatSummary;
   /** Last direct (non-combat) damage event, for client hit-effect attribution. */
   lastDirectHit?: DirectHit;
+  /** Elimination announcements, for client banners explaining court sweeps. */
+  lastEliminations?: EliminationEvent[];
   pendingClubDebuff?: PendingClubDebuff;
   /** Targeted opponents who still need to submit (or pass on) blocks during "declare_blocks". Cleared once all have submitted. */
   pendingBlockDefenders?: string[];

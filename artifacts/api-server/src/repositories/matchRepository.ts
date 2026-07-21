@@ -185,7 +185,23 @@ export async function loadEngineState(matchId: string): Promise<EngineGameState 
 }
 
 export async function saveEngineState(matchId: string, engineState: EngineGameState): Promise<void> {
+  // Keep match_players.life / is_eliminated mirroring the engine state so
+  // lobby/scoreboard views (which read match_players, not the JSONB state)
+  // never show stale life totals.
+  const playerSyncs = Object.values(engineState.players).map((p) =>
+    db
+      .update(matchPlayersTable)
+      .set({ life: p.life, isEliminated: p.isEliminated })
+      .where(
+        and(
+          eq(matchPlayersTable.matchId, matchId),
+          eq(matchPlayersTable.userId, p.id),
+        ),
+      ),
+  );
+
   await Promise.all([
+    ...playerSyncs,
     db
       .update(gameStateTable)
       .set({

@@ -247,6 +247,24 @@ export default function MatchScreen() {
     return () => clearTimeout(t);
   }, [duelNotice?.id]);
 
+  // Elimination announcement: a prominent overlay explaining WHY a court
+  // suddenly vanished (life hit 0 → every court card swept to the Abyss).
+  // Dismissible, and auto-clears after ~10s so it can't block forever.
+  const [elimNotice, setElimNotice] = useState<{
+    id: number;
+    playerId: string;
+    sweptCount: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!elimNotice) return;
+    const t = setTimeout(() => setElimNotice(null), 10000);
+    return () => clearTimeout(t);
+  }, [elimNotice?.id]);
+
+  // Direct-hit dedup: lastDirectHit.seq is monotonic per match; remember the
+  // last seq we toasted so rejoining mid-match doesn't replay an old hit.
+  const seenDirectHitSeqRef = useRef<number | null>(null);
+
   const { data: stateData, isLoading } = useGetMatchState(matchId ?? "", {
     query: {
       queryKey: getGetMatchStateQueryKey(matchId ?? ""),
@@ -1024,7 +1042,35 @@ export default function MatchScreen() {
           actor: nameOf(id),
           tag: "☠",
         });
-        showToast(`☠ ${nameOf(id)} ${id === effectMyId ? "were" : "was"} eliminated`, "info");
+        // Prominent overlay (replaces the old easy-to-miss toast). The server
+        // records how many cards were swept; fall back to the pre-diff court
+        // size for matches persisted before lastEliminations existed.
+        const elimEvent = (gameState.lastEliminations ?? [])
+          .filter((e) => e.playerId === id)
+          .pop();
+        setElimNotice({
+          id: idCounterRef.current++,
+          playerId: id,
+          sweptCount: elimEvent?.sweptCardIds?.length ?? before.court.length,
+        });
+      }
+    }
+
+    // Direct (non-combat) damage — a burned Club or a Joker's damage mode.
+    // Toast it with the card, victim, and amount so face damage is never
+    // just a silently shrinking life number.
+    const dh = gameState.lastDirectHit;
+    if (dh) {
+      if (seenDirectHitSeqRef.current === null) {
+        // First snapshot (or rejoin): don't replay a hit from before we joined.
+        seenDirectHitSeqRef.current = dh.seq;
+      } else if (dh.seq > seenDirectHitSeqRef.current) {
+        seenDirectHitSeqRef.current = dh.seq;
+        const victimLife = gameState.players[dh.targetPlayerId]?.life;
+        showToast(
+          `💥 ${cardLabel(dh.sourceCardId)} hit ${nameOf(dh.targetPlayerId)} for ${dh.amount}${victimLife !== undefined ? ` (❤ ${victimLife})` : ""}`,
+          "info",
+        );
       }
     }
 
@@ -2506,6 +2552,37 @@ export default function MatchScreen() {
         );
       })()}
 
+      {/* Elimination announcement — prominent, explains the court sweep, and
+          stacks ABOVE the winner banner so the "why" lands before the "who
+          won". Dismissible via OK; auto-clears after ~10s. */}
+      {elimNotice && (() => {
+        const isMe = elimNotice.playerId === myId;
+        const name = nameFor(elimNotice.playerId);
+        return (
+          <View style={styles.elimOverlay} pointerEvents="box-none">
+            <Animated.View entering={FadeInDown.duration(300)} style={styles.elimPanel} testID="elimination-notice">
+              <Ionicons name="skull" size={30} color={Colors.accentRed} />
+              <Text style={styles.elimTitle}>
+                {isMe ? "You have been eliminated!" : `${name} has been eliminated!`}
+              </Text>
+              <Text style={styles.elimBody}>
+                {isMe ? "Your" : `${name}'s`} life reached 0
+                {elimNotice.sweptCount > 0
+                  ? ` — all ${elimNotice.sweptCount} of ${isMe ? "your" : "their"} court card${elimNotice.sweptCount !== 1 ? "s were" : " was"} swept to the Abyss.`
+                  : `.${isMe ? " You're spectating now." : ""}`}
+              </Text>
+              <Pressable
+                onPress={() => setElimNotice(null)}
+                style={({ pressed }) => [styles.elimBtn, pressed && { opacity: 0.8 }]}
+                testID="elimination-notice-dismiss"
+              >
+                <Text style={styles.elimBtnText}>OK</Text>
+              </Pressable>
+            </Animated.View>
+          </View>
+        );
+      })()}
+
       <ToastHost toasts={toasts} />
     </View>
   );
@@ -2545,6 +2622,53 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
     justifyContent: "center",
+  },
+  elimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 70,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  elimPanel: {
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.accentRed,
+    paddingVertical: 18,
+    paddingHorizontal: 22,
+    maxWidth: 340,
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+  },
+  elimTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: Colors.accentRed,
+    textAlign: "center",
+  },
+  elimBody: {
+    fontSize: 13,
+    color: Colors.textPrimary,
+    textAlign: "center",
+    lineHeight: 19,
+  },
+  elimBtn: {
+    marginTop: 4,
+    backgroundColor: Colors.accentRed,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 28,
+  },
+  elimBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFF",
   },
   gameOverBanner: {
     position: "absolute",

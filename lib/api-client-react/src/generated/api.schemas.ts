@@ -264,6 +264,16 @@ export interface DirectHit {
   seq: number;
 }
 
+/**
+ * Announcement record for a player elimination — life reached 0 and their whole court was swept to the Abyss. seq increases monotonically per match so clients can dedup across snapshots.
+ */
+export interface EliminationEvent {
+  playerId: string;
+  /** Every card (Royals + attachments) swept from their court to the Abyss */
+  sweptCardIds: string[];
+  seq: number;
+}
+
 export type PendingClubDebuffReturnPhase =
   (typeof PendingClubDebuffReturnPhase)[keyof typeof PendingClubDebuffReturnPhase];
 
@@ -429,6 +439,7 @@ export interface PlayerGameView {
   duelContext?: DuelContext;
   lastCombatSummary?: CombatSummary;
   lastDirectHit?: DirectHit;
+  lastEliminations?: EliminationEvent[];
   pendingClubDebuff?: PendingClubDebuff;
   /** Opponents targeted by the current attack who have not yet submitted their block declarations. */
   pendingBlockDefenders?: string[];
