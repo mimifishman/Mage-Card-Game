@@ -33,7 +33,10 @@ interface EventTickerProps {
 
 // Matches card references produced by cardLabel()/royalStatLabel():
 // "K♠", "10♥", "JKR★", optionally followed by a stat block "(⚔3 ♥3)".
-const CARD_TOKEN_RE = /((?:10|[AJQK2-9])[♥♠♦♣]|JKR★)(?:\s*\((⚔\d+)\s+(♥\d+)\))?/g;
+// Buffed values render as a visible sum, e.g. "(⚔3+1 ♥0+1)", and clubs can
+// push a term negative, e.g. "♥-1+2" — the regex accepts signed terms.
+const CARD_TOKEN_RE =
+  /((?:10|[AJQK2-9])[♥♠♦♣]|JKR★)(?:\s*\((⚔-?\d+(?:[+-]\d+)?)\s+(♥-?\d+(?:[+-]\d+)?)\))?/g;
 
 const SUIT_COLORS: Record<string, string> = {
   "♥": "#C8102E",

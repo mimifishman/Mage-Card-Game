@@ -90,10 +90,16 @@ function cardLabel(id: string): string {
 // A Royal named with its effective totals, e.g. "K♥ (⚔10 ♥4)". Used everywhere
 // the log mentions a Royal so a card is never shown without its value — for a
 // destroyed Royal, pass its last-known stats from a snapshot.
+// Buffed values are written as a visible sum so attachment effects are never
+// hidden: "♥3+1" = base-minus-damage 3 plus +1 buff (effective 4). The two
+// terms always add up to the effective total shown on the board badge.
 function royalStatLabel(r: RoyalStats): string {
   const atk = effectiveAttack(r.cardId, r.buffAttack);
   const hp = effectiveHealth(r.cardId, r.buffHealth, r.damageTaken);
-  return `${cardLabel(r.cardId)} (⚔${atk} ♥${hp})`;
+  const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
+  const atkStr = r.buffAttack !== 0 ? `${atk - r.buffAttack}${sign(r.buffAttack)}` : `${atk}`;
+  const hpStr = r.buffHealth !== 0 ? `${hp - r.buffHealth}${sign(r.buffHealth)}` : `${hp}`;
+  return `${cardLabel(r.cardId)} (⚔${atkStr} ♥${hpStr})`;
 }
 
 // Plain-language names for engine phases — raw ids read as jargon.
@@ -645,10 +651,15 @@ export default function MatchScreen() {
       const defName = nameOf(snap.defenderId);
       const atkCourt = gameState.players[snap.attackerId]?.court ?? [];
       const defCourt = gameState.players[snap.defenderId]?.court ?? [];
-      // Name any Royal in the duel with its duel-start totals (works for a
-      // destroyed Royal too, since stats come from the snapshot).
+      // Name any Royal in the duel with its current effective totals: prefer
+      // the live court entry (reflects mid-duel attachments and final combat
+      // damage); fall back to the snapshot's last-known stats for a destroyed
+      // Royal (the snapshot is refreshed every update while the duel runs, so
+      // buffs attached mid-duel are included even for the dead).
       const royalName = (id: string) => {
-        const s = snap.stats[id];
+        const live =
+          atkCourt.find((r) => r.cardId === id) ?? defCourt.find((r) => r.cardId === id);
+        const s = live ?? snap.stats[id];
         return s ? royalStatLabel(s) : cardLabel(id);
       };
       // The dueling Royals on each side, with their values — so the outcome
@@ -687,7 +698,24 @@ export default function MatchScreen() {
       handledByDuelTracker = true;
       const sameDuel =
         snap && snap.attackerId === ctx.attackerPlayerId && snap.defenderId === ctx.defenderPlayerId;
-      if (!sameDuel) {
+      if (sameDuel) {
+        // Keep the snapshot's stats fresh while the duel runs: attachments
+        // played mid-duel (Hearts, Spades, Clubs) change a Royal's totals, and
+        // the final log must reflect them — including for a Royal that later
+        // dies. Only Royals still on the board are refreshed; a destroyed
+        // Royal keeps its last-seen stats.
+        for (const r of [
+          ...(gameState.players[ctx.attackerPlayerId]?.court ?? []),
+          ...(gameState.players[ctx.defenderPlayerId]?.court ?? []),
+        ]) {
+          snap.stats[r.cardId] = {
+            cardId: r.cardId,
+            buffAttack: r.buffAttack,
+            buffHealth: r.buffHealth,
+            damageTaken: r.damageTaken,
+          };
+        }
+      } else {
         // Previous duel (if any) handed off to the next defender — record it.
         if (snap) {
           const res = finalize(snap);
