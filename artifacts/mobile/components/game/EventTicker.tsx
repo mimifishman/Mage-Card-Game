@@ -28,7 +28,7 @@ export default function EventTicker({ events }: EventTickerProps) {
     list.map((ev, i) => (
       <Animated.View key={ev.id} entering={FadeIn.duration(250)} style={styles.row}>
         <View style={[styles.dot, { backgroundColor: ev.color }]} />
-        <Text style={[styles.text, i === 0 && latestBold && styles.textLatest]} numberOfLines={2}>
+        <Text style={[styles.text, i === 0 && latestBold && styles.textLatest]}>
           {ev.text}
         </Text>
       </Animated.View>
@@ -41,7 +41,9 @@ export default function EventTicker({ events }: EventTickerProps) {
           {rows(all, false)}
         </ScrollView>
       ) : (
-        rows(recent, true)
+        <ScrollView style={styles.collapsedList} nestedScrollEnabled>
+          {rows(recent, true)}
+        </ScrollView>
       )}
       <Text style={styles.expandHint}>{expanded ? "tap to collapse" : `log (${events.length})`}</Text>
     </Pressable>
@@ -57,17 +59,22 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 6,
+    paddingVertical: 3,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
+    marginTop: 5,
   },
   text: {
     flex: 1,
-    fontSize: 11,
+    fontSize: 13,
+    lineHeight: 18,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
   },
@@ -76,12 +83,15 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   expandHint: {
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: "Inter_400Regular",
     color: Colors.textMuted,
     alignSelf: "flex-end",
   },
+  collapsedList: {
+    maxHeight: 96,
+  },
   expandedList: {
-    maxHeight: 180,
+    maxHeight: 220,
   },
 });
