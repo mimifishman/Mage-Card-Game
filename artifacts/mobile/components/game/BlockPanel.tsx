@@ -24,6 +24,13 @@ interface BlockPanelProps {
    * the block window.
    */
   attachTargeting?: { hint: string; onAttach: (royalId: string) => void };
+  /**
+   * When the player has a card armed that targets any Royal (e.g. a Club
+   * debuff), the attacker cards in this panel become valid tap targets:
+   * they glow and a tap applies the card to that Royal instead of switching
+   * the active attack lane.
+   */
+  attackerTargeting?: { onTarget: (royalId: string) => void };
 }
 
 /** Inline blocking panel rendered in the table center — the board, your court
@@ -39,6 +46,7 @@ export default function BlockPanel({
   isSubmitting,
   onConfirm,
   attachTargeting,
+  attackerTargeting,
 }: BlockPanelProps) {
   const incomingAttacks = useMemo(
     () => attacks.filter((a) => a.targetPlayerId === myId),
@@ -148,10 +156,15 @@ export default function BlockPanel({
           return (
             <Pressable
               key={atk.attackerCardId}
-              onPress={() => setActiveAttackerId(atk.attackerCardId)}
+              onPress={() =>
+                attackerTargeting
+                  ? attackerTargeting.onTarget(atk.attackerCardId)
+                  : setActiveAttackerId(atk.attackerCardId)
+              }
               style={({ pressed }) => [
                 styles.attackerCol,
-                isActive && [styles.attackerColActive, { borderColor: attackerColor }],
+                isActive && !attackerTargeting && [styles.attackerColActive, { borderColor: attackerColor }],
+                attackerTargeting && styles.attackerColTarget,
                 pressed && { opacity: 0.8 },
               ]}
             >
@@ -315,6 +328,15 @@ const styles = StyleSheet.create({
   },
   attackerColActive: {
     backgroundColor: Tints.white,
+  },
+  attackerColTarget: {
+    borderColor: Colors.brand,
+    backgroundColor: "rgba(200,155,60,0.12)",
+    shadowColor: Colors.brand,
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
   },
   attackerVal: {
     fontSize: 12,

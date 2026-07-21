@@ -2176,6 +2176,15 @@ export default function MatchScreen() {
                     }
                   : undefined
               }
+              attackerTargeting={
+                targetingRoyals &&
+                !gameState.players[attacksTargetingMe[0].attackerPlayerId]?.isEliminated
+                  ? {
+                      onTarget: (royalId) =>
+                        dispatchRoyalTarget(attacksTargetingMe[0]!.attackerPlayerId, royalId),
+                    }
+                  : undefined
+              }
             />
           ) : showDuelStage && duelCtx ? (
             <DuelStage
