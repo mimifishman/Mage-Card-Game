@@ -205,7 +205,7 @@ export default function MatchScreen() {
       extra?: { actor?: string; sublines?: string[]; tag?: string },
     ) => {
       const id = idCounterRef.current++;
-      setEvents((prev) => [...prev.slice(-60), { id, color, text, ...extra }]);
+      setEvents((prev) => [...prev.slice(-60), { id, color, text, at: Date.now(), ...extra }]);
     },
     [],
   );

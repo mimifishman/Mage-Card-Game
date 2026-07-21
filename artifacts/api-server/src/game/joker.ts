@@ -111,7 +111,7 @@ export function playJokerDamagePlayer(
 
   const updatedTarget: PlayerState = {
     ...targetBase,
-    life: targetBase.life - JOKER_COST,
+    life: Math.max(0, targetBase.life - JOKER_COST),
   };
 
   return ok(

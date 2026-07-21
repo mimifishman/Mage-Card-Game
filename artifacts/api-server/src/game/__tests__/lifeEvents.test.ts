@@ -3,6 +3,7 @@ import { pushLifeEvent } from "../lifeEvents";
 import { discardHeartToHeal } from "../attachments";
 import { applyClub } from "../clubs";
 import { eliminatePlayerIfNeeded } from "../turn";
+import { playJoker } from "../joker";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 
 describe("pushLifeEvent", () => {
@@ -92,6 +93,27 @@ describe("life events emitted by game actions", () => {
     expect(events[1]!.targetPlayerId).toBe(P2);
     expect(events[1]!.resultingLife).toBe(0);
     expect(events[1]!.seq).toBe(events[0]!.seq + 1);
+  });
+
+  it("overkill Joker damage clamps both state life and logged resulting life at 0", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D", "9D", "8D", "7D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["JOKER1"] }),
+        [P2]: makePlayer(P2, { life: 3 }),
+      },
+    });
+    const res = playJoker(state, P1, "JOKER1", "damage_player", P2);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value.players[P2]!.life).toBe(0);
+    const ev = res.value.lifeEvents!.at(-1)!;
+    expect(ev.kind).toBe("joker_damage");
+    expect(ev.amount).toBe(10);
+    expect(ev.resultingLife).toBe(0);
+    expect(ev.resultingLife).toBe(res.value.players[P2]!.life);
   });
 
   it("heal records positive amount and resulting life", () => {

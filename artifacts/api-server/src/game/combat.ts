@@ -441,7 +441,7 @@ function computeImmediateUnblockedHits(state: GameState): {
     const atkPower = effectiveAttack(attackerRoyal);
     players[attack.targetPlayerId] = {
       ...players[attack.targetPlayerId]!,
-      life: players[attack.targetPlayerId]!.life - atkPower,
+      life: Math.max(0, players[attack.targetPlayerId]!.life - atkPower),
     };
 
     immediateHits.push({
@@ -619,7 +619,7 @@ function executeResolveCombat(state: GameState): Result<GameState> {
     } else if (!attack.blockerCardIds?.length) {
       players[attack.targetPlayerId] = {
         ...players[attack.targetPlayerId]!,
-        life: players[attack.targetPlayerId]!.life - atkPower,
+        life: Math.max(0, players[attack.targetPlayerId]!.life - atkPower),
       };
       newLifeEvents.push({
         kind: "attack_damage",

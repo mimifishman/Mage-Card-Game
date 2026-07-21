@@ -17,6 +17,14 @@ export interface GameEvent {
   sublines?: string[];
   /** Small badge before the actor, e.g. "⚡" for off-turn plays or "auto". */
   tag?: string;
+  /** Epoch ms when the entry was logged; rendered as HH:MM:SS. */
+  at: number;
+}
+
+function formatTime(at: number): string {
+  const d = new Date(at);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 interface EventTickerProps {
@@ -122,6 +130,7 @@ export default function EventTicker({ events }: EventTickerProps) {
     list.map((ev, i) => (
       <Animated.View key={ev.id} entering={FadeIn.duration(250)} style={styles.row}>
         <View style={[styles.dot, { backgroundColor: ev.color }]} />
+        <Text style={styles.timestamp}>{formatTime(ev.at)}</Text>
         <View style={styles.body}>
           <RichLine
             text={ev.text}
@@ -238,6 +247,13 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     marginTop: 5,
+  },
+  timestamp: {
+    fontSize: 10,
+    lineHeight: 18,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.35)",
+    fontVariant: ["tabular-nums"],
   },
   text: {
     flex: 1,
