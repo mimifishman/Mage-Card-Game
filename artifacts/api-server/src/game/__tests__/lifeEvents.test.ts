@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { pushLifeEvent } from "../lifeEvents";
 import { discardHeartToHeal } from "../attachments";
 import { applyClub } from "../clubs";
+import { eliminatePlayerIfNeeded } from "../turn";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 
 describe("pushLifeEvent", () => {
@@ -67,6 +68,30 @@ describe("life events emitted by game actions", () => {
     expect(ev.resultingLife).toBe(13);
     expect(ev.actorPlayerId).toBe(P1);
     expect(ev.sourceCardId).toBe("7C");
+  });
+
+  it("elimination emits a distinct event in sequence after the lethal hit", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D", "9D", "8D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["9C"] }),
+        [P2]: makePlayer(P2, { life: 5 }),
+      },
+    });
+    const res = applyClub(state, P1, "9C", P2, undefined);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const afterElim = eliminatePlayerIfNeeded(res.value, P2);
+    const events = afterElim.lifeEvents!;
+    expect(events).toHaveLength(2);
+    expect(events[0]!.kind).toBe("club_damage");
+    expect(events[0]!.resultingLife).toBe(0);
+    expect(events[1]!.kind).toBe("elimination");
+    expect(events[1]!.targetPlayerId).toBe(P2);
+    expect(events[1]!.resultingLife).toBe(0);
+    expect(events[1]!.seq).toBe(events[0]!.seq + 1);
   });
 
   it("heal records positive amount and resulting life", () => {

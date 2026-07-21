@@ -1037,8 +1037,19 @@ export default function MatchScreen() {
     // Players whose life changes this snapshot are already covered by
     // detailed event lines — skip the generic fallback diff for them.
     const detailedLifeIds = new Set<string>();
+    const detailedElimIds = new Set<string>();
     for (const ev of newLifeEvents) {
-      if (ev.kind === "elimination") continue; // elimination flow below handles it
+      if (ev.kind === "elimination") {
+        // Detailed elimination line: resulting life is always shown so the
+        // knockout reads in sequence with the lethal hit right before it.
+        detailedElimIds.add(ev.targetPlayerId);
+        pushEvent(
+          colorOf(ev.targetPlayerId),
+          `${ev.targetPlayerId === effectMyId ? "were" : "was"} eliminated (❤ ${ev.resultingLife})`,
+          { actor: nameOf(ev.targetPlayerId), tag: "☠" },
+        );
+        continue;
+      }
       detailedLifeIds.add(ev.targetPlayerId);
       const source = ev.sourceCardId ? cardLabel(ev.sourceCardId) : undefined;
       if (ev.kind === "heal") {
@@ -1089,10 +1100,14 @@ export default function MatchScreen() {
         damageParts.push(`${nameOf(id)} lost ${lostNames}`);
       }
       if (!before.eliminated && p.isEliminated) {
-        pushEvent(colorOf(id), `${id === effectMyId ? "were" : "was"} eliminated!`, {
-          actor: nameOf(id),
-          tag: "☠",
-        });
+        // Fallback line only for matches persisted before lifeEvents existed;
+        // otherwise the detailed elimination line above already covered it.
+        if (!detailedElimIds.has(id)) {
+          pushEvent(colorOf(id), `${id === effectMyId ? "were" : "was"} eliminated!`, {
+            actor: nameOf(id),
+            tag: "☠",
+          });
+        }
         // Prominent overlay (replaces the old easy-to-miss toast). The server
         // records how many cards were swept; fall back to the pre-diff court
         // size for matches persisted before lastEliminations existed.
