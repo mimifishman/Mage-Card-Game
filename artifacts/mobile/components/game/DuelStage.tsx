@@ -158,7 +158,7 @@ export default function DuelStage({
       {completedDuels.map((d) => (
         <View key={d.id} style={styles.doneRow}>
           <Text style={styles.doneCheck}>✓</Text>
-          <Text style={styles.doneText} numberOfLines={2}>{d.text}</Text>
+          <Text style={styles.doneText}>{d.text}</Text>
         </View>
       ))}
 
@@ -361,7 +361,8 @@ const styles = StyleSheet.create({
   },
   doneText: {
     flex: 1,
-    fontSize: 11,
+    fontSize: 13,
+    lineHeight: 18,
     fontFamily: "Inter_500Medium",
     color: Colors.textSecondary,
   },

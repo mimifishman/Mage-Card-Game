@@ -19,6 +19,7 @@ import { buildPlayerView } from "../game/serializer";
 import { sendToUser, broadcastToMatch } from "../ws/manager";
 import { initializeAndStartMatch, applyResultAndBroadcast } from "../services/matchStart";
 import { kickBotRunner, markHumanActivity } from "../bot/runner";
+import { SELECTABLE_PERSONA_KEYS, RANDOM_PERSONA_KEY, personaForMatch } from "../game/bot";
 import { withMatchLock } from "../lib/matchLock";
 
 type MatchPlayersData = NonNullable<Awaited<ReturnType<typeof getMatchWithPlayers>>>;
@@ -43,7 +44,9 @@ router.get("/mine", async (req: Request, res: Response) => {
 
 router.post("/", async (req: Request, res: Response) => {
   const userId = req.user!.internalUserId;
-  const vsAi = (req.body as { vsAi?: unknown } | undefined)?.vsAi === true;
+  const body = req.body as { vsAi?: unknown; botPersona?: unknown } | undefined;
+  const vsAi = body?.vsAi === true;
+  const rawPersona = body?.botPersona;
 
   try {
     if (!vsAi) {
@@ -52,8 +55,17 @@ router.post("/", async (req: Request, res: Response) => {
       return;
     }
 
+    let botPersona: string | undefined;
+    if (rawPersona !== undefined) {
+      if (typeof rawPersona !== "string" || !SELECTABLE_PERSONA_KEYS.includes(rawPersona)) {
+        res.status(400).json({ error: `Invalid botPersona — must be one of: ${SELECTABLE_PERSONA_KEYS.join(", ")}` });
+        return;
+      }
+      botPersona = rawPersona;
+    }
+
     const botUserId = await ensureBotUser();
-    const match = await createVsAiMatch(userId, botUserId);
+    const match = await createVsAiMatch(userId, botUserId, botPersona);
     const started = await initializeAndStartMatch(match.id);
     if (!started.ok) {
       req.log.error({ matchId: match.id, error: started.error }, "Failed to start vs-AI match");
@@ -130,6 +142,13 @@ router.get("/:id", async (req: Request, res: Response) => {
         turnNumber: data.match.turnNumber,
         currentTurnPlayerId: data.match.currentTurnPlayerId,
         winnerUserId: data.match.winnerUserId,
+        botPersona: data.match.botPersona,
+        // "random" resolves per match id, so rematches roll a fresh persona;
+        // expose the resolved key so the client can show which mage is playing.
+        botPersonaResolved:
+          data.match.botPersona === RANDOM_PERSONA_KEY
+            ? personaForMatch(data.match.id).name
+            : data.match.botPersona,
         startedAt: data.match.startedAt,
         finishedAt: data.match.finishedAt,
       },

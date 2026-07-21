@@ -85,13 +85,19 @@ export async function applyResultAndBroadcast(
   // match log instead of guessing from state diffs.
   const lastAction = { actorUserId, action };
 
+  // Server-side audit trail: every logged action carries a snapshot of all
+  // players' hands as of this action resolving. Never sent to clients.
+  const handsSnapshot = Object.fromEntries(
+    Object.entries(newState.players).map(([id, p]) => [id, p.hand]),
+  );
+
   if (isGameOver(newState)) {
     const winner = getWinner(newState);
     await Promise.all([
       saveEngineState(matchId, newState).then(() =>
         winner ? finishMatch(matchId, winner) : Promise.resolve(),
       ),
-      logAction(matchId, actorUserId, action, newState.turnNumber),
+      logAction(matchId, actorUserId, action, newState.turnNumber, handsSnapshot),
     ]);
 
     broadcastViews(
@@ -113,7 +119,7 @@ export async function applyResultAndBroadcast(
 
   await Promise.all([
     saveEngineState(matchId, newState),
-    logAction(matchId, actorUserId, action, newState.turnNumber),
+    logAction(matchId, actorUserId, action, newState.turnNumber, handsSnapshot),
   ]);
 
   broadcastViews(
