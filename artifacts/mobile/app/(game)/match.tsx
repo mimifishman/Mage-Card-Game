@@ -87,19 +87,27 @@ function cardLabel(id: string): string {
   return `${c.displayRank}${c.suitSymbol}`;
 }
 
-// A Royal named with its effective totals, e.g. "K♥ (⚔10 ♥4)". Used everywhere
+// A Royal named with its effective totals, e.g. "K♥ ⚔10 ♥4". Used everywhere
 // the log mentions a Royal so a card is never shown without its value — for a
 // destroyed Royal, pass its last-known stats from a snapshot.
-// Buffed values are written as a visible sum so attachment effects are never
-// hidden: "♥3+1" = base-minus-damage 3 plus +1 buff (effective 4). The two
-// terms always add up to the effective total shown on the board badge.
-function royalStatLabel(r: RoyalStats): string {
-  const atk = effectiveAttack(r.cardId, r.buffAttack);
-  const hp = effectiveHealth(r.cardId, r.buffHealth, r.damageTaken);
+// Buffed values show the effective total first with the base+buff breakdown in
+// parentheses, and damage as a separate trailing term so the base never goes
+// negative: "♥13(2+11)−3" = full hearts 13 (base 2, +11 buff), minus 3 damage
+// taken (current hearts 10). Total-in-front minus the damage term always equals
+// the value shown on the board badge.
+function statTerm(symbol: string, base: number, buff: number, damage: number): string {
   const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
-  const atkStr = r.buffAttack !== 0 ? `${atk - r.buffAttack}${sign(r.buffAttack)}` : `${atk}`;
-  const hpStr = r.buffHealth !== 0 ? `${hp - r.buffHealth}${sign(r.buffHealth)}` : `${hp}`;
-  return `${cardLabel(r.cardId)} (⚔${atkStr} ♥${hpStr})`;
+  let s = buff !== 0 ? `${symbol}${base + buff}(${base}${sign(buff)})` : `${symbol}${base}`;
+  if (damage > 0) s += `−${damage}`;
+  return s;
+}
+
+function royalStatLabel(r: RoyalStats): string {
+  const atkBase = effectiveAttack(r.cardId, 0);
+  const hpBase = effectiveHealth(r.cardId, 0, 0);
+  const atkStr = statTerm("⚔", atkBase, r.buffAttack, 0);
+  const hpStr = statTerm("♥", hpBase, r.buffHealth, r.damageTaken);
+  return `${cardLabel(r.cardId)} ${atkStr} ${hpStr}`;
 }
 
 // Plain-language names for engine phases — raw ids read as jargon.
@@ -969,7 +977,7 @@ export default function MatchScreen() {
     const possOf = (id: string) => (id === effectMyId ? "your" : `${nameOf(id)}'s`);
     // Possessive when the owner is also the actor: "your own" / "Bob's own".
     const ownPossOf = (id: string) => (id === effectMyId ? "your own" : `${nameOf(id)}'s own`);
-    // A Royal named with its effective totals, e.g. "K♥ (⚔10 ♥4)". Falls back to
+    // A Royal named with its effective totals, e.g. "K♥ ⚔10 ♥4". Falls back to
     // the previous snapshot when the Royal has already left the court, so a card
     // is never logged without its value.
     const royalLabel = (playerId: string, royalCardId: string) => {

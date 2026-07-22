@@ -32,11 +32,16 @@ interface EventTickerProps {
 }
 
 // Matches card references produced by cardLabel()/royalStatLabel():
-// "K♠", "10♥", "JKR★", optionally followed by a stat block "(⚔3 ♥3)".
-// Buffed values render as a visible sum, e.g. "(⚔3+1 ♥0+1)", and clubs can
-// push a term negative, e.g. "♥-1+2" — the regex accepts signed terms.
-const CARD_TOKEN_RE =
-  /((?:10|[AJQK2-9])[♥♠♦♣]|JKR★)(?:\s*\((⚔-?\d+(?:[+-]\d+)?)\s+(♥-?\d+(?:[+-]\d+)?)\))?/g;
+// "K♠", "10♥", "JKR★", optionally followed by a stat block "⚔3 ♥3".
+// Buffed values show the total with a base+buff breakdown in parentheses and
+// damage as a trailing minus term, e.g. "⚔11(2+9) ♥13(2+11)−3". Clubs can push
+// totals negative, so each number accepts a leading minus. Both ASCII "-" and
+// the minus sign "−" are accepted for the damage term.
+const STAT_TERM = String.raw`-?\d+(?:\(-?\d+[+-]\d+\))?(?:[−-]\d+)?`;
+const CARD_TOKEN_RE = new RegExp(
+  String.raw`((?:10|[AJQK2-9])[♥♠♦♣]|JKR★)(?:\s+(⚔${STAT_TERM})\s+(♥${STAT_TERM}))?`,
+  "g",
+);
 
 const SUIT_COLORS: Record<string, string> = {
   "♥": "#C8102E",
