@@ -136,6 +136,17 @@ function courtValue(player: PlayerState): number {
 }
 
 /**
+ * Total attack a player's Court can swing next turn. Deliberately NOT filtered
+ * by hasAttackedThisTurn: advanceTurn only untaps the INCOMING player's Royals,
+ * so during the bot's own turn an opponent's Royals still read as tapped even
+ * though every one of them untaps when their turn begins. Filtering here would
+ * badly undercount the incoming threat.
+ */
+function courtAttack(player: PlayerState): number {
+  return player.court.reduce((sum, r) => sum + effectiveAttack(r), 0);
+}
+
+/**
  * Rough usefulness of holding a card, so discard decisions (and card spends)
  * distinguish a King from a 2 instead of just counting cards.
  */
@@ -154,6 +165,10 @@ const WIN_SCORE = 1_000_000;
 const ELIMINATION_BONUS = 300;
 /** Vault kept unspent counts toward the score only up to this much. */
 const RESERVE_CAP = 5;
+/** Slack wanted above the board's lethal swing before the bot stops worrying. */
+const DANGER_MARGIN = 2;
+/** Survival penalty per squared point of lethal shortfall. */
+const SURVIVAL_WEIGHT = 2.5;
 
 function evaluateState(state: GameState, botId: string, persona: BotPersona): number {
   const me = state.players[botId];
@@ -179,6 +194,7 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
     Math.min(Math.max(availableVault(state.mine, me), 0), RESERVE_CAP);
 
   let anyOpponentBoard = false;
+  let incomingThreat = 0;
   for (const id of state.turnOrder) {
     if (id === botId) continue;
     const opp = state.players[id];
@@ -188,9 +204,23 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
       continue;
     }
     if (opp.court.length > 0) anyOpponentBoard = true;
+    incomingThreat += courtAttack(opp);
     score -= persona.aggression * opp.life;
     score -= persona.oppBoard * courtValue(opp);
   }
+
+  // Survival urgency. The linear life term above values a point of life the
+  // same at 3 life as at 17, and the one-ply search never plays the opponent's
+  // NEXT turn — so the bot could not see incoming lethal and repeatedly died
+  // at 0 life still holding affordable Hearts (and Vault to pay for them).
+  // Penalise states the board can kill us from, growing quadratically as the
+  // shortfall widens so a partial heal still registers as progress (a hard
+  // cliff would make healing 3 when short by 5 look worthless).
+  // Scaled by persona.selfLife, which already means "how much I value my life".
+  // Stays subordinate to winning: ELIMINATION_BONUS (300) and WIN_SCORE dwarf
+  // it, so a lethal swing at the opponent still beats healing.
+  const lethalShortfall = Math.max(0, incomingThreat + DANGER_MARGIN - me.life);
+  score -= persona.selfLife * SURVIVAL_WEIGHT * lethalShortfall * lethalShortfall;
 
   // Defensive readiness: untapped Royals can block next turn. Only matters
   // while an opponent has a board to attack with.

@@ -921,3 +921,106 @@ describe("previously-missing card plays are now generated", () => {
     }
   });
 });
+
+describe("survival urgency — heals when the board threatens lethal", () => {
+  // Fixed persona + near-zero temperature ≈ argmax, so these choices are
+  // deterministic regardless of which archetype a match id would hash to.
+  const sharp = {
+    name: "test-sharp",
+    selfLife: 1,
+    aggression: 1,
+    board: 1.2,
+    oppBoard: 1,
+    hand: 0.7,
+    economy: 0.35,
+    reserve: 0.9,
+    temperature: 0.01,
+  };
+  const seeds = [1, 2, 3];
+
+  const choose = (state: GameState, seed: number) =>
+    chooseBotAction(state, BOT, { persona: sharp, rng: createRng(seed) });
+
+  it("heals instead of ending the turn when the enemy board is lethal", () => {
+    // Bot on 4 life facing K♥+Q♥ (⚔3 + ⚔2 = 5 incoming). Its only cards are a
+    // 4♥ and plenty of Vault — healing is the difference between living and
+    // dying, and previously the bot just ended the turn and died holding it.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2C", "3C", "4C"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QH")], life: 20 }),
+        [BOT]: makePlayer(BOT, { hand: ["4H"], court: [], life: 4 }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("discard_heart_to_heal");
+      expect(dispatchAction(state, BOT, action).ok).toBe(true);
+    }
+  });
+
+  it("buffs its Royal instead of healing when it is NOT in danger", () => {
+    // Identical board and Vault, but the bot is on 19 life — comfortably clear
+    // of the 5 incoming. The survival term must be inert here, leaving the
+    // ordinary trade (attach the Heart to the Royal) to win.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2C", "3C", "4C"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QH")], life: 20 }),
+        [BOT]: makePlayer(BOT, { hand: ["4H"], court: [mkRoyal("JS")], life: 19 }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("attach_heart");
+    }
+  });
+
+  it("flips to healing on the same board once life is lethal", () => {
+    // Same state as above with the Heart-attach still available, only the life
+    // total changed (19 -> 4). The survival term must now outweigh the buff.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2C", "3C", "4C"],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KH"), mkRoyal("QH")], life: 20 }),
+        [BOT]: makePlayer(BOT, { hand: ["4H"], court: [mkRoyal("JS")], life: 4 }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("discard_heart_to_heal");
+    }
+  });
+
+  it("still takes the lethal swing rather than healing", () => {
+    // Bot on 2 life (K♥ untaps for 3 next turn, so it IS in danger) but its
+    // K♠ can swing for exactly lethal into a tapped-out board that cannot
+    // block. WIN_SCORE/ELIMINATION_BONUS must stay above the survival term.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D"],
+      deck: ["2C", "3C", "4C"],
+      players: {
+        [P1]: makePlayer(P1, {
+          court: [mkRoyal("KH", { hasAttackedThisTurn: true })],
+          life: 3,
+        }),
+        [BOT]: makePlayer(BOT, { hand: ["4H"], court: [mkRoyal("KS")], life: 2 }),
+      },
+    });
+    for (const seed of seeds) {
+      const action = choose(state, seed);
+      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("declare_attack");
+    }
+  });
+});
