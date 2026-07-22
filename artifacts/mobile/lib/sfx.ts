@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Asset } from "expo-asset";
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
 import type { EffectKind, EffectSuit } from "@/lib/hitEffectsDiff";
 import sfxZap from "../assets/sfx/zap.wav";
@@ -19,9 +20,16 @@ import sfxDefeat from "../assets/sfx/defeat.wav";
 // (license-free, ~15-50 KB each); swap the files for professional SFX any
 // time without touching this module.
 //
-// Audio is decoration: every call is fail-safe (no-op on web, try/catch on
+// Audio is decoration: every call is fail-safe (no-op on web, guarded on
 // native) so a codec/session problem can never break gameplay. A persisted
 // mute switch (toggled from the match menu) silences everything.
+//
+// Published-build gotcha: in a published (OTA/CDN) bundle, Metro asset ids
+// resolve to extensionless hashed CDN URLs that the native audio player can
+// fail to decode. We therefore resolve each asset through expo-asset first —
+// `downloadAsync()` yields a `localUri` pointing at a cached file with a real
+// `.wav` extension (and is a no-op for assets already bundled on disk) — and
+// feed that URI to the player instead of the raw asset id.
 
 const SUIT_SOURCES: Record<EffectSuit, number> = {
   C: sfxZap,
@@ -44,7 +52,13 @@ const GAME_SOURCES: Record<GameSfx, number> = {
 };
 
 const players = new Map<number, AudioPlayer>();
+// One in-flight resolution per asset so concurrent plays don't double-create.
+const pendingPlayers = new Map<number, Promise<AudioPlayer | null>>();
 let audioModeSet = false;
+
+function warn(context: string, err: unknown): void {
+  if (__DEV__) console.warn(`[sfx] ${context}:`, err);
+}
 
 // ── Mute switch ──────────────────────────────────────────────────────────
 const MUTE_KEY = "@mage/sfx-muted";
@@ -60,7 +74,7 @@ function loadMuteOnce(): void {
     .then((v) => {
       if (v === "1") muted = true;
     })
-    .catch(() => {});
+    .catch((err) => warn("load mute preference", err));
 }
 loadMuteOnce();
 
@@ -70,7 +84,7 @@ export function getSfxMuted(): boolean {
 
 export function setSfxMuted(m: boolean): void {
   muted = m;
-  AsyncStorage.setItem(MUTE_KEY, m ? "1" : "0").catch(() => {});
+  AsyncStorage.setItem(MUTE_KEY, m ? "1" : "0").catch((err) => warn("save mute preference", err));
 }
 
 // ── Playback ─────────────────────────────────────────────────────────────
@@ -79,49 +93,75 @@ function ensureAudioMode(): void {
   audioModeSet = true;
   // Game feedback should be audible with the iOS mute switch on, and
   // should duck under (not pause) the user's music.
-  setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "mixWithOthers" }).catch(
-    () => {},
+  setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "mixWithOthers" }).catch((err) =>
+    warn("set audio mode", err),
   );
 }
 
-function getPlayer(source: number): AudioPlayer {
-  let player = players.get(source);
-  if (!player) {
-    player = createAudioPlayer(source);
-    players.set(source, player);
-  }
-  return player;
+/**
+ * Resolve a Metro asset id to a playable player. In development the asset is
+ * a dev-server URL with a `.wav` filename; in a published update it is an
+ * extensionless hashed CDN URL, so we download it to the local asset cache
+ * (which restores the extension) and play from `localUri`. Once created, a
+ * player is cached for the whole app session.
+ */
+function getOrCreatePlayer(source: number): Promise<AudioPlayer | null> {
+  const existing = players.get(source);
+  if (existing) return Promise.resolve(existing);
+  const pending = pendingPlayers.get(source);
+  if (pending) return pending;
+
+  const creation = (async (): Promise<AudioPlayer | null> => {
+    try {
+      const asset = Asset.fromModule(source);
+      if (!asset.localUri) {
+        await asset.downloadAsync();
+      }
+      const uri = asset.localUri ?? asset.uri;
+      const player = createAudioPlayer({ uri });
+      players.set(source, player);
+      return player;
+    } catch (err) {
+      warn(`create player for asset ${source}`, err);
+      return null;
+    } finally {
+      pendingPlayers.delete(source);
+    }
+  })();
+  pendingPlayers.set(source, creation);
+  return creation;
 }
 
 /**
- * Eagerly create every sound's player so first plays are instant. Without
- * this, a player is created on first use — and in Expo Go that means the
- * WAV is fetched from the dev server at that moment, which can lag the
- * sound seconds behind the action. Call once when the match screen mounts;
- * players persist for the whole app session.
+ * Eagerly resolve every sound to a local file and create its player so first
+ * plays are instant. Without this, a player is created on first use — and
+ * that means the WAV is fetched (dev server or CDN) at that moment, which can
+ * lag the sound seconds behind the action. Call once when the match screen
+ * mounts; players persist for the whole app session.
  */
 export function preloadSfx(): void {
   if (Platform.OS === "web") return;
-  try {
-    ensureAudioMode();
-    for (const source of Object.values(SUIT_SOURCES)) getPlayer(source);
-    for (const source of Object.values(GAME_SOURCES)) getPlayer(source);
-  } catch {
-    // Preloading is an optimization — playback will lazily retry.
-  }
+  ensureAudioMode();
+  for (const source of Object.values(SUIT_SOURCES)) void getOrCreatePlayer(source);
+  for (const source of Object.values(GAME_SOURCES)) void getOrCreatePlayer(source);
 }
 
 function playSource(source: number, volume: number): void {
   if (Platform.OS === "web" || muted) return;
-  try {
-    ensureAudioMode();
-    const player = getPlayer(source);
-    player.volume = volume;
-    player.seekTo(0);
-    player.play();
-  } catch {
-    // Missing asset, dead audio session, etc. — skip the sound, keep playing.
-  }
+  ensureAudioMode();
+  getOrCreatePlayer(source)
+    .then((player) => {
+      if (!player || muted) return;
+      try {
+        player.volume = volume;
+        player.seekTo(0);
+        player.play();
+      } catch (err) {
+        // Missing asset, dead audio session, etc. — skip the sound, keep playing.
+        warn("play", err);
+      }
+    })
+    .catch((err) => warn("play (resolve)", err));
 }
 
 /** Suit-flavored hit sound (zap/chime/shatter/clang/star). */

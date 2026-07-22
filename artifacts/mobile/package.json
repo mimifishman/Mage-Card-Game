@@ -63,6 +63,7 @@
   "dependencies": {
     "@clerk/clerk-expo": "^2.19.31",
     "@expo/metro-runtime": "^6.1.2",
+    "expo-asset": "~12.0.13",
     "expo-auth-session": "^7.0.10",
     "expo-clipboard": "^8.0.8",
     "expo-crypto": "^15.0.8",
