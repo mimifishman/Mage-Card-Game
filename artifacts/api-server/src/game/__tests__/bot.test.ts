@@ -839,7 +839,7 @@ describe("softmax variety", () => {
 });
 
 describe("previously-missing card plays are now generated", () => {
-  it("offers attach_royal_support for a Royal in hand onto a Royal in Court", () => {
+  it("does not offer attach_royal_support — the engine forbids Royal-on-Royal attachments", () => {
     const state = makeState({
       phase: "main",
       activePlayerId: BOT,
@@ -850,16 +850,16 @@ describe("previously-missing card plays are now generated", () => {
       },
     });
     const candidates = enumerateCandidateActions(state, BOT);
-    const support = candidates.find(
-      (a) =>
-        a.type === "attach_royal_support" &&
-        a.supportCardId === "KD" &&
-        a.targetRoyalId === "JS",
-    );
-    expect(support, "attach_royal_support should be enumerated").toBeDefined();
-    // play_royal_to_court is still offered alongside it.
+    expect(candidates.some((a) => a.type === "attach_royal_support")).toBe(false);
+    // The Royal is still offered as a new body in Court.
     expect(candidates.some((a) => a.type === "play_royal_to_court")).toBe(true);
-    expect(dispatchAction(state, BOT, support!).ok).toBe(true);
+    // And the engine itself rejects the attach if attempted directly.
+    const attempt = dispatchAction(state, BOT, {
+      type: "attach_royal_support",
+      supportCardId: "KD",
+      targetRoyalId: "JS",
+    });
+    expect(attempt.ok).toBe(false);
   });
 
   it("offers discard_diamond_for_boost while defending a duel with a frozen Vault", () => {

@@ -8,3 +8,4 @@
 - [RN `window` global pitfall](rn-window-global-pitfall.md) — `typeof window !== "undefined"` is true on native too; gate web-only browser API usage on `Platform.OS === "web"` as well.
 - [orval codegen rebuild](api-client-codegen-rebuild.md) — after codegen, run `tsc -b lib/api-client-react lib/api-zod` or consumers read stale dist/*.d.ts (phantom type errors).
 - [Interrupt stack resolution](interrupt-stack.md) — use effectiveDuelPhase() for duel rules in interrupt_window; validate at push (dry-run) and fizzle (not error) at resolve to avoid deadlock.
+- [Elimination timing](elimination-timing.md) — eliminations only at end-of-turn cleanup; treat life<=0 as dead mid-turn (bot scoring bug source); Royal-on-Royal attach permanently forbidden.

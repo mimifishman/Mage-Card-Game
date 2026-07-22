@@ -172,8 +172,24 @@ const SURVIVAL_WEIGHT = 2.5;
 
 function evaluateState(state: GameState, botId: string, persona: BotPersona): number {
   const me = state.players[botId];
-  if (!me || me.isEliminated) return -WIN_SCORE;
+  if (!me || me.isEliminated || me.life <= 0) return -WIN_SCORE;
   if (isGameOver(state) && getWinner(state) === botId) return WIN_SCORE;
+
+  // Eliminations are only applied during end-of-turn cleanup, so mid-turn a
+  // player at 0 life still reads isEliminated: false. For scoring they are
+  // already dead — they will be removed before they ever act again. Treating
+  // them as alive had two bad effects: a game-winning swing never scored as a
+  // win (the bot healed instead of taking lethal), and a dead board still fed
+  // the survival term as incoming threat.
+  const isDead = (p: PlayerState) => p.isEliminated || p.life <= 0;
+
+  // Every opponent dead mid-turn = the win is sealed at cleanup. Score it as
+  // the win it is so lethal lines always dominate.
+  const opponents = state.turnOrder
+    .filter((id) => id !== botId)
+    .map((id) => state.players[id])
+    .filter((p): p is PlayerState => !!p);
+  if (opponents.length > 0 && opponents.every(isDead)) return WIN_SCORE;
 
   let score = 0;
   score += persona.selfLife * me.life;
@@ -199,7 +215,7 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
     if (id === botId) continue;
     const opp = state.players[id];
     if (!opp) continue;
-    if (opp.isEliminated) {
+    if (isDead(opp)) {
       score += ELIMINATION_BONUS;
       continue;
     }
@@ -353,16 +369,9 @@ function mainPhaseCandidates(state: GameState, botId: string): GameAction[] {
 
     if (card.isRoyal && card.vaultCost <= vault) {
       candidates.push({ type: "play_royal_to_court", cardId });
-      // A Royal in hand can instead be spent as a support attachment on a
-      // Royal already in Court (bigger than a Spade: J +1/+2, Q +2/+3,
-      // K +3/+4). Offer both — scoring picks a new body vs. a bigger threat.
-      for (const royal of me.court) {
-        candidates.push({
-          type: "attach_royal_support",
-          supportCardId: cardId,
-          targetRoyalId: royal.cardId,
-        });
-      }
+      // No attach_royal_support: the engine forbids attaching Royals to other
+      // Royals (attachRoyalSupport always rejects), so enumerating it only
+      // wastes scoring dispatches.
     }
 
     if (card.suit === "H" && !card.isRoyal && card.vaultCost <= vault) {
