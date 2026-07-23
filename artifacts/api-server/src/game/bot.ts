@@ -768,17 +768,92 @@ function sampleByScore(
  *   club a Royal. Let the target confirm.
  * - declare_attack lands in declare_blocks with NO damage applied — scored
  *   as-is attacking has zero visible upside (and with the defensive-readiness
- *   term it would look strictly bad). Play combat forward with a simple
- *   deterministic model: the defender answers with the greedy-block line,
- *   damage order ascending, duel participants pass. The same settling makes
- *   the bot's own block choices see their resolved trades.
+ *   term it would look strictly bad). Play combat forward: the defender is
+ *   modelled as picking whichever block line is best FOR THEM (see
+ *   bestDefenderBlocks), damage order ascending, duel participants pass. The
+ *   same settling makes the bot's own block choices see their resolved trades.
  *
  * The model is only a prediction of the opponent (a real player may respond
  * differently), but a plausible resolved outcome beats a blind intermediate
  * one. Bounded steps; every dispatch is engine-validated.
  */
 function settleForScoring(state: GameState): GameState {
+  return settleFrom(state, 1);
+}
+
+/**
+ * How the defender is predicted to block. Deliberately NOT one of the play
+ * personas: the prediction is about the opponent, so it should not swing with
+ * whichever personality the bot happens to be wearing this match.
+ */
+const DEFENSE_MODEL_PERSONA: BotPersona = {
+  name: "defense-model",
+  selfLife: 1,
+  aggression: 1,
+  board: 1,
+  oppBoard: 1,
+  hand: 0.7,
+  economy: 0.4,
+  reserve: 0.7,
+  temperature: 0.01,
+};
+
+/**
+ * Picks the block line the defender would actually choose, by settling each
+ * option and scoring the outcome from the DEFENDER's point of view.
+ *
+ * This used to hardcode the greedy line (`options[1] ?? options[0]`), which
+ * assigns every attacker the best blocker that kills it and survives — close
+ * to a best case for the defender. Assuming it unconditionally made attacking
+ * look far worse than it is: measured over 180 simulated games the bot
+ * declared 917 attacks while 961 individual attacks were passed rather than
+ * blocked, and the production action log showed ~75% of block submissions were
+ * all-pass. The bot was defending rationally but assuming its opponent
+ * defended greedily, so it declined good attacks — including lethal ones — in
+ * favour of Clubs.
+ *
+ * Reuses evaluateState, so the modelled defender blocks to avoid dying
+ * (-WIN_SCORE when eliminated) and passes when a block is a bad trade.
+ * `budget` is spent here so the nested settles fall back to the cheap greedy
+ * line — one level of branching, bounded cost.
+ */
+function bestDefenderBlocks(
+  state: GameState,
+  defenderId: string,
+  budget: number,
+): GameAction | undefined {
+  const options = declareBlocksCandidates(state, defenderId);
+  if (options.length === 0) return undefined;
+  if (budget <= 0) {
+    // options[1] is the greedy-block line when the defender has blockers;
+    // options[0] is all-pass.
+    return options[1] ?? options[0];
+  }
+
+  let best: GameAction | undefined;
+  let bestScore = -Infinity;
+  for (const option of options) {
+    const res = dispatchAction(state, defenderId, option);
+    if (!res.ok) continue;
+    const score = evaluateState(
+      settleFrom(res.value, budget - 1),
+      defenderId,
+      DEFENSE_MODEL_PERSONA,
+    );
+    if (score > bestScore) {
+      bestScore = score;
+      best = option;
+    }
+  }
+  return best ?? options[1] ?? options[0];
+}
+
+/** @param branchBudget how many declare_blocks decisions may be searched
+ *  rather than assumed. Spent at the first one; deeper ones use the greedy
+ *  line so a settle can never fan out combinatorially. */
+function settleFrom(state: GameState, branchBudget: number): GameState {
   let current = state;
+  let budget = branchBudget;
   for (let step = 0; step < 14; step++) {
     if (isGameOver(current)) break;
 
@@ -793,11 +868,9 @@ function settleForScoring(state: GameState): GameState {
     if (current.phase === "declare_blocks") {
       const holderId = getTurnHolderId(current);
       if (!holderId) break;
-      const options = declareBlocksCandidates(current, holderId);
-      // options[1] is the greedy-block line when the defender has blockers;
-      // options[0] is all-pass.
-      const blocks = options[1] ?? options[0];
+      const blocks = bestDefenderBlocks(current, holderId, budget);
       if (!blocks) break;
+      if (budget > 0) budget--;
       const res = dispatchAction(current, holderId, blocks);
       if (!res.ok) break;
       current = res.value;

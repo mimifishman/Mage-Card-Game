@@ -28,7 +28,7 @@ import type { CardId, GameState, PlayerState } from "../types";
  *  2. Interrupts. It mirrors bot/runner.ts (max 2 per player per game turn,
  *     only after an opponent has acted this turn), exercising chooseBotInterrupt
  *     and INTERRUPT_MIN_GAIN — otherwise entirely unsimulated.
- *  3. Ten misplay detectors instead of one.
+ *  3. Eleven detectors instead of one.
  *  4. 3-player games, where the single-lowest-life declare_attack targeting in
  *     mainPhaseCandidates stops being dormant.
  *  5. Per-game seeding, so any flagged game is replayable from its index alone.
@@ -103,6 +103,7 @@ interface Diagnostics {
     deathHoldingHeart: DetectorStat;
     nonLowestTarget: DetectorStat;
     splitAttack: DetectorStat;
+    blocksAssigned: DetectorStat;
   };
   /** Detector hits attributed to the persona of the player who acted. */
   perPersona: Record<string, Record<string, number>>;
@@ -131,6 +132,7 @@ function newDiagnostics(): Diagnostics {
       deathHoldingHeart: newDetector(),
       nonLowestTarget: newDetector(),
       splitAttack: newDetector(),
+      blocksAssigned: newDetector(),
     },
     perPersona: {},
   };
@@ -184,10 +186,16 @@ function handHasUnusedDiamond(player: PlayerState): boolean {
 // --- detectors -------------------------------------------------------------
 
 /**
- * D1 — a swing that reaches an opponent's remaining life was available and the
- * bot did something else. Heuristic: blockers may still save the opponent, so
- * a hit is a lead, not proof. A high rate points at settleForScoring's
- * assumption that the defender always greedy-blocks, which discounts attacks.
+ * D1 — the turn ended with a swing available that reached an opponent's life,
+ * and the bot never attacked.
+ *
+ * Fires only on end_turn. An earlier version fired on every main-phase
+ * decision, so a turn that played four cards and then swung logged three false
+ * misses and the rate was badly inflated. Denominator is now every turn-end
+ * with a living opponent, which makes the number comparable across runs.
+ *
+ * Still a heuristic: `swing` ignores blockers, so the defender may legitimately
+ * have survived. A hit is a lead, not proof.
  */
 function checkMissedLethal(
   diag: Diagnostics,
@@ -197,27 +205,34 @@ function checkMissedLethal(
   action: GameAction,
   gameLabel: string,
 ): void {
-  if (state.phase !== "main" && state.phase !== "declare_attacks") return;
-  if (state.hasAttackedThisTurn) return;
+  if (action.type !== "end_turn") return;
   const me = state.players[playerId];
   if (!me) return;
-  const ready = attackReadyRoyals(me);
-  if (ready.length === 0) return;
-  const swing = ready.reduce((sum, r) => sum + effectiveAttack(r), 0);
   const opponents = livingOpponents(state, playerId);
-  const killable = opponents.filter((o) => o.life <= swing);
-  if (killable.length === 0) return;
+  if (opponents.length === 0) return;
 
-  record(diag.detectors.missedLethal, action.type !== "declare_attack", () => {
+  const ready = attackReadyRoyals(me);
+  const swing = ready.reduce((sum, r) => sum + effectiveAttack(r), 0);
+  const killable = opponents.filter((o) => o.life <= swing);
+  const hit = !state.hasAttackedThisTurn && swing > 0 && killable.length > 0;
+
+  record(diag.detectors.missedLethal, hit, () => {
     const target = killable[0]!;
-    return `${gameLabel} ${persona}: swing ${swing} vs ${target.id} life ${target.life}, played ${action.type}`;
+    return `${gameLabel} ${persona}: ended turn ${state.turnNumber} with swing ${swing} vs ${target.id} life ${target.life}`;
   });
-  if (action.type !== "declare_attack") bump(diag, persona, "missedLethal");
+  if (hit) bump(diag, persona, "missedLethal");
 }
 
 /**
- * D2 — ended the turn with attackers available and never swung. Quantifies the
+ * D2 — ended the turn with usable attackers and never swung. Quantifies the
  * "aggressor is the least aggressive persona" finding from the live logs.
+ *
+ * Denominator is every turn-end with a living opponent. It used to be only
+ * turn-ends that still had an untapped Royal, which excluded every turn where
+ * the bot attacked with its whole court (attacking taps them) — so the ratio
+ * was nearly 1 by construction and told us nothing. Royals with non-positive
+ * total attack do not count as an opportunity: not attacking with those is
+ * correct, and Club debuffs push Royals well below zero.
  */
 function checkPassivity(
   diag: Diagnostics,
@@ -231,14 +246,44 @@ function checkPassivity(
   const me = state.players[playerId];
   if (!me) return;
   if (livingOpponents(state, playerId).length === 0) return;
-  const ready = attackReadyRoyals(me);
-  if (ready.length === 0) return;
 
-  record(diag.detectors.passivity, !state.hasAttackedThisTurn, () => {
-    const swing = ready.reduce((sum, r) => sum + effectiveAttack(r), 0);
-    return `${gameLabel} ${persona}: ended turn ${state.turnNumber} holding ${ready.length} ready Royal(s) (${swing} atk), never attacked`;
-  });
-  if (!state.hasAttackedThisTurn) bump(diag, persona, "passivity");
+  const ready = attackReadyRoyals(me);
+  const swing = ready.reduce((sum, r) => sum + effectiveAttack(r), 0);
+  const hit = !state.hasAttackedThisTurn && ready.length > 0 && swing > 0;
+
+  record(diag.detectors.passivity, hit, () =>
+    `${gameLabel} ${persona}: ended turn ${state.turnNumber} holding ${ready.length} ready Royal(s) (${swing} atk), never attacked`,
+  );
+  if (hit) bump(diag, persona, "passivity");
+}
+
+/**
+ * D11 — how often an incoming attack is actually blocked.
+ *
+ * This is the assumption settleForScoring makes when it scores an attack: it
+ * predicts the defender's reply, and used to assume the greedy-block line
+ * every time. Hits = attacks given a real blocker, opportunities = all incoming
+ * attacks, so `rate()` reads directly as the block rate. If it is low, then
+ * modelling the defender as always blocking systematically undervalues
+ * attacking.
+ */
+function checkBlockRate(
+  diag: Diagnostics,
+  state: GameState,
+  playerId: string,
+  action: GameAction,
+  gameLabel: string,
+): void {
+  if (action.type !== "confirm_declare_blocks") return;
+  for (const attack of state.attacks) {
+    if (attack.targetPlayerId !== playerId) continue;
+    const assigned = action.blocks[attack.attackerCardId];
+    record(
+      diag.detectors.blocksAssigned,
+      assigned !== undefined && assigned !== "pass",
+      () => `${gameLabel}: blocked ${attack.attackerCardId}`,
+    );
+  }
 }
 
 /**
@@ -440,6 +485,7 @@ function playGame(
     checkMissedFreeBlock(diag, state, holderId, persona.name, action, gameLabel);
     checkBadDiscard(diag, state, holderId, persona.name, action, gameLabel);
     checkAttackTargeting(diag, state, holderId, persona.name, action, gameLabel);
+    checkBlockRate(diag, state, holderId, action, gameLabel);
 
     const result = dispatchAction(state, holderId, action);
     if (!result.ok) {
@@ -566,6 +612,9 @@ function formatReport(title: string, diag: Diagnostics): string {
   lines.push(`  D8 died with a Heart  ${rate(d.deathHoldingHeart)}`);
   lines.push(`  D10 non-lowest target ${rate(d.nonLowestTarget)}`);
   lines.push(`  D10 split attack      ${rate(d.splitAttack)}`);
+  // Not a misplay count: this is the share of incoming attacks that got a real
+  // blocker, i.e. what settleForScoring's defender model should assume.
+  lines.push(`  D11 BLOCK RATE        ${rate(d.blocksAssigned)}`);
 
   lines.push("");
   lines.push(

@@ -25,7 +25,13 @@ import { P1, P2 } from "./helpers";
  * with a seeded PRNG too, making the whole run reproducible.
  */
 
-const GAMES = 40;
+/**
+ * 40 games was too noisy to gate on: it read 17.5% for the headline metric
+ * while a 180-game diagnostics run over the same code put the true rate at
+ * 9.4% — close enough to the threshold that an unrelated change could flip the
+ * suite red for no reason. The run costs ~180ms, so more games is cheap.
+ */
+const GAMES = 150;
 const MAX_ACTIONS = 3000;
 
 /** Non-Royal Hearts this player could actually afford to play right now. */
@@ -191,6 +197,11 @@ describe("bot-vs-bot simulation (behavioural metrics)", () => {
 
       // The regression guard for this fix: dying with a playable Heart still in
       // hand should be rare. Pre-fix this was the norm (3 of 6 observed losses).
+      //
+      // TODO(threshold): re-derive from THIS run's printed rate at 150 games,
+      // then set to roughly observed x 1.5 and record the observed value here.
+      // 0.2 was calibrated against a 40-game sample under the old rules, before
+      // immediate elimination removed the heal-back-from-0 escape hatch.
       expect(
         deathRate,
         `died holding an affordable Heart in ${(deathRate * 100).toFixed(1)}% of deaths`,
