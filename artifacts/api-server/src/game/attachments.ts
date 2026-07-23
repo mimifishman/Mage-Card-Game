@@ -275,6 +275,11 @@ export function discardHeartToHeal(
   if (!targetPlayer) {
     return err(`Target player ${targetPlayerId} not found`);
   }
+  // Reaching 0 life is final: elimination is applied the moment damage lands,
+  // so a Heart can never bring a player back.
+  if (targetPlayer.isEliminated) {
+    return err(`Player ${targetPlayerId} is eliminated and cannot be healed`);
+  }
 
   if (targetPlayerId === playerId) {
     const player = state.players[playerId]!;

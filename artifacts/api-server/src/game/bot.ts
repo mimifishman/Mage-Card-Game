@@ -175,16 +175,18 @@ function evaluateState(state: GameState, botId: string, persona: BotPersona): nu
   if (!me || me.isEliminated || me.life <= 0) return -WIN_SCORE;
   if (isGameOver(state) && getWinner(state) === botId) return WIN_SCORE;
 
-  // Eliminations are only applied during end-of-turn cleanup, so mid-turn a
-  // player at 0 life still reads isEliminated: false. For scoring they are
-  // already dead — they will be removed before they ever act again. Treating
-  // them as alive had two bad effects: a game-winning swing never scored as a
-  // win (the bot healed instead of taking lethal), and a dead board still fed
-  // the survival term as incoming threat.
+  // Redundant since applyStateBasedActions (turn.ts) started eliminating at 0
+  // life inside dispatchAction: any state the bot scores now has isEliminated
+  // already set, so life <= 0 and isEliminated agree. Kept as a cheap
+  // invariant guard because the cost of it being wrong is high — this used to
+  // be a real workaround, from when elimination only happened during
+  // end-of-turn cleanup and a game-winning swing therefore never scored as a
+  // win (the bot healed instead of taking lethal, and a dead board still fed
+  // the survival term as incoming threat).
   const isDead = (p: PlayerState) => p.isEliminated || p.life <= 0;
 
-  // Every opponent dead mid-turn = the win is sealed at cleanup. Score it as
-  // the win it is so lethal lines always dominate.
+  // Every opponent dead = the win. Score it as the win it is so lethal lines
+  // always dominate.
   const opponents = state.turnOrder
     .filter((id) => id !== botId)
     .map((id) => state.players[id])

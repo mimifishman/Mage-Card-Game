@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { endTurn, eliminatePlayerIfNeeded, advanceTurn, isGameOver, getWinner } from "../turn";
+import {
+  endTurn,
+  eliminatePlayerIfNeeded,
+  applyStateBasedActions,
+  advanceTurn,
+  isGameOver,
+  getWinner,
+} from "../turn";
 import { dispatchAction } from "../dispatcher";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
@@ -303,5 +310,136 @@ describe("isGameOver / getWinner", () => {
     });
     expect(isGameOver(state)).toBe(true);
     expect(getWinner(state)).toBe(P1);
+  });
+});
+
+const P3 = "player-3";
+
+describe("applyStateBasedActions — 0 life is final", () => {
+  it("is a no-op (identity) when nobody is at 0 life", () => {
+    const state = makeState({
+      players: { [P1]: makePlayer(P1, { life: 1 }), [P2]: makePlayer(P2) },
+    });
+    expect(applyStateBasedActions(state)).toBe(state);
+  });
+
+  it("eliminates at 0 life and ends the game immediately, mid-turn", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      players: {
+        [P1]: makePlayer(P1),
+        [P2]: makePlayer(P2, { life: 0, court: [mkRoyal("KH")] }),
+      },
+    });
+
+    const result = applyStateBasedActions(state);
+
+    expect(result.players[P2]!.isEliminated).toBe(true);
+    expect(result.abyss).toContain("KH");
+    expect(isGameOver(result)).toBe(true);
+    expect(getWinner(result)).toBe(P1);
+    // Decided immediately rather than at end-of-turn cleanup.
+    expect(result.phase).toBe("end_turn");
+  });
+
+  it("prunes a dead player's combat and unwinds an unholdable phase (3 players)", () => {
+    // P3 is being blocked out of existence while the game parks in
+    // declare_blocks, whose priority holder is derived from state.attacks.
+    const state = makeState({
+      phase: "declare_blocks",
+      activePlayerId: P1,
+      turnOrder: [P1, P2, P3],
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KS", { hasAttackedThisTurn: true })] }),
+        [P2]: makePlayer(P2),
+        [P3]: makePlayer(P3, { life: 0, court: [mkRoyal("JD")] }),
+      },
+      attacks: [
+        { attackerPlayerId: P1, attackerCardId: "KS", targetPlayerId: P3 },
+      ],
+      pendingBlockDefenders: [P3],
+    });
+
+    const result = applyStateBasedActions(state);
+
+    expect(result.players[P3]!.isEliminated).toBe(true);
+    // The game continues — two players are still standing.
+    expect(isGameOver(result)).toBe(false);
+    // Nothing may still reference the dead player, or the phase machine would
+    // hand priority to a corpse and deadlock the match.
+    expect(result.attacks).toHaveLength(0);
+    expect(result.pendingBlockDefenders ?? []).not.toContain(P3);
+    expect(result.phase).toBe("main");
+    expect(result.players[result.activePlayerId]!.isEliminated).toBe(false);
+  });
+});
+
+describe("dispatchAction applies state-based actions", () => {
+  it("a Club face burn to 0 ends the game on the spot", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D"], // Vault 10, enough for a 5C
+      players: {
+        [P1]: makePlayer(P1, { hand: ["5C"] }),
+        [P2]: makePlayer(P2, { life: 5 }),
+      },
+    });
+
+    const result = dispatchAction(state, P1, {
+      type: "apply_club",
+      clubCardId: "5C",
+      targetPlayerId: P2,
+    });
+
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.life).toBe(0);
+    expect(result.value.players[P2]!.isEliminated).toBe(true);
+    expect(isGameOver(result.value)).toBe(true);
+    expect(getWinner(result.value)).toBe(P1);
+  });
+
+  it("refuses any further action once the game is over", () => {
+    const state = makeState({
+      phase: "end_turn",
+      activePlayerId: P1,
+      players: {
+        [P1]: makePlayer(P1),
+        [P2]: makePlayer(P2, { isEliminated: true }),
+      },
+    });
+
+    const result = dispatchAction(state, P1, { type: "end_turn" });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/game is over/i);
+  });
+
+  it("an eliminated player cannot be healed back above 0", () => {
+    // Three players so the game is still live and the dispatcher's game-over
+    // guard is not what rejects this — the heal resolver itself must.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      turnOrder: [P1, P2, P3],
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["3H"] }),
+        [P2]: makePlayer(P2),
+        [P3]: makePlayer(P3, { life: 0, isEliminated: true }),
+      },
+    });
+
+    const result = dispatchAction(state, P1, {
+      type: "discard_heart_to_heal",
+      heartCardId: "3H",
+      targetPlayerId: P3,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/eliminated/i);
   });
 });
