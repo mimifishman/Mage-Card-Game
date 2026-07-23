@@ -198,14 +198,19 @@ describe("bot-vs-bot simulation (behavioural metrics)", () => {
       // The regression guard for this fix: dying with a playable Heart still in
       // hand should be rare. Pre-fix this was the norm (3 of 6 observed losses).
       //
-      // TODO(threshold): re-derive from THIS run's printed rate at 150 games,
-      // then set to roughly observed x 1.5 and record the observed value here.
-      // 0.2 was calibrated against a 40-game sample under the old rules, before
-      // immediate elimination removed the heal-back-from-0 escape hatch.
+      // Observed 12.0% (18/150) as of the defender-model change; the gate is
+      // set ~50% above that. The run is fully seeded, so it is identical
+      // between runs on identical code — a breach means the bot's behaviour
+      // changed, never sampling luck. Re-derive this whenever a change moves
+      // the printed rate for a good reason, and update the number here.
+      //
+      // The previous 0.2 came from a 40-game sample under the old rules, when
+      // a player at 0 life could still interrupt-heal back above zero — so the
+      // deaths this measures were being erased before they could be counted.
       expect(
         deathRate,
         `died holding an affordable Heart in ${(deathRate * 100).toFixed(1)}% of deaths`,
-      ).toBeLessThan(0.2);
+      ).toBeLessThan(0.18);
     },
     180_000,
   );
