@@ -128,11 +128,25 @@ export function personaForMatch(matchId: string): BotPersona {
   return PERSONAS[hashString(matchId) % PERSONAS.length]!;
 }
 
+/**
+ * Standing value of a Court. Health counts base + buffs but deliberately
+ * ignores damageTaken: healAllRoyals (turn.ts) resets damage to 0 for EVERY
+ * player at the end of EVERY turn, so a Royal that survives combat is back to
+ * full next turn and pricing the damage as a permanent loss is simply wrong.
+ *
+ * It mattered: with damage counted, a Queen that blocked and killed a Jack
+ * scored WORSE than one that let the hit through, so the modelled defender
+ * declined free blocks and the bot read attacking as safer than it is. Royals
+ * that actually die are removed from the court by combat resolution, so they
+ * stop counting here anyway; the separate fragility penalty in evaluateState
+ * still prices being one hit from death within the current turn.
+ */
 function courtValue(player: PlayerState): number {
-  return player.court.reduce(
-    (sum, r) => sum + effectiveAttack(r) + Math.max(0, effectiveHealth(r)),
-    0,
-  );
+  return player.court.reduce((sum, r) => {
+    const card = getCard(r.cardId);
+    if (!card.isRoyal) return sum;
+    return sum + effectiveAttack(r) + Math.max(0, effectiveHealth(r) + r.damageTaken);
+  }, 0);
 }
 
 /**

@@ -474,6 +474,34 @@ describe("settle-scoring strategy", () => {
     }
   });
 
+  it("declines an attack the defender would profitably block", () => {
+    // The mirror of the test above. The bot's lone J♠ (⚔1 ♥1) faces K♥ (⚔3 ♥3)
+    // and Q♥ (⚔2 ♥2): Q♥ can block, kill the Jack and survive, so swinging
+    // just donates a Royal. settleForScoring must predict that block.
+    //
+    // Guards two things that were wrong together. The defender used to be
+    // modelled as ALWAYS playing the greedy line, so the bot's own read of an
+    // attack never depended on whether blocking was actually good for the
+    // opponent. And courtValue counted damageTaken, so a Q♥ that blocked and
+    // survived at 1 health scored WORSE than one that let the hit through --
+    // even though healAllRoyals wipes that damage at end of turn -- which made
+    // the modelled defender decline free blocks.
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      deck: ["2H"],
+      players: {
+        [P1]: makePlayer(P1, { life: 20, court: [mkRoyal("KH"), mkRoyal("QH")] }),
+        [BOT]: makePlayer(BOT, { life: 19, court: [mkRoyal("JS")], hand: [] }),
+      },
+    });
+    const sharpPersona = { ...personaForMatch("any"), temperature: 0.01 };
+    for (const seed of [1, 2, 3]) {
+      const action = chooseBotAction(state, BOT, { persona: sharpPersona, rng: createRng(seed) });
+      expect(action.type, `seed ${seed} picked ${action.type}`).not.toBe("declare_attack");
+    }
+  });
+
   it("enumerates a legal gang-block when no single blocker can kill", () => {
     // Q♥ (⚔2 ♥2) attacks; the bot's two Jacks (⚔1 each) can only kill it
     // together — the gang-block candidate must exist and be engine-legal.
@@ -617,6 +645,12 @@ describe("strategy matrix — every card type gets played when clearly best", ()
   });
 
   it("Heart: attaches to its Royal when at full life", () => {
+    // KS is haste-locked so it cannot attack. Without that the bot correctly
+    // prefers swinging: P1's lone QH (2/2) cannot kill a KS (3/3), so trading
+    // it away is bad for P1 and the modelled defender passes, making the
+    // attack 3 free damage. That is good play, not a Heart bug — and this
+    // suite is about each card type being played "when clearly best", so the
+    // competing attack has to be off the table for the case to mean anything.
     const state = makeState({
       phase: "main",
       activePlayerId: BOT,
@@ -624,7 +658,11 @@ describe("strategy matrix — every card type gets played when clearly best", ()
       deck: ["2H"],
       players: {
         [P1]: makePlayer(P1, { court: [mkRoyal("QH")] }),
-        [BOT]: makePlayer(BOT, { hand: ["5H", "2D"], court: [mkRoyal("KS")], life: 20 }),
+        [BOT]: makePlayer(BOT, {
+          hand: ["5H", "2D"],
+          court: [mkRoyal("KS", { hasteLocked: true })],
+          life: 20,
+        }),
       },
     });
     for (const seed of seeds) {
