@@ -105,7 +105,38 @@ export function applyClub(
   const afterSpend = spendVault(withoutCard, card.vaultCost);
 
   if (!targetCardId) {
-    const baseTarget = targetPlayerId === playerId ? afterSpend : targetPlayer;
+    // A killing face-burn opens the same respond_to_club window a Royal-Club
+    // does, so the defender can heal (or accept) before the blow lands. No life
+    // is deducted here — confirmClubResponse applies faceDamage.amount, after
+    // which the dispatcher's applyStateBasedActions eliminates if still <= 0.
+    // Non-lethal burns, and self-targeted ones, resolve immediately as before.
+    const isSelf = targetPlayerId === playerId;
+    if (!isSelf && targetPlayer.life - card.pipValue <= 0) {
+      const returnPhase =
+        state.phase === "interrupt_window"
+          ? state.interruptStack?.returnPhase
+          : isDuelPhase(state.phase) || state.phase === "declare_blocks"
+            ? state.phase
+            : undefined;
+      return ok({
+        ...state,
+        phase: "respond_to_club",
+        pendingClubDebuff: {
+          attackerPlayerId: playerId,
+          clubCardId: cardId,
+          targetPlayerId,
+          faceDamage: { sourceCardId: cardId, amount: card.pipValue },
+          defenderDiamondUsed: false,
+          returnPhase,
+        },
+        players: {
+          ...state.players,
+          [playerId]: afterSpend,
+        },
+      });
+    }
+
+    const baseTarget = isSelf ? afterSpend : targetPlayer;
     const damagedTarget: PlayerState = {
       ...baseTarget,
       life: Math.max(0, baseTarget.life - card.pipValue),
@@ -274,12 +305,59 @@ export function confirmClubResponse(
   }
 
   const returnPhase = pending.returnPhase ?? "main";
+
+  // Lethal face-damage response: apply the stored damage now — a heal played
+  // during the window has already raised the defender's life — then return to
+  // the pre-window phase. The dispatcher runs applyStateBasedActions next, so a
+  // target still at <= 0 is eliminated there, consistent with the 0-life rule.
+  if (pending.faceDamage) {
+    const target = state.players[pending.targetPlayerId];
+    if (!target) return err(`Player ${pending.targetPlayerId} not found`);
+    const { sourceCardId, amount } = pending.faceDamage;
+    const damaged: PlayerState = {
+      ...target,
+      life: Math.max(0, target.life - amount),
+    };
+    return ok(
+      pushLifeEvent(
+        {
+          ...state,
+          phase: returnPhase,
+          pendingClubDebuff: undefined,
+          abyss: [...state.abyss, sourceCardId],
+          lastDirectHit: {
+            sourceCardId,
+            targetPlayerId: pending.targetPlayerId,
+            amount,
+            seq: (state.lastDirectHit?.seq ?? 0) + 1,
+          },
+          players: {
+            ...state.players,
+            [pending.targetPlayerId]: damaged,
+          },
+        },
+        {
+          kind: getCard(sourceCardId).isJoker ? "joker_damage" : "club_damage",
+          targetPlayerId: pending.targetPlayerId,
+          amount,
+          resultingLife: damaged.life,
+          actorPlayerId: pending.attackerPlayerId,
+          sourceCardId,
+        },
+      ),
+    );
+  }
+
+  if (!pending.targetRoyalId) {
+    return err("Pending club response has neither a target Royal nor face damage");
+  }
+  const targetRoyalId = pending.targetRoyalId;
   const result = applyDebuffToRoyal(
     { ...state, phase: returnPhase },
     pending.attackerPlayerId,
     pending.clubCardId,
     pending.targetPlayerId,
-    pending.targetRoyalId,
+    targetRoyalId,
   );
   if (!result.ok) return result;
 
@@ -293,7 +371,7 @@ export function confirmClubResponse(
       (pending.attackerPlayerId === ctx.attackerPlayerId ||
         pending.attackerPlayerId === ctx.defenderPlayerId);
     if (attackerIsDuelParticipant) {
-      return markDuelPairResolved(result.value, pending.targetRoyalId);
+      return markDuelPairResolved(result.value, targetRoyalId);
     }
   }
 

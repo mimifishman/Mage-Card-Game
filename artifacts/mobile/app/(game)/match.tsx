@@ -1028,19 +1028,30 @@ export default function MatchScreen() {
 
     // Club plays.
     const pendingClubKey = gameState.pendingClubDebuff
-      ? `${gameState.pendingClubDebuff.clubCardId}:${gameState.pendingClubDebuff.targetRoyalId}`
+      ? `${gameState.pendingClubDebuff.clubCardId}:${gameState.pendingClubDebuff.targetRoyalId ?? "life"}`
       : null;
     if (pendingClubKey && pendingClubKey !== prevPendingClubRef.current && gameState.pendingClubDebuff) {
       const c = gameState.pendingClubDebuff;
       const clubTargetPoss =
         c.attackerPlayerId === c.targetPlayerId ? ownPossOf(c.attackerPlayerId) : possOf(c.targetPlayerId);
-      // Stats read here are pre-debuff: the play is still pending when this fires.
-      const clubPip = parseCardId(c.clubCardId).pipValue;
-      pushEvent(
-        colorOf(c.attackerPlayerId),
-        `played ${cardLabel(c.clubCardId)} (−${clubPip}) on ${clubTargetPoss} Royal ${royalLabel(c.targetPlayerId, c.targetRoyalId)}`,
-        { actor: nameOf(c.attackerPlayerId) },
-      );
+      if (!c.targetRoyalId) {
+        // Lethal face-burn (Club or Joker) — no Royal target; the blow lands on
+        // the player's life once they respond. Avoids parsing a Joker card id
+        // as a pip Club below.
+        pushEvent(
+          colorOf(c.attackerPlayerId),
+          `is striking ${clubTargetPoss} life for lethal — respond or accept`,
+          { actor: nameOf(c.attackerPlayerId) },
+        );
+      } else {
+        // Stats read here are pre-debuff: the play is still pending when this fires.
+        const clubPip = parseCardId(c.clubCardId).pipValue;
+        pushEvent(
+          colorOf(c.attackerPlayerId),
+          `played ${cardLabel(c.clubCardId)} (−${clubPip}) on ${clubTargetPoss} Royal ${royalLabel(c.targetPlayerId, c.targetRoyalId)}`,
+          { actor: nameOf(c.attackerPlayerId) },
+        );
+      }
     }
     prevPendingClubRef.current = pendingClubKey;
 
@@ -1567,11 +1578,20 @@ export default function MatchScreen() {
 
   const pendingClub = gameState.pendingClubDebuff;
   const isClubResponder = inRespondToClub && pendingClub?.targetPlayerId === myId;
-  const targetedClubRoyal = pendingClub
-    ? gameState.players[pendingClub.targetPlayerId]?.court.find(
-        (r) => r.cardId === pendingClub.targetRoyalId,
-      )
-    : undefined;
+  // A lethal face-burn (Club or Joker) opens the same respond window but has no
+  // target Royal. Guard the Royal-specific UI so it never feeds an undefined
+  // cardId into CardView (which would crash the panel), and reword the prompt to
+  // be about the player's life. The defender heals via the normal "Heal a
+  // player" hand action (already available in respond_to_club) and then accepts.
+  const clubTargetRoyalId = (pendingClub as { targetRoyalId?: string } | undefined)
+    ?.targetRoyalId;
+  const isFaceClubResponse = !!pendingClub && !clubTargetRoyalId;
+  const targetedClubRoyal =
+    pendingClub && clubTargetRoyalId
+      ? gameState.players[pendingClub.targetPlayerId]?.court.find(
+          (r) => r.cardId === clubTargetRoyalId,
+        )
+      : undefined;
 
   const vault = myState?.vault.available ?? 0;
 
@@ -2262,8 +2282,12 @@ export default function MatchScreen() {
                 <Ionicons name="warning" size={16} color="#C89B3C" />
                 <Text style={styles.clubPanelTitle}>
                   {isClubResponder
-                    ? `${clubAttackerName === "You" ? "You're" : `${clubAttackerName} is`} playing a Club on your Royal!`
-                    : `${possFor(pendingClub.attackerPlayerId)} Club → ${possFor(pendingClub.targetPlayerId)} Royal`}
+                    ? isFaceClubResponse
+                      ? `${clubAttackerName === "You" ? "You're" : `${clubAttackerName} is`} striking your life — heal or accept!`
+                      : `${clubAttackerName === "You" ? "You're" : `${clubAttackerName} is`} playing a Club on your Royal!`
+                    : isFaceClubResponse
+                      ? `${possFor(pendingClub.attackerPlayerId)} strike → ${possFor(pendingClub.targetPlayerId)} life`
+                      : `${possFor(pendingClub.attackerPlayerId)} Club → ${possFor(pendingClub.targetPlayerId)} Royal`}
                 </Text>
               </View>
               <View style={styles.clubPanelBody}>
@@ -2274,19 +2298,23 @@ export default function MatchScreen() {
                 <Ionicons name="arrow-forward" size={18} color={Colors.textMuted} />
                 <View style={styles.clubCardPreview}>
                   <Text style={styles.clubPanelLabel}>Target</Text>
-                  {isClubResponder && targetingRoyals ? (
+                  {isFaceClubResponse ? (
+                    <Text style={styles.clubRoyalStats}>
+                      {possFor(pendingClub.targetPlayerId)} life
+                    </Text>
+                  ) : isClubResponder && targetingRoyals && clubTargetRoyalId ? (
                     <Pressable
-                      onPress={() => dispatchRoyalTarget(pendingClub.targetPlayerId, pendingClub.targetRoyalId)}
+                      onPress={() => dispatchRoyalTarget(pendingClub.targetPlayerId, clubTargetRoyalId)}
                       style={({ pressed }) => [styles.clubTargetRing, pressed && { opacity: 0.7 }]}
                     >
-                      <CardView cardId={pendingClub.targetRoyalId} size="sm" glowColor={colorOf(myId)} />
+                      <CardView cardId={clubTargetRoyalId} size="sm" glowColor={colorOf(myId)} />
                       <View style={styles.clubTargetBadge}>
                         <Text style={styles.clubTargetBadgeText}>🎯</Text>
                       </View>
                     </Pressable>
-                  ) : (
-                    <CardView cardId={pendingClub.targetRoyalId} size="sm" />
-                  )}
+                  ) : clubTargetRoyalId ? (
+                    <CardView cardId={clubTargetRoyalId} size="sm" />
+                  ) : null}
                   {targetedClubRoyal && (
                     <Text style={styles.clubRoyalStats}>
                       ⚔{effectiveAttack(targetedClubRoyal.cardId, targetedClubRoyal.buffAttack)}{"  "}
@@ -2298,9 +2326,11 @@ export default function MatchScreen() {
                   {isClubResponder ? (
                     <>
                       <Text style={styles.clubPanelHint}>
-                        {targetingRoyals
-                          ? "Tap your Royal to apply the spell, or accept the Club."
-                          : "Strengthen your Royal with Hearts, Spades, Clubs or a Joker — or accept it."}
+                        {isFaceClubResponse
+                          ? "Play a Heart to heal above the incoming damage, or accept the blow."
+                          : targetingRoyals
+                            ? "Tap your Royal to apply the spell, or accept the Club."
+                            : "Strengthen your Royal with Hearts, Spades, Clubs or a Joker — or accept it."}
                       </Text>
                       <Pressable
                         onPress={handleConfirmClubResponse}
@@ -2310,7 +2340,9 @@ export default function MatchScreen() {
                         {isSubmitting ? (
                           <ActivityIndicator size="small" color={Colors.bgDeep} />
                         ) : (
-                          <Text style={styles.clubConfirmText}>Accept the Club</Text>
+                          <Text style={styles.clubConfirmText}>
+                            {isFaceClubResponse ? "Accept the blow" : "Accept the Club"}
+                          </Text>
                         )}
                       </Pressable>
                     </>

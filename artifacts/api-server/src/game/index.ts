@@ -55,7 +55,7 @@ export {
   resolveCombat,
 } from "./combat";
 
-export { endTurn, endTurnCleanupAndAdvance, eliminatePlayerIfNeeded, advanceTurn, isGameOver, getWinner } from "./turn";
+export { endTurn, endTurnCleanupAndAdvance, eliminatePlayerIfNeeded, applyStateBasedActions, advanceTurn, isGameOver, getWinner } from "./turn";
 
 export { dispatchAction, getTurnHolderId } from "./dispatcher";
 

@@ -17,8 +17,9 @@ import type { GameState } from "../game/types";
 import { isGameOver } from "../game";
 import { applyResultAndBroadcast } from "../services/matchStart";
 
-/** Pause between bot moves so the client can animate each state_update. */
-const BOT_MOVE_DELAY_MS = 700;
+/** Pause between bot moves so the client can animate each state_update, and so
+ * the bot never feels like it is playing faster than a person could follow. */
+const BOT_MOVE_DELAY_MS = 1000;
 /**
  * Big, story-beat moves get a longer pause so the player can read the log
  * entry and watch the board change before the next move lands.

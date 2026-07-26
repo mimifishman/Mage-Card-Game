@@ -179,6 +179,114 @@ export function isGameOver(state: GameState): boolean {
   return active.length <= 1;
 }
 
+/** True when this phase's priority holder is derived from something that a
+ * mid-turn elimination may have just removed (an attack, a duel, a pending
+ * Club) rather than from activePlayerId. Mirrors getTurnHolderId in
+ * dispatcher.ts, which cannot be imported here without a cycle. */
+function phaseHasHolder(state: GameState): boolean {
+  switch (state.phase) {
+    case "declare_blocks":
+      return state.attacks.length > 0;
+    case "duel_attacker_turn":
+    case "duel_blocker_turn":
+    case "assign_damage_order":
+      return state.duelContext !== undefined;
+    case "respond_to_club":
+      return state.pendingClubDebuff !== undefined;
+    default:
+      return !state.players[state.activePlayerId]?.isEliminated;
+  }
+}
+
+/** Drops combat and response bookkeeping that names a player who is now out,
+ * so the phase machine can never hand priority to — or resolve a fight for —
+ * an eliminated player. Their Royals have already been swept to the Abyss. */
+function pruneEliminatedFromCombat(state: GameState): GameState {
+  const dead = (id: string | undefined): boolean =>
+    id !== undefined && state.players[id]?.isEliminated === true;
+
+  const duelContext =
+    state.duelContext &&
+    (dead(state.duelContext.attackerPlayerId) || dead(state.duelContext.defenderPlayerId))
+      ? undefined
+      : state.duelContext;
+
+  return {
+    ...state,
+    attacks: state.attacks.filter(
+      (a) => !dead(a.attackerPlayerId) && !dead(a.targetPlayerId),
+    ),
+    pendingBlockDefenders: state.pendingBlockDefenders?.filter((id) => !dead(id)),
+    duelQueue: state.duelQueue?.filter((id) => !dead(id)),
+    duelContext,
+    pendingClubDebuff: dead(state.pendingClubDebuff?.targetPlayerId)
+      ? undefined
+      : state.pendingClubDebuff,
+  };
+}
+
+/**
+ * State-based actions, applied after every dispatched action: a player at 0
+ * life is eliminated immediately, and the game ends the moment one player is
+ * left standing.
+ *
+ * Elimination used to be checked only in endTurnCleanupAndAdvance, so a player
+ * driven to 0 stayed in the game — still targetable, and still able to
+ * interrupt with a Heart to heal back above 0 — until the current turn ended.
+ * A game was therefore not decided at the moment the killing blow landed.
+ *
+ * Idempotent: with nobody newly at 0 life it returns the state unchanged, so
+ * wrapping every dispatch costs one scan and no allocation.
+ */
+export function applyStateBasedActions(state: GameState): GameState {
+  const newlyDead = state.turnOrder.filter((id) => {
+    const player = state.players[id];
+    return player !== undefined && !player.isEliminated && player.life <= 0;
+  });
+  if (newlyDead.length === 0) return state;
+
+  let current = state;
+  for (const playerId of newlyDead) {
+    current = eliminatePlayerIfNeeded(current, playerId);
+  }
+  current = pruneEliminatedFromCombat(current);
+
+  if (isGameOver(current)) {
+    return {
+      ...current,
+      phase: "end_turn",
+      activePlayerId: getWinner(current) ?? current.activePlayerId,
+      attacks: [],
+      hasAttackedThisTurn: false,
+      duelContext: undefined,
+      duelQueue: undefined,
+      pendingBlockDefenders: undefined,
+      pendingClubDebuff: undefined,
+    };
+  }
+
+  // The game continues (3-4 players). If pruning left the game parked in a
+  // phase whose priority holder just died, unwind to a phase somebody holds.
+  if (!phaseHasHolder(current)) {
+    const unwound: GameState = {
+      ...current,
+      attacks: [],
+      hasAttackedThisTurn: false,
+      duelContext: undefined,
+      duelQueue: undefined,
+      pendingBlockDefenders: undefined,
+      pendingClubDebuff: undefined,
+    };
+    if (!unwound.players[unwound.activePlayerId]?.isEliminated) {
+      return { ...unwound, phase: "main" };
+    }
+    const advanced = advanceTurn(unwound);
+    return advanced.ok ? advanced.value : { ...unwound, phase: "main" };
+  }
+
+  return current;
+}
+
 export function getWinner(state: GameState): string | null {
   const active = state.turnOrder.filter(
     (id) => !state.players[id]?.isEliminated,

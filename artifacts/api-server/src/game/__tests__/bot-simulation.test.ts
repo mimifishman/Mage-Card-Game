@@ -25,7 +25,13 @@ import { P1, P2 } from "./helpers";
  * with a seeded PRNG too, making the whole run reproducible.
  */
 
-const GAMES = 40;
+/**
+ * 40 games was too noisy to gate on: it read 17.5% for the headline metric
+ * while a 180-game diagnostics run over the same code put the true rate at
+ * 9.4% — close enough to the threshold that an unrelated change could flip the
+ * suite red for no reason. The run costs ~180ms, so more games is cheap.
+ */
+const GAMES = 150;
 const MAX_ACTIONS = 3000;
 
 /** Non-Royal Hearts this player could actually afford to play right now. */
@@ -191,10 +197,20 @@ describe("bot-vs-bot simulation (behavioural metrics)", () => {
 
       // The regression guard for this fix: dying with a playable Heart still in
       // hand should be rare. Pre-fix this was the norm (3 of 6 observed losses).
+      //
+      // Observed 12.0% (18/150) as of the defender-model change; the gate is
+      // set ~50% above that. The run is fully seeded, so it is identical
+      // between runs on identical code — a breach means the bot's behaviour
+      // changed, never sampling luck. Re-derive this whenever a change moves
+      // the printed rate for a good reason, and update the number here.
+      //
+      // The previous 0.2 came from a 40-game sample under the old rules, when
+      // a player at 0 life could still interrupt-heal back above zero — so the
+      // deaths this measures were being erased before they could be counted.
       expect(
         deathRate,
         `died holding an affordable Heart in ${(deathRate * 100).toFixed(1)}% of deaths`,
-      ).toBeLessThan(0.2);
+      ).toBeLessThan(0.18);
     },
     180_000,
   );

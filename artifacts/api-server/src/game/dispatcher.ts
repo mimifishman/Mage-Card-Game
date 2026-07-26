@@ -21,6 +21,8 @@ import {
   duelPass,
   endTurn,
   endTurnCleanupAndAdvance,
+  applyStateBasedActions,
+  isGameOver,
 } from "./index";
 import { autoAdvanceDuelIfNeeded, setDamageOrder } from "./combat";
 import { canPlayCard, isDuelPhase } from "./validation";
@@ -320,14 +322,24 @@ export function dispatchAction(
     return err(`Interrupts resolve immediately — there is no window to pass on`);
   }
 
+  // A decided game accepts no further plays. Without this a player eliminated
+  // by the killing blow could still be healed back above 0 before the turn
+  // ended, un-deciding a game that was already over.
+  if (isGameOver(state)) {
+    return err(`The game is over`);
+  }
+
   const turnHolderId = getTurnHolderId(state);
-  if (
+  const result =
     INTERRUPT_ELIGIBLE_ACTIONS.has(action.type) &&
     turnHolderId !== undefined &&
     turnHolderId !== playerId
-  ) {
-    return handleInterruptImmediate(state, playerId, action);
-  }
+      ? handleInterruptImmediate(state, playerId, action)
+      : executeGameAction(state, playerId, action);
 
-  return executeGameAction(state, playerId, action);
+  if (!result.ok) return result;
+  // Single chokepoint for state-based actions: whatever the action was, and
+  // whichever resolver applied the damage, anyone at 0 life is eliminated
+  // before the state is handed back.
+  return ok(applyStateBasedActions(result.value));
 }
