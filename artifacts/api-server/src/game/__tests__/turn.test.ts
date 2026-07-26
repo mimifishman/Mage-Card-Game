@@ -376,23 +376,34 @@ describe("applyStateBasedActions — 0 life is final", () => {
 });
 
 describe("dispatchAction applies state-based actions", () => {
-  it("a Club face burn to 0 ends the game on the spot", () => {
+  it("eliminates and ends the game when a lethal face Club resolves on confirm", () => {
+    // A lethal face Club now opens a response window rather than killing on the
+    // spot; the elimination fires from applyStateBasedActions when the defender
+    // confirms the blow — which is still a dispatchAction, so this exercises the
+    // same state-based-action chokepoint.
     const state = makeState({
       phase: "main",
       activePlayerId: P1,
       mine: ["10D"], // Vault 10, enough for a 5C
       players: {
         [P1]: makePlayer(P1, { hand: ["5C"] }),
-        [P2]: makePlayer(P2, { life: 5 }),
+        [P2]: makePlayer(P2, { life: 5, hand: [] }),
       },
     });
 
-    const result = dispatchAction(state, P1, {
+    const opened = dispatchAction(state, P1, {
       type: "apply_club",
       clubCardId: "5C",
       targetPlayerId: P2,
     });
+    expect(opened.ok, opened.ok ? "" : opened.error).toBe(true);
+    if (!opened.ok) return;
+    // No life lost yet — the defender still holds priority to respond.
+    expect(opened.value.phase).toBe("respond_to_club");
+    expect(opened.value.players[P2]!.life).toBe(5);
+    expect(opened.value.players[P2]!.isEliminated).toBe(false);
 
+    const result = dispatchAction(opened.value, P2, { type: "confirm_club_response" });
     expect(result.ok, result.ok ? "" : result.error).toBe(true);
     if (!result.ok) return;
     expect(result.value.players[P2]!.life).toBe(0);
