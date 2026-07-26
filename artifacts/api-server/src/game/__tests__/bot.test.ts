@@ -474,25 +474,23 @@ describe("settle-scoring strategy", () => {
     }
   });
 
-  it("declines an attack the defender would profitably block", () => {
-    // The mirror of the test above. The bot's lone J♠ (⚔1 ♥1) faces K♥ (⚔3 ♥3)
-    // and Q♥ (⚔2 ♥2): Q♥ can block, kill the Jack and survive, so swinging
-    // just donates a Royal. settleForScoring must predict that block.
+  it("declines an attack that clearly donates a big Royal", () => {
+    // The bot's lone K♠ (⚔3 ♥3) faces a K♥ buffed to ⚔3 ♥4: it blocks, kills
+    // the K♠ and survives — a free removal of a whole KING, worth far more than
+    // any chip damage, so even a light-blocking opponent always makes this
+    // block. settleForScoring must predict it and decline the swing.
     //
-    // Guards two things that were wrong together. The defender used to be
-    // modelled as ALWAYS playing the greedy line, so the bot's own read of an
-    // attack never depended on whether blocking was actually good for the
-    // opponent. And courtValue counted damageTaken, so a Q♥ that blocked and
-    // survived at 1 health scored WORSE than one that let the hit through --
-    // even though healAllRoyals wipes that damage at end of turn -- which made
-    // the modelled defender decline free blocks.
+    // With DEFENDER_PASS_BIAS the bot now assumes ~human blocking and WILL poke
+    // cheap Royals (a 1/1 Jack) for chip damage — that is the intended
+    // aggression. This guards the other end: throwing away a King is still
+    // declined, because a King's block margin dwarfs the bias.
     const state = makeState({
       phase: "main",
       activePlayerId: BOT,
       deck: ["2H"],
       players: {
-        [P1]: makePlayer(P1, { life: 20, court: [mkRoyal("KH"), mkRoyal("QH")] }),
-        [BOT]: makePlayer(BOT, { life: 19, court: [mkRoyal("JS")], hand: [] }),
+        [P1]: makePlayer(P1, { life: 20, court: [mkRoyal("KH", { buffHealth: 1 })] }),
+        [BOT]: makePlayer(BOT, { life: 19, court: [mkRoyal("KS")], hand: [] }),
       },
     });
     const sharpPersona = { ...personaForMatch("any"), temperature: 0.01 };
@@ -585,6 +583,30 @@ describe("abyss reclaim when rebuilding", () => {
       const action = chooseBotAction(state, BOT, { persona: sharp, rng: createRng(seed) });
       expect(action.type, `seed ${seed} picked ${action.type}`).toBe("play_royal_to_court");
     }
+  });
+
+  it("offers reclaiming a Royal to rebuild, not only the top-value card", () => {
+    // A 10♠ can reach either Abyss card. The 9♥ has a higher raw card value
+    // than the J♦ (cardPotential 4.5 vs 4), so the old single-best reclaim
+    // offered ONLY the 9♥ — which never gives the bot a body. reclaimTargets
+    // must also surface the Royal so the bot can rebuild when a body is worth
+    // more than raw value. (Whether it's ultimately chosen depends on the
+    // Spade's Vault cost, so this asserts the option exists, at enumeration.)
+    const state = makeState({
+      phase: "main",
+      activePlayerId: BOT,
+      mine: ["10D", "9D"],
+      abyss: ["9H", "JD"],
+      players: {
+        [P1]: makePlayer(P1, { court: [] }),
+        [BOT]: makePlayer(BOT, { hand: ["10S"], court: [] }),
+      },
+    });
+    const reclaimTargetIds = enumerateCandidateActions(state, BOT)
+      .filter((a) => a.type === "discard_spade_to_return")
+      .map((a) => (a.type === "discard_spade_to_return" ? a.targetCardId : ""));
+    expect(reclaimTargetIds).toContain("JD"); // the Royal, so a body is reachable
+    expect(reclaimTargetIds).toContain("9H"); // the top-value card still offered
   });
 });
 
@@ -689,6 +711,11 @@ describe("strategy matrix — every card type gets played when clearly best", ()
   });
 
   it("Spade: attaches to its Royal (Abyss empty, so no reclaim option)", () => {
+    // KS is haste-locked so attacking is not on the table: a lone QH (2/2)
+    // can't kill a KS (3/3), so swinging would push free damage and out-score
+    // buffing. This suite is about each card type being played "when clearly
+    // best", so the competing attack has to be off the table for the Spade
+    // decision to mean anything.
     const state = makeState({
       phase: "main",
       activePlayerId: BOT,
@@ -697,7 +724,7 @@ describe("strategy matrix — every card type gets played when clearly best", ()
       abyss: [],
       players: {
         [P1]: makePlayer(P1, { court: [mkRoyal("QH")] }),
-        [BOT]: makePlayer(BOT, { hand: ["6S"], court: [mkRoyal("KS")] }),
+        [BOT]: makePlayer(BOT, { hand: ["6S"], court: [mkRoyal("KS", { hasteLocked: true })] }),
       },
     });
     for (const seed of seeds) {
@@ -1000,10 +1027,12 @@ describe("survival urgency — heals when the board threatens lethal", () => {
     }
   });
 
-  it("buffs its Royal instead of healing when it is NOT in danger", () => {
+  it("does NOT panic-heal when it is not in danger", () => {
     // Identical board and Vault, but the bot is on 19 life — comfortably clear
-    // of the 5 incoming. The survival term must be inert here, leaving the
-    // ordinary trade (attach the Heart to the Royal) to win.
+    // of the 5 incoming. The survival term must be inert here: the bot should
+    // develop (buff its Royal) or pressure (poke the opponent), NOT spend a
+    // Heart to heal. We assert only "no defensive heal" — whether it buffs or
+    // pokes is a matter of aggression, and both are fine when safe.
     const state = makeState({
       phase: "main",
       activePlayerId: BOT,
@@ -1016,7 +1045,7 @@ describe("survival urgency — heals when the board threatens lethal", () => {
     });
     for (const seed of seeds) {
       const action = choose(state, seed);
-      expect(action.type, `seed ${seed} picked ${action.type}`).toBe("attach_heart");
+      expect(action.type, `seed ${seed} picked ${action.type}`).not.toBe("discard_heart_to_heal");
     }
   });
 
