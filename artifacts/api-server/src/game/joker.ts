@@ -2,7 +2,7 @@ import { getCard } from "./cards";
 import type { CardId, GameState, PlayerState, Result } from "./types";
 import { err, ok } from "./types";
 import { availableVault, spendVault } from "./vault";
-import { canPlayCard } from "./validation";
+import { canPlayCard, isDuelPhase } from "./validation";
 import { pushLifeEvent } from "./lifeEvents";
 
 const JOKER_COST = 10;
@@ -103,6 +103,36 @@ export function playJokerDamagePlayer(
 
   const withoutJoker = { ...player, hand: player.hand.filter((c) => c !== jokerCardId) };
   const afterSpend = spendVault(withoutJoker, JOKER_COST);
+
+  // A killing Joker to the face opens the same respond_to_club window a lethal
+  // Club does, so the defender can heal or accept before it lands. No life is
+  // deducted here — confirmClubResponse applies faceDamage.amount, then the
+  // dispatcher's applyStateBasedActions eliminates if still <= 0. Self-target
+  // resolves immediately (you chose it), as does any non-lethal hit.
+  if (targetPlayerId !== playerId && targetPlayer.life - JOKER_COST <= 0) {
+    const returnPhase =
+      state.phase === "interrupt_window"
+        ? state.interruptStack?.returnPhase
+        : isDuelPhase(state.phase) || state.phase === "declare_blocks"
+          ? state.phase
+          : undefined;
+    return ok({
+      ...state,
+      phase: "respond_to_club",
+      pendingClubDebuff: {
+        attackerPlayerId: playerId,
+        clubCardId: jokerCardId,
+        targetPlayerId,
+        faceDamage: { sourceCardId: jokerCardId, amount: JOKER_COST },
+        defenderDiamondUsed: false,
+        returnPhase,
+      },
+      players: {
+        ...state.players,
+        [playerId]: afterSpend,
+      },
+    });
+  }
 
   // Same self-target hazard as playJokerDestroyRoyal above: if the target is
   // the caster, base the life update on `afterSpend`, not the stale

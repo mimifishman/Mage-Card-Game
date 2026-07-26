@@ -2,8 +2,7 @@ import { describe, it, expect } from "vitest";
 import { pushLifeEvent } from "../lifeEvents";
 import { discardHeartToHeal } from "../attachments";
 import { applyClub } from "../clubs";
-import { eliminatePlayerIfNeeded } from "../turn";
-import { playJoker } from "../joker";
+import { dispatchAction } from "../dispatcher";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 
 describe("pushLifeEvent", () => {
@@ -71,7 +70,10 @@ describe("life events emitted by game actions", () => {
     expect(ev.sourceCardId).toBe("7C");
   });
 
-  it("elimination emits a distinct event in sequence after the lethal hit", () => {
+  it("elimination emits a distinct event in sequence after a lethal face Club resolves", () => {
+    // A lethal face Club now opens a response window; the club_damage event and
+    // the elimination land together when the defender confirms without saving
+    // themselves (dispatchAction runs applyStateBasedActions after confirm).
     const state = makeState({
       phase: "main",
       activePlayerId: P1,
@@ -81,21 +83,23 @@ describe("life events emitted by game actions", () => {
         [P2]: makePlayer(P2, { life: 5 }),
       },
     });
-    const res = applyClub(state, P1, "9C", P2, undefined);
+    const opened = dispatchAction(state, P1, { type: "apply_club", clubCardId: "9C", targetPlayerId: P2 });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const res = dispatchAction(opened.value, P2, { type: "confirm_club_response" });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    const afterElim = eliminatePlayerIfNeeded(res.value, P2);
-    const events = afterElim.lifeEvents!;
-    expect(events).toHaveLength(2);
-    expect(events[0]!.kind).toBe("club_damage");
-    expect(events[0]!.resultingLife).toBe(0);
-    expect(events[1]!.kind).toBe("elimination");
-    expect(events[1]!.targetPlayerId).toBe(P2);
-    expect(events[1]!.resultingLife).toBe(0);
-    expect(events[1]!.seq).toBe(events[0]!.seq + 1);
+    const events = res.value.lifeEvents!;
+    const club = events.find((e) => e.kind === "club_damage")!;
+    const elim = events.find((e) => e.kind === "elimination")!;
+    expect(club.resultingLife).toBe(0);
+    expect(elim.targetPlayerId).toBe(P2);
+    expect(elim.resultingLife).toBe(0);
+    expect(elim.seq).toBe(club.seq + 1);
   });
 
   it("overkill Joker damage clamps both state life and logged resulting life at 0", () => {
+    // Lethal to the face → response window; damage applies on confirm.
     const state = makeState({
       phase: "main",
       activePlayerId: P1,
@@ -105,15 +109,21 @@ describe("life events emitted by game actions", () => {
         [P2]: makePlayer(P2, { life: 3 }),
       },
     });
-    const res = playJoker(state, P1, "JOKER1", "damage_player", P2);
+    const opened = dispatchAction(state, P1, {
+      type: "play_joker",
+      cardId: "JOKER1",
+      mode: "damage_player",
+      targetPlayerId: P2,
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const res = dispatchAction(opened.value, P2, { type: "confirm_club_response" });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.value.players[P2]!.life).toBe(0);
-    const ev = res.value.lifeEvents!.at(-1)!;
-    expect(ev.kind).toBe("joker_damage");
+    const ev = res.value.lifeEvents!.find((e) => e.kind === "joker_damage")!;
     expect(ev.amount).toBe(10);
     expect(ev.resultingLife).toBe(0);
-    expect(ev.resultingLife).toBe(res.value.players[P2]!.life);
   });
 
   it("heal records positive amount and resulting life", () => {

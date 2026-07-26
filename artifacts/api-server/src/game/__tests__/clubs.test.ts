@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { applyClubToRoyal, confirmClubResponse } from "../clubs";
 import { attachHeart, attachSpade } from "../attachments";
+import { dispatchAction } from "../dispatcher";
+import { isGameOver, getWinner } from "../turn";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
 
@@ -1052,5 +1054,103 @@ describe("per-pair duel resolution (Task: end duel pair when Royal is debuffed)"
     // No combat damage applied to JD (pair was resolved — KH's attack skipped)
     expect(jd!.damageTaken).toBe(0);
     expect(jd!.buffHealth).toBe(2); // 5 - 3 from the 3C pip
+  });
+});
+
+describe("lethal face-damage response window (Club)", () => {
+  it("opens respond_to_club and deducts no life yet when a face Club is lethal", () => {
+    const state = makeState({
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["5C"] }),
+        [P2]: makePlayer(P2, { life: 3 }),
+      },
+    });
+    const result = applyClubToRoyal(state, P1, "5C", P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("respond_to_club");
+    expect(result.value.pendingClubDebuff?.faceDamage).toEqual({
+      sourceCardId: "5C",
+      amount: 5,
+    });
+    expect(result.value.pendingClubDebuff?.targetRoyalId).toBeUndefined();
+    // Not applied yet — the defender still gets to respond.
+    expect(result.value.players[P2]!.life).toBe(3);
+    expect(result.value.players[P2]!.isEliminated).toBe(false);
+  });
+
+  it("applies a NON-lethal face Club immediately with no window", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["3C"] }),
+        [P2]: makePlayer(P2, { life: 10 }),
+      },
+    });
+    const result = dispatchAction(state, P1, {
+      type: "apply_club",
+      clubCardId: "3C",
+      targetPlayerId: P2,
+    });
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("main");
+    expect(result.value.pendingClubDebuff).toBeUndefined();
+    expect(result.value.players[P2]!.life).toBe(7);
+  });
+
+  it("lets the defender heal during the window and survive the blow", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D", "9D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["5C"] }),
+        [P2]: makePlayer(P2, { life: 4, hand: ["8H"] }),
+      },
+    });
+    const opened = dispatchAction(state, P1, { type: "apply_club", clubCardId: "5C", targetPlayerId: P2 });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+
+    const healed = dispatchAction(opened.value, P2, { type: "discard_heart_to_heal", heartCardId: "8H" });
+    expect(healed.ok, healed.ok ? "" : healed.error).toBe(true);
+    if (!healed.ok) return;
+    expect(healed.value.phase).toBe("respond_to_club"); // still the defender's window
+    expect(healed.value.players[P2]!.life).toBe(12);
+
+    const confirmed = dispatchAction(healed.value, P2, { type: "confirm_club_response" });
+    expect(confirmed.ok).toBe(true);
+    if (!confirmed.ok) return;
+    expect(confirmed.value.players[P2]!.life).toBe(7); // 12 - 5
+    expect(confirmed.value.players[P2]!.isEliminated).toBe(false);
+    expect(isGameOver(confirmed.value)).toBe(false);
+    expect(confirmed.value.phase).toBe("main");
+  });
+
+  it("kills the defender who accepts the blow without healing", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["5C"] }),
+        [P2]: makePlayer(P2, { life: 4, hand: [] }),
+      },
+    });
+    const opened = dispatchAction(state, P1, { type: "apply_club", clubCardId: "5C", targetPlayerId: P2 });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+
+    const confirmed = dispatchAction(opened.value, P2, { type: "confirm_club_response" });
+    expect(confirmed.ok).toBe(true);
+    if (!confirmed.ok) return;
+    expect(confirmed.value.players[P2]!.life).toBe(0);
+    expect(confirmed.value.players[P2]!.isEliminated).toBe(true);
+    expect(isGameOver(confirmed.value)).toBe(true);
+    expect(getWinner(confirmed.value)).toBe(P1);
   });
 });

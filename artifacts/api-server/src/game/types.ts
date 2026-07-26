@@ -76,7 +76,21 @@ export interface PendingClubDebuff {
   attackerPlayerId: string;
   clubCardId: CardId;
   targetPlayerId: string;
-  targetRoyalId: CardId;
+  /**
+   * The Royal being debuffed. Absent when this is a lethal face-damage
+   * response (faceDamage is set instead): a Club or Joker whose damage would
+   * take the target to <= 0 opens the same respond_to_club window so the
+   * defender can heal (or accept) before the killing blow lands. Non-lethal
+   * face damage never opens a window and never sets this pending payload.
+   */
+  targetRoyalId?: CardId;
+  /**
+   * Set for a lethal face-damage response instead of targetRoyalId. Carries the
+   * source card (a Club or Joker) and the damage to apply on confirm; the life
+   * is not deducted until confirmClubResponse, so a heal played first reduces
+   * or removes the shortfall.
+   */
+  faceDamage?: { sourceCardId: CardId; amount: number };
   defenderDiamondUsed?: boolean;
   returnPhase?: TurnPhase;
 }

@@ -694,8 +694,25 @@ function respondToClubCandidates(state: GameState, botId: string): GameAction[] 
     }
   }
 
-  const targetRoyal = me.court.find((r) => r.cardId === pending.targetRoyalId);
-  if (!targetRoyal) return candidates;
+  // Lethal face-damage response (no Royal target): the only save is to heal
+  // above the incoming hit. Enumerate every affordable non-Royal Heart;
+  // settleForScoring auto-confirms the pending damage after the modelled heal,
+  // so "heal then survive" outscores "confirm then die" via the survival term.
+  if (pending.faceDamage) {
+    for (const cardId of me.hand) {
+      const card = getCard(cardId);
+      if (card.suit === "H" && !card.isRoyal && card.vaultCost <= vault) {
+        candidates.push({ type: "discard_heart_to_heal", heartCardId: cardId });
+      }
+    }
+    return candidates;
+  }
+
+  const targetRoyalId = pending.targetRoyalId;
+  const targetRoyal = targetRoyalId
+    ? me.court.find((r) => r.cardId === targetRoyalId)
+    : undefined;
+  if (!targetRoyalId || !targetRoyal) return candidates;
 
   // Attach options are always enumerated: settleForScoring auto-confirms the
   // pending debuff during scoring, so "attach then eat the Club" is compared
@@ -707,8 +724,8 @@ function respondToClubCandidates(state: GameState, botId: string): GameAction[] 
     if (card.suit === "H" || card.suit === "S") {
       const action: GameAction =
         card.suit === "H"
-          ? { type: "attach_heart", heartCardId: cardId, targetRoyalId: pending.targetRoyalId }
-          : { type: "attach_spade", spadeCardId: cardId, targetRoyalId: pending.targetRoyalId };
+          ? { type: "attach_heart", heartCardId: cardId, targetRoyalId }
+          : { type: "attach_spade", spadeCardId: cardId, targetRoyalId };
       candidates.push(action);
     }
   }

@@ -1062,3 +1062,30 @@ describe("survival urgency — heals when the board threatens lethal", () => {
     }
   });
 });
+
+describe("bot defends a lethal face-burn", () => {
+  it("offers discard_heart_to_heal when the pending Club is lethal face damage", () => {
+    // The window is open with a face-damage payload (no target Royal). The bot,
+    // as defender, must be able to heal — otherwise it can only accept the hit.
+    const state = makeState({
+      phase: "respond_to_club",
+      mine: ["10D"],
+      pendingClubDebuff: {
+        attackerPlayerId: P1,
+        clubCardId: "6C",
+        targetPlayerId: BOT,
+        faceDamage: { sourceCardId: "6C", amount: 6 },
+      },
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { life: 4, hand: ["5H", "2D"] }),
+      },
+    });
+    const candidates = enumerateCandidateActions(state, BOT);
+    const heal = candidates.find(
+      (a) => a.type === "discard_heart_to_heal" && a.heartCardId === "5H",
+    );
+    expect(heal, "expected a discard_heart_to_heal candidate for 5H").toBeDefined();
+    expect(candidates.some((a) => a.type === "confirm_club_response")).toBe(true);
+  });
+});

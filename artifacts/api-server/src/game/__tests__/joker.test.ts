@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { playJokerDestroyRoyal, playJokerDamagePlayer, playJoker } from "../joker";
+import { dispatchAction } from "../dispatcher";
+import { isGameOver, getWinner } from "../turn";
 import { makeState, makePlayer, P1, P2 } from "./helpers";
 import type { RoyalInCourt } from "../types";
 
@@ -167,5 +169,55 @@ describe("playJokerDamagePlayer", () => {
     expect(result.value.players[P1]!.hand).not.toContain("JOKER1");
     expect(result.value.players[P1]!.vault.spent).toBe(10);
     expect(result.value.abyss).toContain("JOKER1");
+  });
+});
+
+describe("lethal Joker to the face opens a response window", () => {
+  it("opens respond_to_club with no life lost when a face Joker is lethal", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["JOKER1"] }),
+        [P2]: makePlayer(P2, { life: 8 }),
+      },
+    });
+    const result = playJokerDamagePlayer(state, P1, "JOKER1", P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.phase).toBe("respond_to_club");
+    expect(result.value.pendingClubDebuff?.faceDamage).toEqual({
+      sourceCardId: "JOKER1",
+      amount: 10,
+    });
+    expect(result.value.players[P2]!.life).toBe(8);
+    expect(result.value.players[P2]!.isEliminated).toBe(false);
+  });
+
+  it("kills on confirm when the defender cannot answer it", () => {
+    const state = makeState({
+      phase: "main",
+      activePlayerId: P1,
+      mine: ["10D"],
+      players: {
+        [P1]: makePlayer(P1, { hand: ["JOKER1"] }),
+        [P2]: makePlayer(P2, { life: 8, hand: [] }),
+      },
+    });
+    const opened = dispatchAction(state, P1, {
+      type: "play_joker",
+      cardId: "JOKER1",
+      mode: "damage_player",
+      targetPlayerId: P2,
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const confirmed = dispatchAction(opened.value, P2, { type: "confirm_club_response" });
+    expect(confirmed.ok).toBe(true);
+    if (!confirmed.ok) return;
+    expect(confirmed.value.players[P2]!.isEliminated).toBe(true);
+    expect(isGameOver(confirmed.value)).toBe(true);
+    expect(getWinner(confirmed.value)).toBe(P1);
   });
 });
