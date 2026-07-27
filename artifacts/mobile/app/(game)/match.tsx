@@ -1320,7 +1320,7 @@ export default function MatchScreen() {
     );
   }, [matchId, abandonMatchMutate]);
 
-  const { mutate: submitAction, isPending: isSubmitting } = useSubmitGameAction({
+  const { mutate: submitAction, isPending: isSubmitting, reset: resetSubmit } = useSubmitGameAction({
     mutation: {
       onSuccess: (data) => {
         setGameState(data.state);
@@ -1360,6 +1360,22 @@ export default function MatchScreen() {
       },
     },
   });
+
+  // Watchdog: every control is `disabled={isSubmitting}`, so a request that
+  // never settles freezes the whole board until the app is reloaded — which is
+  // exactly what players hit (greyed-out buttons, fixed instantly by a reload).
+  // customFetch now enforces its own deadline; this is the backstop for a hang
+  // anywhere else in the chain, and it guarantees the UI always becomes usable
+  // again. Safe to clear the lock blindly: if the action did land, the
+  // WebSocket push (or the state poll) reconciles the board either way.
+  useEffect(() => {
+    if (!isSubmitting) return;
+    const timer = setTimeout(() => {
+      resetSubmit();
+      showToast("That took too long — nothing was sent. Try again.", "error");
+    }, 25000);
+    return () => clearTimeout(timer);
+  }, [isSubmitting, resetSubmit, showToast]);
 
   const handleAction = useCallback(
     (params: ActionParams) => {

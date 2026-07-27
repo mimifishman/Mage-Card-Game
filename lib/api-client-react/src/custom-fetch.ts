@@ -1,6 +1,38 @@
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
+  /**
+   * Abort the request after this many ms. Defaults to DEFAULT_TIMEOUT_MS.
+   * Pass 0 to disable (for genuinely long-running calls).
+   */
+  timeoutMs?: number;
 };
+
+/**
+ * Every request must settle. Without this a hung connection — a phone moving
+ * between wifi and cell, or resuming from background — leaves the promise
+ * pending forever, which strands React Query mutations in `isPending: true`
+ * and disables the whole UI until the app is reloaded.
+ */
+const DEFAULT_TIMEOUT_MS = 20_000;
+/** Auth token lookups hit the network too (token refresh), so they get their own cap. */
+const AUTH_TOKEN_TIMEOUT_MS = 10_000;
+
+export class RequestTimeoutError extends Error {
+  readonly name = "RequestTimeoutError";
+  readonly method: string;
+  readonly url: string;
+  readonly timeoutMs: number;
+
+  constructor(requestInfo: { method: string; url: string }, timeoutMs: number) {
+    super(
+      `${requestInfo.method} ${requestInfo.url} timed out after ${timeoutMs}ms — the server did not respond`,
+    );
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.method = requestInfo.method;
+    this.url = requestInfo.url;
+    this.timeoutMs = timeoutMs;
+  }
+}
 
 export type ErrorType<T = unknown> = ApiError<T>;
 
@@ -346,18 +378,48 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
+  const requestInfo = { method, url: resolveUrl(input) };
+
   // Attach bearer token when an auth getter is configured and no
-  // Authorization header has been explicitly provided.
+  // Authorization header has been explicitly provided. Capped: this can hit
+  // the network (token refresh), and it runs BEFORE fetch — so without a
+  // timeout a stalled refresh hangs the request where no abort signal reaches.
   if (_authTokenGetter && !headers.has("authorization")) {
-    const token = await _authTokenGetter();
+    const token = await withTimeout(
+      Promise.resolve(_authTokenGetter()),
+      AUTH_TOKEN_TIMEOUT_MS,
+      requestInfo,
+    );
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
     }
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  const response = await fetch(input, { ...init, method, headers });
+  // Abort the request once the deadline passes, unless the caller supplied
+  // their own signal (then it is theirs to manage).
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let signal = init.signal;
+  if (timeoutMs > 0 && !signal && typeof AbortController !== "undefined") {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, method, headers, signal });
+  } catch (cause) {
+    // An abort here is our own deadline firing: report it as a timeout so
+    // callers can tell "server never answered" from a real network error.
+    if (timer && (cause as { name?: string })?.name === "AbortError") {
+      throw new RequestTimeoutError(requestInfo, timeoutMs);
+    }
+    throw cause;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
@@ -365,4 +427,29 @@ export async function customFetch<T = unknown>(
   }
 
   return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+}
+
+/** Rejects with RequestTimeoutError if `promise` has not settled in time. */
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  requestInfo: { method: string; url: string },
+): Promise<T> {
+  if (timeoutMs <= 0) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new RequestTimeoutError(requestInfo, timeoutMs)),
+      timeoutMs,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
