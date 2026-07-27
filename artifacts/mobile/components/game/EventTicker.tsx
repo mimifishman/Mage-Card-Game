@@ -134,7 +134,7 @@ export default function EventTicker({ events }: EventTickerProps) {
 
   if (events.length === 0) return null;
 
-  const rows = (list: GameEvent[], latestBold: boolean) =>
+  const rows = (list: GameEvent[], latestBold: boolean, showSublines = true) =>
     list.map((ev, i) => (
       <Animated.View key={ev.id} entering={FadeIn.duration(250)} style={styles.row}>
         <View style={[styles.dot, { backgroundColor: ev.color }]} />
@@ -147,11 +147,12 @@ export default function EventTicker({ events }: EventTickerProps) {
             tag={ev.tag}
             textStyle={i === 0 && latestBold ? styles.textLatest : undefined}
           />
-          {ev.sublines?.map((line, j) => (
-            <View key={j} style={styles.subline}>
-              <RichLine text={line} />
-            </View>
-          ))}
+          {showSublines &&
+            ev.sublines?.map((line, j) => (
+              <View key={j} style={styles.subline}>
+                <RichLine text={line} />
+              </View>
+            ))}
         </View>
       </Animated.View>
     ));
@@ -162,7 +163,10 @@ export default function EventTicker({ events }: EventTickerProps) {
           nested in the board ScrollView and could not scroll on iOS). Tap opens
           the full log in a Modal, which scrolls freely because it is not nested. */}
       <Pressable onPress={() => setOpen(true)} style={styles.container}>
-        <View style={styles.collapsedList}>{rows(recent, true)}</View>
+        {/* Headlines only: combat entries carry multi-line `sublines` that
+            overflowed the peek and collided with the panels below. The full
+            detail is one tap away in the modal. */}
+        <View style={styles.collapsedList}>{rows(recent, true, false)}</View>
         <Text style={styles.expandHint}>{`log (${events.length}) — tap to open`}</Text>
       </Pressable>
 
@@ -296,6 +300,10 @@ const styles = StyleSheet.create({
   },
   collapsedList: {
     maxHeight: 96,
+    // REQUIRED: React Native does not clip children to maxHeight without this.
+    // Without it, long entries spilled out of the peek and overlapped the
+    // panels below, which is what made the log look like a jumbled mess.
+    overflow: "hidden",
   },
   logOverlay: {
     flex: 1,

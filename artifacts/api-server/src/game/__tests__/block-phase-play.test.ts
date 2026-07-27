@@ -81,20 +81,25 @@ describe("declare_blocks phase — card play permissions", () => {
     expect(result.error).toMatch(/declare_blocks/i);
   });
 
-  it("defender cannot discard a Diamond to draw during declare_blocks", () => {
-    const state = declareBlocksState(["2D"]);
+  // Rule: a blocking defender is reacting on the attacker's turn, so they get
+  // one Diamond action (draw or boost) — only banking to the Mine stays
+  // turn-only (asserted above).
+  it("defender CAN discard a Diamond to draw during declare_blocks", () => {
+    const state = { ...declareBlocksState(["2D"]), deck: ["KH", "3C"] };
     const result = discardDiamondToDraw(state, P2, "2D");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/declare_blocks/i);
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.hand).toContain("KH");
+    expect(result.value.blockDiamondUsedBy).toContain(P2);
   });
 
-  it("defender cannot discard a Diamond for a boost during declare_blocks", () => {
+  it("defender CAN discard a Diamond for a boost during declare_blocks", () => {
     const state = declareBlocksState(["2D"]);
     const result = discardDiamondForBoost(state, P2, "2D");
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/declare_blocks/i);
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.vault.tempBoost).toBe(2);
+    expect(result.value.blockDiamondUsedBy).toContain(P2);
   });
 
   it("defender cannot play a Royal to Court during declare_blocks", () => {

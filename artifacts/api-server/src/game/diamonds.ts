@@ -100,10 +100,6 @@ export function discardDiamondToDraw(
   playerId: string,
   cardId: CardId,
 ): Result<GameState> {
-  if (state.phase === "declare_blocks") {
-    return err(`Cannot use a Diamond action during phase "declare_blocks"`);
-  }
-
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
 
@@ -116,6 +112,24 @@ export function discardDiamondToDraw(
   }
 
   const player = state.players[playerId]!;
+
+  // A targeted defender may take one Diamond action (draw or boost) while
+  // blocking — they are reacting on the attacker's turn, like a duel defender.
+  // Playing a Diamond to the Mine stays a turn-only action.
+  if (state.phase === "declare_blocks") {
+    const used = state.blockDiamondUsedBy ?? [];
+    if (used.includes(playerId)) {
+      return err("You have already used your Diamond action while blocking");
+    }
+    const withoutCard = removeFromHand(player, cardId);
+    const afterDiscard: GameState = {
+      ...state,
+      players: { ...state.players, [playerId]: withoutCard },
+      abyss: [...state.abyss, cardId],
+      blockDiamondUsedBy: [...used, playerId],
+    };
+    return drawCard(afterDiscard, playerId);
+  }
 
   const effPhase = effectiveDuelPhase(state);
 
@@ -194,10 +208,6 @@ export function discardDiamondForBoost(
   cardId: CardId,
   targetPlayerId: string = playerId,
 ): Result<GameState> {
-  if (state.phase === "declare_blocks") {
-    return err(`Cannot use a Diamond action during phase "declare_blocks"`);
-  }
-
   const canPlay = canPlayCard(state, playerId, cardId);
   if (!canPlay.ok) return canPlay as Result<GameState>;
 
@@ -222,6 +232,22 @@ export function discardDiamondForBoost(
       [targetPlayerId]: addTempBoost(targetPlayer, card.pipValue),
     };
   };
+
+  // A targeted defender may take one Diamond action (draw or boost) while
+  // blocking — see discardDiamondToDraw for the reasoning.
+  if (state.phase === "declare_blocks") {
+    const used = state.blockDiamondUsedBy ?? [];
+    if (used.includes(playerId)) {
+      return err("You have already used your Diamond action while blocking");
+    }
+    const withoutCard = removeFromHand(player, cardId);
+    return ok({
+      ...state,
+      players: { ...state.players, ...applyBoost(withoutCard) },
+      abyss: [...state.abyss, cardId],
+      blockDiamondUsedBy: [...used, playerId],
+    });
+  }
 
   const effPhase = effectiveDuelPhase(state);
 

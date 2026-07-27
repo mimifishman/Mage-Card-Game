@@ -1118,3 +1118,50 @@ describe("bot defends a lethal face-burn", () => {
     expect(candidates.some((a) => a.type === "confirm_club_response")).toBe(true);
   });
 });
+
+describe("bot uses its Diamond action while blocking", () => {
+  function blockingState(hand: string[], usedBy: string[] = []) {
+    return makeState({
+      phase: "declare_blocks",
+      activePlayerId: P1,
+      deck: ["2C", "3C"],
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KS", targetPlayerId: BOT }],
+      pendingBlockDefenders: [BOT],
+      blockDiamondUsedBy: usedBy,
+      players: {
+        [P1]: makePlayer(P1, { court: [mkRoyal("KS", { hasAttackedThisTurn: true })] }),
+        [BOT]: makePlayer(BOT, { hand, court: [mkRoyal("QH")] }),
+      },
+    });
+  }
+
+  it("offers draw and boost while blocking, alongside the block lines", () => {
+    const candidates = enumerateCandidateActions(blockingState(["5D"]), BOT);
+    expect(candidates.some((a) => a.type === "discard_diamond_to_draw")).toBe(true);
+    expect(candidates.some((a) => a.type === "discard_diamond_for_boost")).toBe(true);
+    expect(candidates.some((a) => a.type === "confirm_declare_blocks")).toBe(true);
+    // Every candidate must be engine-legal.
+    for (const action of candidates) {
+      expect(
+        dispatchAction(blockingState(["5D"]), BOT, action).ok,
+        `${JSON.stringify(action)} was rejected`,
+      ).toBe(true);
+    }
+  });
+
+  it("stops offering it once the block-window Diamond is spent", () => {
+    const candidates = enumerateCandidateActions(blockingState(["5D"], [BOT]), BOT);
+    expect(candidates.some((a) => a.type.startsWith("discard_diamond"))).toBe(false);
+  });
+
+  it("keeps the block lines first, so settle-scoring's positional fallback is safe", () => {
+    // bestDefenderBlocks falls back to options[0] (all-pass) / options[1]
+    // (greedy) when its search budget runs out. A Diamond landing in either
+    // slot would corrupt the modelled defender, so blocks must lead the list.
+    const candidates = enumerateCandidateActions(blockingState(["5D"]), BOT);
+    expect(candidates[0]?.type).toBe("confirm_declare_blocks");
+    const firstDiamond = candidates.findIndex((a) => a.type.startsWith("discard_diamond"));
+    const lastBlock = candidates.map((a) => a.type).lastIndexOf("confirm_declare_blocks");
+    expect(firstDiamond).toBeGreaterThan(lastBlock);
+  });
+});
