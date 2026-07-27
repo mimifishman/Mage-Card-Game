@@ -15,37 +15,6 @@ import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 if (domain) setBaseUrl(`https://${domain}`);
 
-const proxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
-
-// Clerk FAPI fetch interceptor for production.
-// @clerk/clerk-expo v2 does not pass proxyUrl to getClerkInstance for native
-// builds — the SDK derives the FAPI domain from the publishable key
-// (clerk.<domain>) which is unreachable on Replit deployments. We redirect
-// all FAPI fetch calls through our working proxy instead.
-(function patchFetchForClerkProxy() {
-  if (!proxyUrl) return;
-  try {
-    const hostMatch = proxyUrl.match(/^https?:\/\/([^/]+)/);
-    if (!hostMatch) return;
-    const _fapiBase = `https://clerk.${hostMatch[1]}`;
-    const _orig = global.fetch;
-    global.fetch = function (input, init) {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.toString()
-            : (input as Request).url;
-      if (url.startsWith(_fapiBase)) {
-        return _orig(proxyUrl + url.slice(_fapiBase.length), init);
-      }
-      return _orig(input, init);
-    } as typeof fetch;
-  } catch {
-    // Non-fatal — Clerk will attempt direct FAPI on failure
-  }
-})();
-
 const tokenCache = {
   async getToken(key: string) {
     return SecureStore.getItemAsync(key);
@@ -200,7 +169,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <ClerkProvider
       publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!}
       tokenCache={tokenCache}
-      proxyUrl={proxyUrl}
     >
       <ClerkAuthBridge>{children}</ClerkAuthBridge>
     </ClerkProvider>

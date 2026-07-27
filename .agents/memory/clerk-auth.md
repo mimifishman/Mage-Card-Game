@@ -23,30 +23,19 @@ this up automatically for every API call.
 `bearer-<token>` WebSocket subprotocol. On first connection, the Clerk userId is upserted
 into `usersTable` to get an internal UUID.
 
-## Clerk management status: Replit-managed (migrated)
-Previously external Clerk (user's own account with a dead prod instance on replit.app domain).
-Migrated to Replit-managed via `setupClerkWhitelabelAuth()`. Now:
-- API server has `clerkProxyMiddleware` at `/api/__clerk` (before cors/body parsers) + `clerkMiddleware` using `publishableKeyFromHost` from `@clerk/shared/keys`.
-- Mobile `lib/auth.tsx` passes `proxyUrl={proxyUrl}` (from `EXPO_PUBLIC_CLERK_PROXY_URL`) to `ClerkProvider`.
-- `build.js` constructs `EXPO_PUBLIC_CLERK_PROXY_URL` from `CLERK_PROXY_URL` + deploy domain.
-- On publish, Replit auto-swaps test keys → live keys and sets `CLERK_PROXY_URL=/api/__clerk`.
-- `CLERK_PROXY_URL` is NEVER set in dev (proxy is prod-only). Do not add it to workspace secrets.
+## Clerk management status: EXTERNAL (user's own Clerk instance)
+History: external → Replit-managed (whitelabel) → back to external (July 2026). The
+Replit-managed setup (FAPI proxy at `/api/__clerk`, `publishableKeyFromHost`, mobile fetch
+interceptor, `EXPO_PUBLIC_CLERK_PROXY_URL` in build.js) has been fully removed. Both API
+and mobile read the user's `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` directly from env.
 
-## Critical: proxyUrl is silently ignored in @clerk/clerk-expo v2 native builds
-`@clerk/clerk-expo` v2.19.31 `ClerkProvider` does NOT forward `proxyUrl` to `getClerkInstance()`
-for native builds. `BuildClerkOptions` type confirms: only `publishableKey`, `tokenCache`, and two
-experimental flags are accepted. `proxyUrl` lands in `...rest` spread to clerk-react's Provider but
-can't affect the pre-initialized Clerk instance. The FAPI domain (`clerk.<deploy-domain>`) is thus
-dead on Replit (HTTP 000).
-
-**Fix:** A global `fetch` interceptor is installed at module level in `lib/auth.tsx` (runs before
-ClerkProvider renders). It derives the dead FAPI domain from the proxy URL (`clerk.${proxyHost}`)
-and redirects all matching fetch calls through the working `/api/__clerk` proxy. Only active when
-`EXPO_PUBLIC_CLERK_PROXY_URL` is set (production). Dev mode unaffected (var not set in dev script,
-and dev pk_test uses a different FAPI domain anyway).
-
-**Why:** `clerk.mage-card-game.replit.app` resolves via Replit wildcard DNS but returns HTTP 000 —
-Replit's infra layer doesn't route that subdomain to any service. Cannot be fixed server-side.
+**Why:** User wants production to authenticate against their own Clerk instance.
+**How to apply:** Do NOT reintroduce proxy/whitelabel wiring or call
+`setupClerkWhitelabelAuth()` unless the user explicitly asks to migrate back. If a managed
+Clerk app still exists in the Auth pane, publishing may swap keys — it must be deleted via
+Auth pane → Configure → Delete Clerk app. The user's Clerk dashboard must allow the
+production origin for cross-origin flows. Note: `@clerk/clerk-expo` v2 silently ignores
+`proxyUrl` on native builds — relevant only if a proxy setup ever returns.
 
 ## Env var forwarding
 The mobile dev script in `artifacts/mobile/package.json` forwards
