@@ -2272,39 +2272,49 @@ export default function MatchScreen() {
               }
             />
           ) : showDuelStage && duelCtx ? (
-            <DuelStage
-              phase={phase}
-              attacks={gameState.attacks.filter(
-                (a) =>
-                  a.blockerCardIds &&
-                  a.blockerCardIds.length > 0 &&
-                  a.attackerPlayerId === duelCtx.attackerPlayerId &&
-                  a.targetPlayerId === duelCtx.defenderPlayerId,
-              )}
-              duelContext={duelCtx}
-              myId={myId}
-              attackerCourt={gameState.players[duelCtx.attackerPlayerId]?.court ?? []}
-              defenderCourt={gameState.players[duelCtx.defenderPlayerId]?.court ?? []}
-              displayNames={displayNames}
-              attackerColor={colorOf(duelCtx.attackerPlayerId)}
-              defenderColor={colorOf(duelCtx.defenderPlayerId)}
-              isSubmitting={isSubmitting}
-              targetingRoyals={targetingRoyals}
-              targetGlowColor={colorOf(myId)}
-              onRoyalTarget={dispatchRoyalTarget}
-              completedDuels={completedDuels}
-              upcomingDuels={(gameState.duelQueue ?? []).map((qid) => ({
-                name: nameFor(qid),
-                color: colorOf(qid),
-                fights: gameState.attacks.filter(
+            <>
+              <DuelStage
+                phase={phase}
+                attacks={gameState.attacks.filter(
                   (a) =>
+                    a.blockerCardIds &&
+                    a.blockerCardIds.length > 0 &&
                     a.attackerPlayerId === duelCtx.attackerPlayerId &&
-                    a.targetPlayerId === qid &&
-                    (a.blockerCardIds?.length ?? 0) > 0,
-                ).length,
-              }))}
-              onPass={handleDuelPass}
-            />
+                    a.targetPlayerId === duelCtx.defenderPlayerId,
+                )}
+                duelContext={duelCtx}
+                myId={myId}
+                attackerCourt={gameState.players[duelCtx.attackerPlayerId]?.court ?? []}
+                defenderCourt={gameState.players[duelCtx.defenderPlayerId]?.court ?? []}
+                displayNames={displayNames}
+                attackerColor={colorOf(duelCtx.attackerPlayerId)}
+                defenderColor={colorOf(duelCtx.defenderPlayerId)}
+                isSubmitting={isSubmitting}
+                targetingRoyals={targetingRoyals}
+                targetGlowColor={colorOf(myId)}
+                onRoyalTarget={dispatchRoyalTarget}
+                completedDuels={completedDuels}
+                upcomingDuels={(gameState.duelQueue ?? []).map((qid) => ({
+                  name: nameFor(qid),
+                  color: colorOf(qid),
+                  fights: gameState.attacks.filter(
+                    (a) =>
+                      a.attackerPlayerId === duelCtx.attackerPlayerId &&
+                      a.targetPlayerId === qid &&
+                      (a.blockerCardIds?.length ?? 0) > 0,
+                  ).length,
+                }))}
+                onPass={handleDuelPass}
+              />
+              {/* Keep the shared-zone strip (Deck / Mine / Abyss, each tappable
+                  to browse the pile) visible during a duel — it is otherwise
+                  swapped out for the duel stage. */}
+              <TableCenter
+                mine={gameState.mine ?? []}
+                abyss={gameState.abyss}
+                deckCount={gameState.deck}
+              />
+            </>
           ) : inRespondToClub && pendingClub ? (
             <Animated.View entering={FadeIn.duration(250)} style={styles.clubPanel}>
               <View style={styles.clubPanelHeader}>
