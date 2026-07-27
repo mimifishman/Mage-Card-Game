@@ -144,7 +144,19 @@ export function discardDiamondToDraw(
     if (diamondUsed) {
       return err("You have already used your Diamond action this duel");
     }
-    const withoutCard: PlayerState = removeFromHand(player, cardId);
+    // The attacker is the ACTIVE player: their one-Diamond-per-turn allowance
+    // is shared between the main phase and the duel, so if they already spent
+    // it this turn they cannot take another during their own duel. A defender
+    // is a non-active player reacting on the attacker's turn, so they get their
+    // own Diamond action regardless of their (last turn's) flag.
+    if (isAttacker && player.hasPlayedDiamondThisTurn) {
+      return err("You already used your Diamond action this turn");
+    }
+    const withoutCard: PlayerState = {
+      ...removeFromHand(player, cardId),
+      // Count the attacker's duel Diamond against their turn allowance.
+      hasPlayedDiamondThisTurn: isAttacker ? true : player.hasPlayedDiamondThisTurn,
+    };
     const afterDiscard: GameState = {
       ...state,
       players: { ...state.players, [playerId]: withoutCard },
@@ -237,7 +249,16 @@ export function discardDiamondForBoost(
     if (diamondUsed) {
       return err("You have already used your Diamond action this duel");
     }
-    const withoutCard = removeFromHand(player, cardId);
+    // The attacker is the ACTIVE player: their one-Diamond-per-turn allowance
+    // is shared between the main phase and the duel. A defender is a non-active
+    // player reacting on the attacker's turn and gets their own action.
+    if (isAttacker && player.hasPlayedDiamondThisTurn) {
+      return err("You already used your Diamond action this turn");
+    }
+    const withoutCard = {
+      ...removeFromHand(player, cardId),
+      hasPlayedDiamondThisTurn: isAttacker ? true : player.hasPlayedDiamondThisTurn,
+    };
     const updatedState: GameState = {
       ...state,
       players: { ...state.players, ...applyBoost(withoutCard) },

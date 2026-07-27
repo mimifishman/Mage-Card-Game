@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, Modal } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import Colors from "@/constants/colors";
 
@@ -128,7 +128,7 @@ export function RichLine({
     the full history. Replaces the old fade-away combat banner so state
     changes are never missable. */
 export default function EventTicker({ events }: EventTickerProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   const recent = events.slice(-2).reverse();
   const all = [...events].reverse();
 
@@ -157,18 +157,32 @@ export default function EventTicker({ events }: EventTickerProps) {
     ));
 
   return (
-    <Pressable onPress={() => setExpanded((e) => !e)} style={styles.container}>
-      {expanded ? (
-        <ScrollView style={styles.expandedList} nestedScrollEnabled>
-          {rows(all, false)}
-        </ScrollView>
-      ) : (
-        <ScrollView style={styles.collapsedList} nestedScrollEnabled>
-          {rows(recent, true)}
-        </ScrollView>
-      )}
-      <Text style={styles.expandHint}>{expanded ? "tap to collapse" : `log (${events.length})`}</Text>
-    </Pressable>
+    <>
+      {/* Collapsed inline peek: last two events, no inner ScrollView (it was
+          nested in the board ScrollView and could not scroll on iOS). Tap opens
+          the full log in a Modal, which scrolls freely because it is not nested. */}
+      <Pressable onPress={() => setOpen(true)} style={styles.container}>
+        <View style={styles.collapsedList}>{rows(recent, true)}</View>
+        <Text style={styles.expandHint}>{`log (${events.length}) — tap to open`}</Text>
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.logOverlay} onPress={() => setOpen(false)}>
+          <View style={styles.logSheet}>
+            <View style={styles.logHeader}>
+              <Text style={styles.logTitle}>Match log · {events.length}</Text>
+              <Pressable onPress={() => setOpen(false)} hitSlop={8}>
+                <Text style={styles.logClose}>✕</Text>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.logScroll} contentContainerStyle={styles.logScrollContent}>
+              {rows(all, false)}
+            </ScrollView>
+            <Text style={styles.logDismiss}>Tap outside to close</Text>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -283,7 +297,48 @@ const styles = StyleSheet.create({
   collapsedList: {
     maxHeight: 96,
   },
-  expandedList: {
-    maxHeight: 220,
+  logOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  logSheet: {
+    maxHeight: "75%",
+    backgroundColor: Colors.bgDeep,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
+  logHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  logTitle: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  logClose: {
+    color: Colors.textMuted,
+    fontSize: 18,
+    paddingHorizontal: 6,
+  },
+  logScroll: {
+    flexGrow: 0,
+  },
+  logScrollContent: {
+    paddingBottom: 8,
+  },
+  logDismiss: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 8,
   },
 });

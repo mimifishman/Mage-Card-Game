@@ -672,11 +672,6 @@ export default function MatchScreen() {
         const s = live ?? snap.stats[id];
         return s ? royalStatLabel(s) : cardLabel(id);
       };
-      // The dueling Royals on each side, with their values — so the outcome
-      // shows what both duelers were worth going into the fight.
-      const atkRoyals = [...new Set(snap.pairs.map((p) => p.attackerCardId))].map(royalName);
-      const defRoyals = [...new Set(snap.pairs.flatMap((p) => p.blockerIds))].map(royalName);
-
       const deadAtk: string[] = [];
       const deadDef: string[] = [];
       for (const p of snap.pairs) {
@@ -686,8 +681,17 @@ export default function MatchScreen() {
         }
       }
       const lines: string[] = [];
-      if (atkRoyals.length > 0 || defRoyals.length > 0) {
-        lines.push(`${atkRoyals.join(", ") || atkName} vs ${defRoyals.join(", ") || defName}`);
+      // Explicit attacker → blocker pairings, so it is unambiguous which Royal
+      // fought (and killed) which. A flat "all attackers vs all blockers" line
+      // made an adjacent low-attack Royal look like it had killed a high-health
+      // blocker it never actually fought.
+      const blockedPairs = snap.pairs.filter((p) => p.blockerIds.length > 0);
+      if (blockedPairs.length > 0) {
+        for (const p of blockedPairs) {
+          lines.push(`${royalName(p.attackerCardId)} — blocked by ${p.blockerIds.map(royalName).join(" + ")}`);
+        }
+      } else {
+        lines.push(`${atkName} vs ${defName}`);
       }
       if (deadDef.length > 0) lines.push(`${defName} lost Royal${deadDef.length > 1 ? "s" : ""} ${deadDef.join(", ")}`);
       if (deadAtk.length > 0) lines.push(`${atkName} lost Royal${deadAtk.length > 1 ? "s" : ""} ${deadAtk.join(", ")}`);
@@ -1678,7 +1682,11 @@ export default function MatchScreen() {
 
   // ---- Selected-card targeting (the board becomes the menu). ----
   const hasTakenDiamondAction = isMyDuelTurn && duelCtx
-    ? (myId === duelCtx.attackerPlayerId ? !!duelCtx.attackerDiamondUsed : !!duelCtx.defenderDiamondUsed)
+    ? (myId === duelCtx.attackerPlayerId
+        // The attacker is the active player: their Diamond action is shared
+        // with the main phase, so a turn Diamond already spent bars the duel one.
+        ? (!!duelCtx.attackerDiamondUsed || (gameState.myDiamondPlayed ?? false))
+        : !!duelCtx.defenderDiamondUsed)
     : isClubResponder
       ? !!(pendingClub?.defenderDiamondUsed)
       : (gameState.myDiamondPlayed ?? false);
@@ -2272,7 +2280,6 @@ export default function MatchScreen() {
               }
             />
           ) : showDuelStage && duelCtx ? (
-            <>
               <DuelStage
                 phase={phase}
                 attacks={gameState.attacks.filter(
@@ -2306,15 +2313,6 @@ export default function MatchScreen() {
                 }))}
                 onPass={handleDuelPass}
               />
-              {/* Keep the shared-zone strip (Deck / Mine / Abyss, each tappable
-                  to browse the pile) visible during a duel — it is otherwise
-                  swapped out for the duel stage. */}
-              <TableCenter
-                mine={gameState.mine ?? []}
-                abyss={gameState.abyss}
-                deckCount={gameState.deck}
-              />
-            </>
           ) : inRespondToClub && pendingClub ? (
             <Animated.View entering={FadeIn.duration(250)} style={styles.clubPanel}>
               <View style={styles.clubPanelHeader}>
@@ -2394,13 +2392,17 @@ export default function MatchScreen() {
                 </View>
               </View>
             </Animated.View>
-          ) : (
-            <TableCenter
-              mine={gameState.mine ?? []}
-              abyss={gameState.abyss}
-              deckCount={gameState.deck}
-            />
-          )}
+          ) : null}
+
+          {/* Shared-zone strip (Deck / Mine / Abyss, each tappable to browse the
+              pile). Rendered ALWAYS — below whichever center-stage panel is up —
+              so the counts stay visible while blocking, dueling, or responding to
+              a Club, not only during the main phase. */}
+          <TableCenter
+            mine={gameState.mine ?? []}
+            abyss={gameState.abyss}
+            deckCount={gameState.deck}
+          />
 
           <EventTicker events={events} />
 
