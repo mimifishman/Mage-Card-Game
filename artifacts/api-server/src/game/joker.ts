@@ -67,7 +67,7 @@ export function playJokerDestroyRoyal(
   );
   updatedAbyss = abyss;
 
-  return ok({
+  const finalState: GameState = {
     ...state,
     abyss: updatedAbyss,
     players: {
@@ -75,7 +75,21 @@ export function playJokerDestroyRoyal(
       [playerId]: afterSpend,
       [targetPlayerId]: destroyedTarget,
     },
-  });
+  };
+
+  // Log the destroy so it is not a silent court removal: destroy_royal deals no
+  // damage, so nothing else in the feed would explain the Royal vanishing.
+  return ok(
+    pushLifeEvent(finalState, {
+      kind: "royal_destroyed",
+      targetPlayerId,
+      amount: 0,
+      resultingLife: destroyedTarget.life,
+      actorPlayerId: playerId,
+      sourceCardId: jokerCardId,
+      destroyedRoyalId: targetCardId,
+    }),
+  );
 }
 
 export function playJokerDamagePlayer(

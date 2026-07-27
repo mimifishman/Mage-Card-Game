@@ -312,14 +312,29 @@ function botIncomingAttacks(state: GameState, botId: string) {
  * letting a high-value non-Royal be reclaimed when no Royal/Joker is available.
  * Eligibility uses the engine's discardSpadeToReturn rule (a Joker costs 10).
  */
-function bestReclaimTarget(state: GameState, spadePip: number): CardId | undefined {
-  return state.abyss
-    .filter((abyssId) => {
-      const t = getCard(abyssId);
-      const reclaimCost = t.isJoker ? 10 : t.pipValue;
-      return reclaimCost <= spadePip;
-    })
-    .sort((a, b) => cardPotential(b) - cardPotential(a))[0];
+/**
+ * Reclaim candidates a Spade of the given pip could pull from the Abyss, for
+ * scoring. Returns the single highest-cardPotential card PLUS the best
+ * reclaimable Royal when that differs — so when the bot has no board and no
+ * Royal in hand, "reclaim a Royal to rebuild" is always an option the scorer
+ * can pick (the empty-court board-access bonus makes it win in that spot),
+ * instead of only ever offering the raw highest-value card, which may be a pip
+ * card that never gives the bot a body. Eligibility uses discardSpadeToReturn's
+ * rule (a Joker costs 10, everything else its pip).
+ */
+function reclaimTargets(state: GameState, spadePip: number): CardId[] {
+  const affordable = state.abyss.filter((abyssId) => {
+    const t = getCard(abyssId);
+    const reclaimCost = t.isJoker ? 10 : t.pipValue;
+    return reclaimCost <= spadePip;
+  });
+  if (affordable.length === 0) return [];
+  const ranked = [...affordable].sort((a, b) => cardPotential(b) - cardPotential(a));
+  const best = ranked[0]!;
+  const bestRoyal = ranked.find((id) => getCard(id).isRoyal);
+  const targets: CardId[] = [best];
+  if (bestRoyal && bestRoyal !== best) targets.push(bestRoyal);
+  return targets;
 }
 
 /**
@@ -403,9 +418,8 @@ function mainPhaseCandidates(state: GameState, botId: string): GameAction[] {
       for (const royal of me.court) {
         candidates.push({ type: "attach_spade", spadeCardId: cardId, targetRoyalId: royal.cardId });
       }
-      const retrievable = bestReclaimTarget(state, card.pipValue);
-      if (retrievable) {
-        candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: retrievable });
+      for (const target of reclaimTargets(state, card.pipValue)) {
+        candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: target });
       }
     }
 
@@ -642,9 +656,8 @@ function duelCandidates(state: GameState, botId: string): GameAction[] {
       }
     }
     if (card.suit === "S") {
-      const reclaim = bestReclaimTarget(state, card.pipValue);
-      if (reclaim) {
-        candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: reclaim });
+      for (const target of reclaimTargets(state, card.pipValue)) {
+        candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: target });
       }
     }
     if (card.suit === "C") {
@@ -830,6 +843,16 @@ const DEFENSE_MODEL_PERSONA: BotPersona = {
 };
 
 /**
+ * Handicap (in evaluateState points) applied to a modelled defender's
+ * all-pass line, so the bot predicts ~human-level blocking (~24% of attacks,
+ * per D11) instead of a perfect blocker. Higher = the bot assumes it will be
+ * blocked less, so it commits more Royals and attacks more freely. Bigger
+ * blocks (a must-answer threat) still get predicted; marginal ones flip to
+ * "they'll take it". Tunable: raise for more aggression, lower for caution.
+ */
+const DEFENDER_PASS_BIAS = 3;
+
+/**
  * Picks the block line the defender would actually choose, by settling each
  * option and scoring the outcome from the DEFENDER's point of view.
  *
@@ -861,16 +884,28 @@ function bestDefenderBlocks(
     return options[1] ?? options[0];
   }
 
+  // options[0] is the all-pass line (declareBlocksCandidates pushes it first).
+  const allPass = options[0];
+
   let best: GameAction | undefined;
   let bestScore = -Infinity;
   for (const option of options) {
     const res = dispatchAction(state, defenderId, option);
     if (!res.ok) continue;
-    const score = evaluateState(
+    let score = evaluateState(
       settleFrom(res.value, budget - 1),
       defenderId,
       DEFENSE_MODEL_PERSONA,
     );
+    // Expect ~25% blocking, not perfect defence. This model otherwise picks the
+    // mathematically best block every time, so the attacker assumes its swings
+    // get blocked far more than they will (measured real block rate ~24%, D11)
+    // and under-commits — single-Royal pokes to avoid feeding trades. Handicap
+    // every blocking line by DEFENDER_PASS_BIAS so the model only predicts a
+    // block when it clearly beats taking the hit, closer to how opponents
+    // actually play. Prediction-only: does not change how the bot itself blocks
+    // (that goes through declareBlocksCandidates scored with the real persona).
+    if (option === allPass) score += DEFENDER_PASS_BIAS;
     if (score > bestScore) {
       bestScore = score;
       best = option;
@@ -1006,9 +1041,8 @@ export function enumerateInterruptCandidates(state: GameState, botId: string): G
       for (const royal of me.court) {
         candidates.push({ type: "attach_spade", spadeCardId: cardId, targetRoyalId: royal.cardId });
       }
-      const reclaim = bestReclaimTarget(state, card.pipValue);
-      if (reclaim) {
-        candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: reclaim });
+      for (const target of reclaimTargets(state, card.pipValue)) {
+        candidates.push({ type: "discard_spade_to_return", spadeCardId: cardId, targetCardId: target });
       }
     }
 
