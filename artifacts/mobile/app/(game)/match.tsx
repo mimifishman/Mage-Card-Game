@@ -1678,7 +1678,11 @@ export default function MatchScreen() {
 
   // ---- Selected-card targeting (the board becomes the menu). ----
   const hasTakenDiamondAction = isMyDuelTurn && duelCtx
-    ? (myId === duelCtx.attackerPlayerId ? !!duelCtx.attackerDiamondUsed : !!duelCtx.defenderDiamondUsed)
+    ? (myId === duelCtx.attackerPlayerId
+        // The attacker is the active player: their Diamond action is shared
+        // with the main phase, so a turn Diamond already spent bars the duel one.
+        ? (!!duelCtx.attackerDiamondUsed || (gameState.myDiamondPlayed ?? false))
+        : !!duelCtx.defenderDiamondUsed)
     : isClubResponder
       ? !!(pendingClub?.defenderDiamondUsed)
       : (gameState.myDiamondPlayed ?? false);
@@ -2272,7 +2276,6 @@ export default function MatchScreen() {
               }
             />
           ) : showDuelStage && duelCtx ? (
-            <>
               <DuelStage
                 phase={phase}
                 attacks={gameState.attacks.filter(
@@ -2306,15 +2309,6 @@ export default function MatchScreen() {
                 }))}
                 onPass={handleDuelPass}
               />
-              {/* Keep the shared-zone strip (Deck / Mine / Abyss, each tappable
-                  to browse the pile) visible during a duel — it is otherwise
-                  swapped out for the duel stage. */}
-              <TableCenter
-                mine={gameState.mine ?? []}
-                abyss={gameState.abyss}
-                deckCount={gameState.deck}
-              />
-            </>
           ) : inRespondToClub && pendingClub ? (
             <Animated.View entering={FadeIn.duration(250)} style={styles.clubPanel}>
               <View style={styles.clubPanelHeader}>
@@ -2394,13 +2388,17 @@ export default function MatchScreen() {
                 </View>
               </View>
             </Animated.View>
-          ) : (
-            <TableCenter
-              mine={gameState.mine ?? []}
-              abyss={gameState.abyss}
-              deckCount={gameState.deck}
-            />
-          )}
+          ) : null}
+
+          {/* Shared-zone strip (Deck / Mine / Abyss, each tappable to browse the
+              pile). Rendered ALWAYS — below whichever center-stage panel is up —
+              so the counts stay visible while blocking, dueling, or responding to
+              a Club, not only during the main phase. */}
+          <TableCenter
+            mine={gameState.mine ?? []}
+            abyss={gameState.abyss}
+            deckCount={gameState.deck}
+          />
 
           <EventTicker events={events} />
 

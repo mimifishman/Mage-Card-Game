@@ -68,3 +68,66 @@ describe("discardDiamondForBoost", () => {
     expect(result.value.abyss).toContain("8D");
   });
 });
+
+describe("duel Diamond respects the active player's one-per-turn allowance", () => {
+  function duelCtx() {
+    return {
+      attackerPlayerId: P1,
+      defenderPlayerId: P2,
+      duelAttackerPassed: false,
+      duelBlockerPassed: false,
+      attackerDiamondUsed: false,
+      defenderDiamondUsed: false,
+    };
+  }
+
+  it("bars the attacker (active player) who already spent their turn Diamond", () => {
+    const state = makeState({
+      phase: "duel_attacker_turn",
+      activePlayerId: P1,
+      deck: ["KH", "2C"],
+      duelContext: duelCtx(),
+      players: {
+        [P1]: makePlayer(P1, { hand: ["5D"], hasPlayedDiamondThisTurn: true }),
+        [P2]: makePlayer(P2, { hand: ["6D"] }),
+      },
+    });
+    expect(discardDiamondToDraw(state, P1, "5D").ok).toBe(false);
+    expect(discardDiamondForBoost(state, P1, "5D").ok).toBe(false);
+  });
+
+  it("lets the attacker take it if unused, and counts it against the turn", () => {
+    const state = makeState({
+      phase: "duel_attacker_turn",
+      activePlayerId: P1,
+      deck: ["KH", "2C"],
+      duelContext: duelCtx(),
+      players: {
+        [P1]: makePlayer(P1, { hand: ["5D"] }),
+        [P2]: makePlayer(P2, { hand: ["6D"] }),
+      },
+    });
+    const result = discardDiamondToDraw(state, P1, "5D");
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P1]!.hasPlayedDiamondThisTurn).toBe(true);
+    expect(result.value.duelContext!.attackerDiamondUsed).toBe(true);
+  });
+
+  it("still lets the defender (non-active) take their duel Diamond regardless of their turn flag", () => {
+    const state = makeState({
+      phase: "duel_blocker_turn",
+      activePlayerId: P1,
+      deck: ["KH", "2C"],
+      duelContext: duelCtx(),
+      players: {
+        [P1]: makePlayer(P1),
+        [P2]: makePlayer(P2, { hand: ["6D"], hasPlayedDiamondThisTurn: true }),
+      },
+    });
+    const result = discardDiamondToDraw(state, P2, "6D");
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.duelContext!.defenderDiamondUsed).toBe(true);
+  });
+});
