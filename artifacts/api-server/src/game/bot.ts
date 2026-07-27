@@ -488,6 +488,37 @@ function discardPhaseCandidates(state: GameState, botId: string): GameAction[] {
   return hand.map((cardId) => ({ type: "discard_to_end_turn", cardId }));
 }
 
+/**
+ * Diamond actions a defending bot can take during declare_blocks — the block
+ * window grants a defender one (draw or boost), same as a duel or a Club
+ * response. Worth taking: the boost survives into the duel that follows this
+ * combat (tempBoost is only cleared at the player's OWN turn start), so it can
+ * pay for a pump that swings the fight.
+ *
+ * Deliberately NOT part of declareBlocksCandidates: settleForScoring's
+ * bestDefenderBlocks indexes that list positionally (options[0] = all-pass,
+ * options[1] = greedy) when its search budget runs out, so injecting non-block
+ * actions there would corrupt the opponent model. Only chooseBotAction, via
+ * enumerateCandidateActions, sees these.
+ */
+function blockPhaseDiamondCandidates(state: GameState, botId: string): GameAction[] {
+  const me = state.players[botId];
+  if (!me) return [];
+  // One Diamond action per block window; the engine tracks who has spent theirs.
+  if ((state.blockDiamondUsedBy ?? []).includes(botId)) return [];
+
+  const candidates: GameAction[] = [];
+  for (const cardId of me.hand) {
+    const card = getCard(cardId);
+    if (card.suit !== "D" || card.isRoyal) continue;
+    // Offer both modes for every Diamond so scoring can pick the right card:
+    // typically the cheapest to cash for a draw, the biggest for a boost.
+    candidates.push({ type: "discard_diamond_to_draw", cardId });
+    candidates.push({ type: "discard_diamond_for_boost", cardId });
+  }
+  return candidates;
+}
+
 function declareBlocksCandidates(state: GameState, botId: string): GameAction[] {
   const me = state.players[botId];
   if (!me) return [];
@@ -760,7 +791,10 @@ export function enumerateCandidateActions(state: GameState, botId: string): Game
     case "discard":
       return discardPhaseCandidates(state, botId);
     case "declare_blocks":
-      return declareBlocksCandidates(state, botId);
+      return [
+        ...declareBlocksCandidates(state, botId),
+        ...blockPhaseDiamondCandidates(state, botId),
+      ];
     case "assign_damage_order":
       return damageOrderCandidates(state, botId);
     case "duel_attacker_turn":
