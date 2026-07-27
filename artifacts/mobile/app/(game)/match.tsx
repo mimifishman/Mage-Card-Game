@@ -672,11 +672,6 @@ export default function MatchScreen() {
         const s = live ?? snap.stats[id];
         return s ? royalStatLabel(s) : cardLabel(id);
       };
-      // The dueling Royals on each side, with their values — so the outcome
-      // shows what both duelers were worth going into the fight.
-      const atkRoyals = [...new Set(snap.pairs.map((p) => p.attackerCardId))].map(royalName);
-      const defRoyals = [...new Set(snap.pairs.flatMap((p) => p.blockerIds))].map(royalName);
-
       const deadAtk: string[] = [];
       const deadDef: string[] = [];
       for (const p of snap.pairs) {
@@ -686,8 +681,17 @@ export default function MatchScreen() {
         }
       }
       const lines: string[] = [];
-      if (atkRoyals.length > 0 || defRoyals.length > 0) {
-        lines.push(`${atkRoyals.join(", ") || atkName} vs ${defRoyals.join(", ") || defName}`);
+      // Explicit attacker → blocker pairings, so it is unambiguous which Royal
+      // fought (and killed) which. A flat "all attackers vs all blockers" line
+      // made an adjacent low-attack Royal look like it had killed a high-health
+      // blocker it never actually fought.
+      const blockedPairs = snap.pairs.filter((p) => p.blockerIds.length > 0);
+      if (blockedPairs.length > 0) {
+        for (const p of blockedPairs) {
+          lines.push(`${royalName(p.attackerCardId)} — blocked by ${p.blockerIds.map(royalName).join(" + ")}`);
+        }
+      } else {
+        lines.push(`${atkName} vs ${defName}`);
       }
       if (deadDef.length > 0) lines.push(`${defName} lost Royal${deadDef.length > 1 ? "s" : ""} ${deadDef.join(", ")}`);
       if (deadAtk.length > 0) lines.push(`${atkName} lost Royal${deadAtk.length > 1 ? "s" : ""} ${deadAtk.join(", ")}`);
