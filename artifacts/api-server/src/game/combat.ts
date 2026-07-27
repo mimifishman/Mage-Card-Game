@@ -122,6 +122,8 @@ export function declareAttack(
     players: { ...state.players, [attackerPlayerId]: updatedAttacker },
     attacks: newAttacks,
     pendingBlockDefenders: targetPlayerIds,
+    // Fresh block window: every targeted defender gets their Diamond action.
+    blockDiamondUsedBy: [],
   });
 }
 

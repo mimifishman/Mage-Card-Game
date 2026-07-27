@@ -383,7 +383,10 @@ export function getValidActionsForCard(
 
   if (phase !== "main" && !inDeclareBlocks && !inClubResponse) return [];
 
-  if (inDeclareBlocks && (card.isRoyal || card.suit === "D")) {
+  // Royals are never playable while blocking. Diamonds ARE: a defender may
+  // take one Diamond action (draw or boost) during the block window — only
+  // "to the Mine" stays turn-only, handled in the Diamond branch below.
+  if (inDeclareBlocks && card.isRoyal) {
     return [];
   }
 
@@ -450,7 +453,7 @@ export function getValidActionsForCard(
         disabled: true,
       });
     } else {
-      if (!inClubResponse) {
+      if (!inClubResponse && !inDeclareBlocks) {
         actions.push({
           action: "play_diamond_to_mine",
           label: `Add to the Mine (+${card.pipValue} ⚡)`,
@@ -460,9 +463,13 @@ export function getValidActionsForCard(
           requiresTarget: false,
         });
       } else {
+        // Banking to the Mine is a turn action; Draw/Boost below are still
+        // available while blocking or responding to a Club.
         actions.push({
           action: "play_diamond_to_mine",
-          label: "Add to the Mine — not during a Club response",
+          label: inDeclareBlocks
+            ? "Add to the Mine — not while blocking"
+            : "Add to the Mine — not during a Club response",
           icon: "💎",
           short: "To Mine",
           detail: "not right now",

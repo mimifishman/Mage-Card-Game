@@ -259,6 +259,14 @@ export interface GameState {
   pendingClubDebuff?: PendingClubDebuff;
   /** Targeted opponents who still need to submit (or pass on) blocks during "declare_blocks". Cleared once all have submitted. */
   pendingBlockDefenders?: string[];
+  /**
+   * Defenders who have already taken their one Diamond action (draw or boost)
+   * during the current "declare_blocks" window. A defender is a NON-active
+   * player reacting on the attacker's turn, so their own
+   * `hasPlayedDiamondThisTurn` flag still reflects their previous turn and
+   * cannot gate this — hence per-combat tracking, reset by declareAttack.
+   */
+  blockDiamondUsedBy?: string[];
   /** Ordered queue of remaining opponent IDs (with blocked pairs) still waiting to have their fight resolved, after the one currently in duelContext. */
   duelQueue?: string[];
   /** Accumulates resolved combat pairs across every opponent fought this combat, so the final lastCombatSummary covers all of them. */

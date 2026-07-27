@@ -131,3 +131,47 @@ describe("duel Diamond respects the active player's one-per-turn allowance", () 
     expect(result.value.duelContext!.defenderDiamondUsed).toBe(true);
   });
 });
+
+describe("Diamond actions while blocking", () => {
+  function blockingState(defenderHand: string[], usedBy: string[] = []) {
+    return makeState({
+      phase: "declare_blocks",
+      activePlayerId: P1,
+      deck: ["KH", "2C"],
+      attacks: [{ attackerPlayerId: P1, attackerCardId: "KS", targetPlayerId: P2 }],
+      pendingBlockDefenders: [P2],
+      blockDiamondUsedBy: usedBy,
+      players: {
+        [P1]: makePlayer(P1),
+        // Flag set from their OWN last turn — must not block the react action.
+        [P2]: makePlayer(P2, { hand: defenderHand, hasPlayedDiamondThisTurn: true }),
+      },
+    });
+  }
+
+  it("lets a blocking defender discard a Diamond to draw", () => {
+    const result = discardDiamondToDraw(blockingState(["5D"]), P2, "5D");
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.hand).toContain("KH");
+    expect(result.value.blockDiamondUsedBy).toContain(P2);
+  });
+
+  it("lets a blocking defender discard a Diamond for a boost", () => {
+    const result = discardDiamondForBoost(blockingState(["5D"]), P2, "5D");
+    expect(result.ok, result.ok ? "" : result.error).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.vault.tempBoost).toBe(5);
+    expect(result.value.blockDiamondUsedBy).toContain(P2);
+  });
+
+  it("allows only one Diamond action per block window", () => {
+    const state = blockingState(["5D", "6D"], [P2]);
+    expect(discardDiamondToDraw(state, P2, "5D").ok).toBe(false);
+    expect(discardDiamondForBoost(state, P2, "6D").ok).toBe(false);
+  });
+
+  it("still forbids banking a Diamond to the Mine while blocking", () => {
+    expect(playDiamondToMine(blockingState(["5D"]), P2, "5D").ok).toBe(false);
+  });
+});

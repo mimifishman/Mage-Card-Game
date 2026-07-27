@@ -37,6 +37,8 @@ export interface PlayerGameView {
   lifeEvents?: LifeEvent[];
   pendingClubDebuff?: PendingClubDebuff;
   pendingBlockDefenders?: string[];
+  /** Defenders who already spent their Diamond action in this block window. */
+  blockDiamondUsedBy?: string[];
   duelQueue?: string[];
   interruptStack?: InterruptStackState;
   /** Debug/testing aid: full hands of AI seats, revealed to every viewer. */
@@ -103,6 +105,7 @@ export function buildPlayerView(
     lifeEvents: state.lifeEvents,
     pendingClubDebuff: state.pendingClubDebuff,
     pendingBlockDefenders: state.pendingBlockDefenders,
+    blockDiamondUsedBy: state.blockDiamondUsedBy,
     duelQueue: state.duelQueue,
     interruptStack: state.interruptStack,
     revealedHands,

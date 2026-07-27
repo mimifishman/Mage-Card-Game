@@ -993,7 +993,14 @@ export default function MatchScreen() {
       return royal ? royalStatLabel(royal) : cardLabel(royalCardId);
     };
 
-    // Turn changes.
+    // Turn changes. The first snapshot has no previous active player, so
+    // without this the opening turn ("— turn 1") never appeared in the log:
+    // only *transitions* were recorded, and the game starts already on turn 1.
+    if (!prevActivePlayerRef.current) {
+      pushEvent(colorOf(gameState.activePlayerId), `— turn ${gameState.turnNumber}`, {
+        actor: nameOf(gameState.activePlayerId),
+      });
+    }
     if (prevActivePlayerRef.current && prevActivePlayerRef.current !== gameState.activePlayerId) {
       pushEvent(colorOf(gameState.activePlayerId), `— turn ${gameState.turnNumber}`, {
         actor: nameOf(gameState.activePlayerId),
@@ -1689,7 +1696,11 @@ export default function MatchScreen() {
         : !!duelCtx.defenderDiamondUsed)
     : isClubResponder
       ? !!(pendingClub?.defenderDiamondUsed)
-      : (gameState.myDiamondPlayed ?? false);
+      : inDeclareBlocks && isDefender
+        // Blocking defender: they react on the ATTACKER's turn, so their own
+        // per-turn flag is stale here — the server tracks the block window.
+        ? !!(gameState as { blockDiamondUsedBy?: string[] }).blockDiamondUsedBy?.includes(myId)
+        : (gameState.myDiamondPlayed ?? false);
 
   const anyCourtHasRoyals =
     (myState?.court.length ?? 0) > 0 ||
