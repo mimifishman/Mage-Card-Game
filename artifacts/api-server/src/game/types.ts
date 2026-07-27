@@ -169,14 +169,19 @@ export type LifeEventKind =
   | "joker_damage"
   | "attack_damage"
   | "heal"
-  | "elimination";
+  | "elimination"
+  /** A Royal was removed from a Court without dealing player damage — a Joker's
+   *  destroy mode, or a Club whose debuff dropped it to 0 health. These take no
+   *  life, so without an explicit event the Royal just vanishes with nothing in
+   *  the log explaining why. */
+  | "royal_destroyed";
 
 export interface LifeEvent {
   seq: number;
   kind: LifeEventKind;
-  /** Player whose life changed (or who was eliminated). */
+  /** Player whose life changed, who was eliminated, or who OWNED the destroyed Royal. */
   targetPlayerId: string;
-  /** Life lost or gained, always positive; 0 for eliminations. */
+  /** Life lost or gained, always positive; 0 for eliminations and royal_destroyed. */
   amount: number;
   /** The target's life total after this event (never below 0). */
   resultingLife: number;
@@ -184,6 +189,8 @@ export interface LifeEvent {
   actorPlayerId?: string;
   /** The card responsible: the Club/Joker/Heart played, or the attacking Royal. */
   sourceCardId?: CardId;
+  /** For kind "royal_destroyed": the Royal that was removed. */
+  destroyedRoyalId?: CardId;
 }
 
 export type Zone = "deck" | "mine" | "abyss" | "hand" | "court";

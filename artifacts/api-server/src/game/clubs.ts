@@ -69,14 +69,32 @@ function applyDebuffToRoyal(
 
   if (!finalRoyal || effectiveHealth(finalRoyal) <= 0) {
     const result = destroyRoyalToAbyss(finalTargetPlayer, targetRoyalId, afterCancel.abyss);
-    return ok({
+    const destroyedState: GameState = {
       ...afterCancel,
       abyss: result.abyss,
       players: {
         ...afterCancel.players,
         [targetPlayerId]: result.player,
       },
-    });
+    };
+    // A Club debuff that drops a Royal to <= 0 health kills it with no life
+    // loss (Rule 6) — log it so the removal is attributed rather than silent.
+    // The !finalRoyal case is a pip-cancellation removal, a different mechanic,
+    // so it is left unlogged here.
+    if (finalRoyal) {
+      return ok(
+        pushLifeEvent(destroyedState, {
+          kind: "royal_destroyed",
+          targetPlayerId,
+          amount: 0,
+          resultingLife: result.player.life,
+          actorPlayerId: attackerPlayerId,
+          sourceCardId: clubCardId,
+          destroyedRoyalId: targetRoyalId,
+        }),
+      );
+    }
+    return ok(destroyedState);
   }
 
   return ok(afterCancel);

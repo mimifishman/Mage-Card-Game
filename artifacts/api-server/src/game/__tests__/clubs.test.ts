@@ -1154,3 +1154,36 @@ describe("lethal face-damage response window (Club)", () => {
     expect(getWinner(confirmed.value)).toBe(P1);
   });
 });
+
+describe("Club that kills a Royal logs a royal_destroyed event", () => {
+  it("attributes the debuff-kill instead of the Royal silently vanishing", () => {
+    // KH effective health 3 + 2 - 3 = 2; the 2C debuff removes 2 buffHealth,
+    // dropping it to 0 → destroyed (Rule 6: no life loss).
+    const state = makeState({
+      phase: "respond_to_club",
+      mine: ["10D"],
+      pendingClubDebuff: {
+        attackerPlayerId: P1,
+        clubCardId: "2C",
+        targetPlayerId: P2,
+        targetRoyalId: "KH",
+      },
+      players: {
+        [P1]: makePlayer(P1, { hand: [], vault: { tempBoost: 0, spent: 2 } }),
+        [P2]: makePlayer(P2, {
+          court: [mkRoyal("KH", { buffHealth: 2, damageTaken: 3 })],
+        }),
+      },
+    });
+    const result = confirmClubResponse(state, P2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.court).toHaveLength(0);
+    const ev = result.value.lifeEvents!.at(-1)!;
+    expect(ev.kind).toBe("royal_destroyed");
+    expect(ev.destroyedRoyalId).toBe("KH");
+    expect(ev.sourceCardId).toBe("2C");
+    expect(ev.actorPlayerId).toBe(P1);
+    expect(ev.targetPlayerId).toBe(P2);
+  });
+});

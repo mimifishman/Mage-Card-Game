@@ -578,9 +578,11 @@ export default function MatchScreen() {
           }
           break;
         case "play_joker":
+          // destroy_royal is narrated by the royal_destroyed life event now
+          // (attributed, and it survives rejoins) — don't double-log it here.
           text =
-            a.mode === "destroy_royal" && a.targetRoyalId
-              ? `played a Joker — destroyed ${royalIn(tgt, a.targetRoyalId)}`
+            a.mode === "destroy_royal"
+              ? null
               : `played a Joker — 10 damage to ${nameOf(tgt)}`;
           break;
         case "confirm_declare_blocks": {
@@ -1085,6 +1087,9 @@ export default function MatchScreen() {
     // detailed event lines — skip the generic fallback diff for them.
     const detailedLifeIds = new Set<string>();
     const detailedElimIds = new Set<string>();
+    // Royals covered by a royal_destroyed event, so the generic court-diff
+    // "lost Royal" line below is suppressed for them (no double entry).
+    const detailedDestroyedRoyalIds = new Set<string>();
     for (const ev of newLifeEvents) {
       if (ev.kind === "elimination") {
         // Detailed elimination line: resulting life is always shown so the
@@ -1094,6 +1099,26 @@ export default function MatchScreen() {
           colorOf(ev.targetPlayerId),
           `${ev.targetPlayerId === effectMyId ? "were" : "was"} eliminated (❤ ${ev.resultingLife})`,
           { actor: nameOf(ev.targetPlayerId), tag: "☠" },
+        );
+        continue;
+      }
+      // A Royal removed by a Joker's destroy mode or a lethal Club debuff. It
+      // takes no life, so this is the only thing that explains the Royal
+      // vanishing — narrated with who did it and with what.
+      if ((ev.kind as string) === "royal_destroyed") {
+        const rd = ev as typeof ev & { destroyedRoyalId?: string };
+        if (rd.destroyedRoyalId) detailedDestroyedRoyalIds.add(rd.destroyedRoyalId);
+        const royalLbl = rd.destroyedRoyalId ? cardLabel(rd.destroyedRoyalId) : "a Royal";
+        const src = ev.sourceCardId ? cardLabel(ev.sourceCardId) : undefined;
+        const by = ev.actorPlayerId
+          ? ` — destroyed by ${nameOf(ev.actorPlayerId)}${src ? `'s ${src}` : ""}`
+          : src
+            ? ` — destroyed by a ${src}`
+            : " — destroyed";
+        pushEvent(
+          colorOf(ev.targetPlayerId),
+          `lost ${royalLbl}${by}`,
+          { actor: nameOf(ev.targetPlayerId) },
         );
         continue;
       }
@@ -1138,7 +1163,11 @@ export default function MatchScreen() {
         }
       }
       const nowCourtIds = new Set(p.court.map((r) => r.cardId));
-      const lostRoyals = before.court.filter((r) => !nowCourtIds.has(r.cardId));
+      // Skip Royals a royal_destroyed event already narrated (with attribution);
+      // this generic diff is the fallback for combat losses and old matches.
+      const lostRoyals = before.court.filter(
+        (r) => !nowCourtIds.has(r.cardId) && !detailedDestroyedRoyalIds.has(r.cardId),
+      );
       if (lostRoyals.length > 0) {
         const lostNames = lostRoyals.map(royalStatLabel).join(", ");
         pushEvent(colorOf(id), `lost Royal${lostRoyals.length > 1 ? "s" : ""} ${lostNames}`, {

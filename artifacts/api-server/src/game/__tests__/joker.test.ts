@@ -221,3 +221,19 @@ describe("lethal Joker to the face opens a response window", () => {
     expect(getWinner(confirmed.value)).toBe(P1);
   });
 });
+
+describe("Joker destroy logs a royal_destroyed event", () => {
+  it("records who destroyed which Royal with what, so the removal isn't silent", () => {
+    const state = richState("JOKER1", { court: [mkRoyal("KH", { buffAttack: 4, buffHealth: 4 })] });
+    const result = playJokerDestroyRoyal(state, P1, "JOKER1", P2, "KH");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.players[P2]!.court).toHaveLength(0);
+    const ev = result.value.lifeEvents!.at(-1)!;
+    expect(ev.kind).toBe("royal_destroyed");
+    expect(ev.destroyedRoyalId).toBe("KH");
+    expect(ev.sourceCardId).toBe("JOKER1");
+    expect(ev.actorPlayerId).toBe(P1);
+    expect(ev.targetPlayerId).toBe(P2);
+  });
+});
