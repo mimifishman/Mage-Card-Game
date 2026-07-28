@@ -1051,10 +1051,13 @@ export default function MatchScreen() {
         // Lethal face-burn (Club or Joker) — no Royal target; the blow lands on
         // the player's life once they respond. Avoids parsing a Joker card id
         // as a pip Club below.
+        // The actor is rendered as a separate bold chunk, so the verb has to
+        // agree with it: "You are striking", "AI Mage is striking".
+        const attackerName = nameOf(c.attackerPlayerId);
         pushEvent(
           colorOf(c.attackerPlayerId),
-          `is striking ${clubTargetPoss} life for lethal — respond or accept`,
-          { actor: nameOf(c.attackerPlayerId) },
+          `${attackerName === "You" ? "are" : "is"} striking ${clubTargetPoss} life for lethal — respond or accept`,
+          { actor: attackerName },
         );
       } else {
         // Stats read here are pre-debuff: the play is still pending when this fires.

@@ -13,7 +13,8 @@ import {
   getOpenMatchesForUser,
 } from "../repositories/matchRepository";
 import { ensureBotUser, isBotProviderId } from "../repositories/botRepository";
-import { dispatchAction } from "../game/dispatcher";
+import { dispatchAction, getTurnHolderId } from "../game/dispatcher";
+import { isGameOver } from "../game";
 import { GameActionSchema } from "../game/actions";
 import { buildPlayerView } from "../game/serializer";
 import { sendToUser, broadcastToMatch } from "../ws/manager";
@@ -303,8 +304,30 @@ router.get("/:id/state", async (req: Request, res: Response) => {
       return;
     }
 
-    const view = buildPlayerView(engineState, userId, botUserIds(data));
+    const bots = botUserIds(data);
+    const view = buildPlayerView(engineState, userId, bots);
     res.json({ state: view });
+
+    // Self-heal a stalled bot. The runner is normally driven by the human's
+    // action, so anything that stops the loop mid-turn — a crash, an engine
+    // rejection it can't fall back from, a server restart — leaves the AI
+    // holding priority with nothing left to re-trigger it, and the board sits
+    // on "Waiting for <bot>…" until the player reloads (which re-kicks via the
+    // WebSocket join). The client already polls this endpoint every 15s, so
+    // waking the runner here turns a dead match into a short pause. Costs
+    // nothing when healthy: kickBotRunner no-ops while a loop is live, and the
+    // holder check means we only fire when a bot genuinely owes a move.
+    if (
+      data.match.status === "in_progress" &&
+      bots.length > 0 &&
+      !isGameOver(engineState)
+    ) {
+      const holderId = getTurnHolderId(engineState);
+      if (holderId && bots.includes(holderId)) {
+        req.log.warn({ matchId: id, botId: holderId, phase: engineState.phase }, "Waking stalled bot runner from state poll");
+        kickBotRunner(id, bots);
+      }
+    }
   } catch (err) {
     req.log.error({ err }, "Failed to get match state");
     res.status(500).json({ error: "Failed to get match state" });
