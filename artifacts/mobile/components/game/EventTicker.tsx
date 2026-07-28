@@ -124,6 +124,14 @@ export function RichLine({
   );
 }
 
+/** Flattens a headline to plain text for the collapsed peek: card references
+    keep their label ("K♠") but drop the "⚔3 ♥3" stat block, which is only
+    readable next to a real chip. */
+function peekText(text: string): string {
+  CARD_TOKEN_RE.lastIndex = 0;
+  return text.replace(CARD_TOKEN_RE, (_full, card: string) => card);
+}
+
 /** Rolling match log: shows the last couple of events inline; tap to expand
     the full history. Replaces the old fade-away combat banner so state
     changes are never missable. */
@@ -134,39 +142,51 @@ export default function EventTicker({ events }: EventTickerProps) {
 
   if (events.length === 0) return null;
 
-  const rows = (list: GameEvent[], latestBold: boolean, showSublines = true) =>
-    list.map((ev, i) => (
+  const rows = (list: GameEvent[]) =>
+    list.map((ev) => (
       <Animated.View key={ev.id} entering={FadeIn.duration(250)} style={styles.row}>
         <View style={[styles.dot, { backgroundColor: ev.color }]} />
         <Text style={styles.timestamp}>{formatTime(ev.at)}</Text>
         <View style={styles.body}>
-          <RichLine
-            text={ev.text}
-            actor={ev.actor}
-            actorColor={ev.color}
-            tag={ev.tag}
-            textStyle={i === 0 && latestBold ? styles.textLatest : undefined}
-          />
-          {showSublines &&
-            ev.sublines?.map((line, j) => (
-              <View key={j} style={styles.subline}>
-                <RichLine text={line} />
-              </View>
-            ))}
+          <RichLine text={ev.text} actor={ev.actor} actorColor={ev.color} tag={ev.tag} />
+          {ev.sublines?.map((line, j) => (
+            <View key={j} style={styles.subline}>
+              <RichLine text={line} />
+            </View>
+          ))}
         </View>
       </Animated.View>
     ));
 
   return (
     <>
-      {/* Collapsed inline peek: last two events, no inner ScrollView (it was
-          nested in the board ScrollView and could not scroll on iOS). Tap opens
-          the full log in a Modal, which scrolls freely because it is not nested. */}
+      {/* Collapsed inline peek: the last two headlines, each ONE truncated line.
+          It deliberately does not use RichLine/rows(): that renderer is a
+          wrapping flex row of word- and chip-Views whose height the parent does
+          not reserve, so a headline that wrapped to a second line was drawn on
+          top of the entry below it — the "jumbled" log. Fixed-height plain Text
+          with numberOfLines={1} cannot collide. Chips, stat blocks and the
+          combat sublines all still live in the modal, one tap away. */}
       <Pressable onPress={() => setOpen(true)} style={styles.container}>
-        {/* Headlines only: combat entries carry multi-line `sublines` that
-            overflowed the peek and collided with the panels below. The full
-            detail is one tap away in the modal. */}
-        <View style={styles.collapsedList}>{rows(recent, true, false)}</View>
+        <View style={styles.collapsedList}>
+          {recent.map((ev, i) => (
+            <View key={ev.id} style={styles.peekRow}>
+              <View style={[styles.dot, styles.peekDot, { backgroundColor: ev.color }]} />
+              <Text style={styles.timestamp}>{formatTime(ev.at)}</Text>
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={[styles.peekLine, i === 0 ? styles.textLatest : null]}
+              >
+                {ev.tag ? <Text style={styles.peekTag}>{ev.tag} </Text> : null}
+                {ev.actor ? (
+                  <Text style={[styles.peekActor, { color: ev.color }]}>{ev.actor} </Text>
+                ) : null}
+                {peekText(ev.text)}
+              </Text>
+            </View>
+          ))}
+        </View>
         <Text style={styles.expandHint}>{`log (${events.length}) — tap to open`}</Text>
       </Pressable>
 
@@ -180,7 +200,7 @@ export default function EventTicker({ events }: EventTickerProps) {
               </Pressable>
             </View>
             <ScrollView style={styles.logScroll} contentContainerStyle={styles.logScrollContent}>
-              {rows(all, false)}
+              {rows(all)}
             </ScrollView>
             <Text style={styles.logDismiss}>Tap outside to close</Text>
           </View>
@@ -242,6 +262,9 @@ const chipStyles = StyleSheet.create({
   },
 });
 
+/** One collapsed-peek row: 16px of line box plus a little breathing room. */
+const PEEK_ROW_HEIGHT = 22;
+
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 12,
@@ -299,11 +322,39 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   collapsedList: {
-    maxHeight: 96,
-    // REQUIRED: React Native does not clip children to maxHeight without this.
-    // Without it, long entries spilled out of the peek and overlapped the
-    // panels below, which is what made the log look like a jumbled mess.
+    // Two fixed-height single-line rows. The height is now fully determined by
+    // PEEK_ROW_HEIGHT rather than by how a headline happens to wrap, so nothing
+    // can spill into the panels below. overflow stays as a belt-and-braces clip.
+    height: PEEK_ROW_HEIGHT * 2,
     overflow: "hidden",
+  },
+  peekRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: PEEK_ROW_HEIGHT,
+  },
+  peekDot: {
+    // styles.dot nudges the dot down to meet the first line of a top-aligned
+    // multi-line body; the peek is single-line and centered, so undo that.
+    marginTop: 0,
+  },
+  peekLine: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: "Inter_400Regular",
+    color: Colors.textMuted,
+  },
+  // Nested peek Texts deliberately set no lineHeight — inheriting the parent's
+  // keeps every row exactly one line tall on Android.
+  peekActor: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+  },
+  peekTag: {
+    fontSize: 11,
+    color: "#C89B3C",
   },
   logOverlay: {
     flex: 1,

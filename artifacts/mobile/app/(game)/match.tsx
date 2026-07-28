@@ -110,6 +110,13 @@ function royalStatLabel(r: RoyalStats): string {
   return `${cardLabel(r.cardId)} ${atkStr} ${hpStr}`;
 }
 
+/**
+ * How long the socket may go without delivering a single frame before we treat
+ * it as dead. The server heartbeats every 10s (HEARTBEAT_MS in ws/manager.ts),
+ * so this tolerates two missed ticks before falling back to polling.
+ */
+const WS_SILENCE_MS = 25_000;
+
 // Plain-language names for engine phases — raw ids read as jargon.
 const PHASE_LABELS: Record<string, string> = {
   draw: "Draw",
@@ -178,6 +185,12 @@ export default function MatchScreen() {
   // to a slow safety-net interval. When it's down we poll fast (as before).
   const wsRef = useRef<WebSocket | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  /** Epoch ms of the last frame received on the socket — liveness, not just openness. */
+  const lastWsMessageRef = useRef(0);
+  /** Bumped every time a pushed (WebSocket/poll) state is applied. */
+  const pushSeqRef = useRef(0);
+  /** pushSeqRef as it was when the in-flight action was submitted. */
+  const pushSeqAtSubmitRef = useRef(0);
   // Narrates each resolved action into the match log. Kept in a ref (assigned
   // every render, like playersParamRef) so the long-lived WebSocket onmessage
   // closure always calls the freshest version.
@@ -297,13 +310,41 @@ export default function MatchScreen() {
   });
 
   useEffect(() => {
+    if (!stateData?.state) return;
     // When the socket is live it's the source of truth; ignore the slow-poll
     // snapshots so an in-flight poll can't clobber newer realtime state.
-    if (wsConnected) return;
-    if (stateData?.state) {
-      setGameState(stateData.state);
-    }
+    //
+    // But "live" has to mean receiving, not merely open. A mobile socket can go
+    // half-open — app backgrounded, wifi↔cell handoff — and never fire onclose,
+    // so wsConnected stays true while no frames arrive. That combination is what
+    // froze a real match: the bot confirmed its lethal-response 64ms after the
+    // human's Joker and the server finished the game, but the game_over frame
+    // never landed and this guard suppressed the only other channel, so the
+    // board sat on "Waiting for AI…" until a reload. The human's own moves kept
+    // working (those come back over HTTP), which is exactly why it looked like
+    // "it freezes when the AI plays". Treat a long silence as a dead socket.
+    if (wsConnected && Date.now() - lastWsMessageRef.current < WS_SILENCE_MS) return;
+    pushSeqRef.current += 1;
+    setGameState(stateData.state);
   }, [stateData, wsConnected]);
+
+  // Second half of the same problem: recover realtime, not just the board.
+  // Force-close a socket that has gone quiet so the existing onclose path
+  // reconnects it (and flips wsConnected, re-enabling the 2s poll meanwhile).
+  useEffect(() => {
+    if (!wsConnected) return;
+    const timer = setInterval(() => {
+      if (Date.now() - lastWsMessageRef.current < WS_SILENCE_MS) return;
+      try {
+        wsRef.current?.close();
+      } catch {
+        // onclose/onerror handle the retry
+      }
+      // Poll the clock often so detection is bounded by WS_SILENCE_MS itself
+      // rather than by twice the interval.
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [wsConnected]);
 
   useEffect(() => {
     if (matchData?.players) {
@@ -418,12 +459,16 @@ export default function MatchScreen() {
 
       ws.onopen = () => {
         if (!mounted) return;
+        lastWsMessageRef.current = Date.now();
         setWsConnected(true);
         ws.send(JSON.stringify({ type: "join_match", matchId }));
       };
 
       ws.onmessage = (event) => {
         if (!mounted) return;
+        // Any frame — including the server's "ping" heartbeat — proves the
+        // socket is still delivering. See the silence watchdog above.
+        lastWsMessageRef.current = Date.now();
         try {
           const msg = JSON.parse(event.data as string) as {
             type: string;
@@ -445,6 +490,7 @@ export default function MatchScreen() {
               msg.type === "game_over") &&
             msg.state
           ) {
+            pushSeqRef.current += 1;
             setGameState(msg.state);
           }
           if (msg.type === "game_over") {
@@ -1051,10 +1097,13 @@ export default function MatchScreen() {
         // Lethal face-burn (Club or Joker) — no Royal target; the blow lands on
         // the player's life once they respond. Avoids parsing a Joker card id
         // as a pip Club below.
+        // The actor is rendered as a separate bold chunk, so the verb has to
+        // agree with it: "You are striking", "AI Mage is striking".
+        const attackerName = nameOf(c.attackerPlayerId);
         pushEvent(
           colorOf(c.attackerPlayerId),
-          `is striking ${clubTargetPoss} life for lethal — respond or accept`,
-          { actor: nameOf(c.attackerPlayerId) },
+          `${attackerName === "You" ? "are" : "is"} striking ${clubTargetPoss} life for lethal — respond or accept`,
+          { actor: attackerName },
         );
       } else {
         // Stats read here are pre-debuff: the play is still pending when this fires.
@@ -1322,8 +1371,20 @@ export default function MatchScreen() {
 
   const { mutate: submitAction, isPending: isSubmitting, reset: resetSubmit } = useSubmitGameAction({
     mutation: {
+      onMutate: () => {
+        pushSeqAtSubmitRef.current = pushSeqRef.current;
+      },
       onSuccess: (data) => {
-        setGameState(data.state);
+        // `data.state` is the board as it stood the instant OUR action resolved.
+        // The bot runner acts immediately after — measured at 64ms in a real
+        // match — so its state_update can land on the socket BEFORE this
+        // response finishes resolving. Applying it then would overwrite the
+        // newer board with the older one and strand the game. Only take it if
+        // nothing newer arrived while the request was in flight. (Only one
+        // action is ever in flight: every control is disabled by isSubmitting.)
+        if (pushSeqRef.current === pushSeqAtSubmitRef.current) {
+          setGameState(data.state);
+        }
         setSelectedCardId(null);
         setAbyssPickerAction(null);
         setArmedAction(null);
