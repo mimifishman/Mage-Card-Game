@@ -1118,15 +1118,17 @@ describe("bot defends a lethal face-burn", () => {
     expect(candidates.some((a) => a.type === "confirm_club_response")).toBe(true);
   });
 
-  // Regression for a real match (a427fd1d, turn 30, 2026-07-28): the human
-  // played a lethal Joker at the bot's face and the bot answered with
-  // confirm_club_response — accepting death — while holding 6H and AH with
-  // ample Vault. 6H takes it to 16, eats the 10, and leaves it alive at 6.
+  // Forward guard, not a regression: in the match that prompted it (a427fd1d,
+  // turn 30) the bot accepted a lethal face-Joker, but hands_snapshot showed its
+  // hand was EMPTY, so confirming was its only legal move and it played
+  // correctly. The interesting case — holding a Heart that actually saves you —
+  // was therefore never covered, so cover it here.
   //
   // Offering the candidate is not enough; the SCORER has to prefer it. Dying
-  // should settle to -WIN_SCORE and healing to a finite score, so this ought to
-  // be a landslide. If it is not, the survival path is broken somewhere between
-  // enumeration and sampleByScore.
+  // settles to -WIN_SCORE (settleForScoring auto-confirms the window and the
+  // bot is eliminated) while healing settles to a finite score, so this should
+  // be a landslide. If it ever goes red, the survival path is broken somewhere
+  // between enumeration and sampleByScore.
   it("heals instead of accepting a survivable lethal face-burn", () => {
     const state = makeState({
       phase: "respond_to_club",
@@ -1160,8 +1162,8 @@ describe("bot defends a lethal face-burn", () => {
   });
 
   it("survives the burn after healing", () => {
-    // Guards the premise of the test above: 6H really is a save, so a bot that
-    // confirms instead is misplaying rather than choosing between two deaths.
+    // Guards the premise of the test above: 6H really is a save, so a red
+    // result there means a misplay and not a choice between two deaths.
     const state = makeState({
       phase: "respond_to_club",
       activePlayerId: P1,
