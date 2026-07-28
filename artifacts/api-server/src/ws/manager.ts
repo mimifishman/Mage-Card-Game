@@ -19,6 +19,17 @@ export interface WsClient {
 const clients = new Map<WebSocket, WsClient>();
 const matchRooms = new Map<string, Set<WebSocket>>();
 
+/**
+ * Application-level heartbeat. Without it the socket is silent whenever nobody
+ * is acting, so a client cannot tell "quiet game" from "socket died" — and a
+ * mobile socket can go half-open (app backgrounded, wifi↔cell handoff) without
+ * ever closing. A steady tick makes silence meaningful, so the client can time
+ * a dead socket out and fall back to polling instead of showing a frozen board.
+ * A protocol-level ws.ping() would not do: React Native's WebSocket never
+ * surfaces pong frames to JS.
+ */
+const HEARTBEAT_MS = 10_000;
+
 export function createWsServer(httpServer: Server): WebSocketServer {
   const wss = new WebSocketServer({
     server: httpServer,
@@ -37,6 +48,21 @@ export function createWsServer(httpServer: Server): WebSocketServer {
       ws.close(1011, "Internal error");
     });
   });
+
+  const heartbeat = setInterval(() => {
+    const frame = JSON.stringify({ type: "ping", at: Date.now() });
+    for (const ws of clients.keys()) {
+      if (ws.readyState !== WebSocket.OPEN) continue;
+      try {
+        ws.send(frame);
+      } catch {
+        // A send failure means the socket is going away; its close handler cleans up.
+      }
+    }
+  }, HEARTBEAT_MS);
+  // Don't hold the process open just for the heartbeat.
+  heartbeat.unref?.();
+  wss.on("close", () => clearInterval(heartbeat));
 
   return wss;
 }
