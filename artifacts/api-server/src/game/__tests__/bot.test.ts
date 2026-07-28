@@ -1117,6 +1117,81 @@ describe("bot defends a lethal face-burn", () => {
     expect(heal, "expected a discard_heart_to_heal candidate for 5H").toBeDefined();
     expect(candidates.some((a) => a.type === "confirm_club_response")).toBe(true);
   });
+
+  // Regression for a real match (a427fd1d, turn 30, 2026-07-28): the human
+  // played a lethal Joker at the bot's face and the bot answered with
+  // confirm_club_response — accepting death — while holding 6H and AH with
+  // ample Vault. 6H takes it to 16, eats the 10, and leaves it alive at 6.
+  //
+  // Offering the candidate is not enough; the SCORER has to prefer it. Dying
+  // should settle to -WIN_SCORE and healing to a finite score, so this ought to
+  // be a landslide. If it is not, the survival path is broken somewhere between
+  // enumeration and sampleByScore.
+  it("heals instead of accepting a survivable lethal face-burn", () => {
+    const state = makeState({
+      phase: "respond_to_club",
+      activePlayerId: P1,
+      turnNumber: 30,
+      // 26 Vault available — the heal costs 6.
+      mine: ["10D", "9D", "7D"],
+      pendingClubDebuff: {
+        attackerPlayerId: P1,
+        clubCardId: "JOKER1",
+        targetPlayerId: BOT,
+        faceDamage: { sourceCardId: "JOKER1", amount: 10 },
+      },
+      players: {
+        [P1]: makePlayer(P1, { life: 17, court: [mkRoyal("KH")] }),
+        [BOT]: makePlayer(BOT, {
+          life: 10,
+          hand: ["10S", "5C", "AH", "6H", "3C", "8C"],
+          court: [mkRoyal("JS"), mkRoyal("JH")],
+        }),
+      },
+    });
+
+    for (const seed of [1, 2, 3, 42, 1337]) {
+      const action = chooseBotAction(state, BOT, { rng: createRng(seed) });
+      expect(
+        action.type,
+        `seed ${seed}: bot accepted lethal instead of healing (picked ${JSON.stringify(action)})`,
+      ).toBe("discard_heart_to_heal");
+    }
+  });
+
+  it("survives the burn after healing", () => {
+    // Guards the premise of the test above: 6H really is a save, so a bot that
+    // confirms instead is misplaying rather than choosing between two deaths.
+    const state = makeState({
+      phase: "respond_to_club",
+      activePlayerId: P1,
+      mine: ["10D", "9D", "7D"],
+      pendingClubDebuff: {
+        attackerPlayerId: P1,
+        clubCardId: "JOKER1",
+        targetPlayerId: BOT,
+        faceDamage: { sourceCardId: "JOKER1", amount: 10 },
+      },
+      players: {
+        [P1]: makePlayer(P1),
+        [BOT]: makePlayer(BOT, { life: 10, hand: ["6H"] }),
+      },
+    });
+
+    const healed = dispatchAction(state, BOT, {
+      type: "discard_heart_to_heal",
+      heartCardId: "6H",
+    });
+    expect(healed.ok, healed.ok ? "" : healed.error).toBe(true);
+    if (!healed.ok) return;
+    expect(healed.value.players[BOT]!.life).toBe(16);
+
+    const confirmed = dispatchAction(healed.value, BOT, { type: "confirm_club_response" });
+    expect(confirmed.ok, confirmed.ok ? "" : confirmed.error).toBe(true);
+    if (!confirmed.ok) return;
+    expect(confirmed.value.players[BOT]!.life).toBe(6);
+    expect(confirmed.value.players[BOT]!.isEliminated).toBe(false);
+  });
 });
 
 describe("bot uses its Diamond action while blocking", () => {
