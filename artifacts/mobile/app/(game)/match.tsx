@@ -1748,7 +1748,11 @@ export default function MatchScreen() {
 
   // ---- Who is the game waiting on? One rule for every seat's ring/chip. ----
   const waitingOn: Record<string, string> = {};
-  if (inDuel && duelCtx) {
+  if (gameOverReveal) {
+    // Decided game: nobody is "up". The final state still carries a phase and
+    // an activePlayerId, so without this the last mover keeps a live turn ring
+    // and a "PLAYING"/"RESPONDING" chip while the results banner is up.
+  } else if (inDuel && duelCtx) {
     const holder = phase === "duel_attacker_turn" ? duelCtx.attackerPlayerId : duelCtx.defenderPlayerId;
     waitingOn[holder] = "DUELING";
   } else if (inDeclareBlocks) {
@@ -2494,40 +2498,50 @@ export default function MatchScreen() {
 
           <EventTicker events={events} />
 
-          {/* Compact waiting strips (never push the layout around). */}
-          {!isMyTurn && !inDeclareBlocks && !inRespondToClub && !inDuel && !inAssignDamageOrder && !inInterrupt && (
-            <View style={styles.waitingInlineCentered}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.waitingText}>
-                {gameState.activePlayerId === botPlayerId
-                  ? `${activePlayerName} is thinking…`
-                  : `Waiting for ${activePlayerName}…`}
-              </Text>
-            </View>
-          )}
-          {!isMyTurn && inDeclareBlocks && attacksTargetingMe.length === 0 && (
-            <View style={styles.waitingInlineCentered}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.waitingText}>
-                {pendingBlockDefenders?.length
-                  ? `${pendingBlockDefenders.map((id) => nameFor(id)).join(", ")} choosing blocks…`
-                  : "Blocks being chosen…"}
-              </Text>
-            </View>
-          )}
-          {waitingOnOtherDefenders && (
-            <View style={styles.waitingInlineCentered}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.waitingText}>
-                Blocks sent — waiting for {(pendingBlockDefenders ?? []).map((id) => nameFor(id)).join(", ")}…
-              </Text>
-            </View>
-          )}
-          {inAssignDamageOrder && duelCtx && myId !== duelCtx.attackerPlayerId && (
-            <View style={styles.waitingInlineCentered}>
-              <ActivityIndicator size="small" color={Colors.textMuted} />
-              <Text style={styles.waitingText}>Attacker is ordering damage…</Text>
-            </View>
+          {/* Compact waiting strips (never push the layout around).
+              All of them are suppressed once the game is decided: the phase and
+              activePlayerId in the final state still point at whoever was "up"
+              when the killing blow landed, so without this the board sat under
+              the results banner claiming "AI Mage is thinking…" / "Waiting for
+              <opponent>…" for a game that was already over. Same `gameOverReveal`
+              gate the action dock, hand tray and Abyss picker already use. */}
+          {!gameOverReveal && (
+            <>
+              {!isMyTurn && !inDeclareBlocks && !inRespondToClub && !inDuel && !inAssignDamageOrder && !inInterrupt && (
+                <View style={styles.waitingInlineCentered}>
+                  <ActivityIndicator size="small" color={Colors.textMuted} />
+                  <Text style={styles.waitingText}>
+                    {gameState.activePlayerId === botPlayerId
+                      ? `${activePlayerName} is thinking…`
+                      : `Waiting for ${activePlayerName}…`}
+                  </Text>
+                </View>
+              )}
+              {!isMyTurn && inDeclareBlocks && attacksTargetingMe.length === 0 && (
+                <View style={styles.waitingInlineCentered}>
+                  <ActivityIndicator size="small" color={Colors.textMuted} />
+                  <Text style={styles.waitingText}>
+                    {pendingBlockDefenders?.length
+                      ? `${pendingBlockDefenders.map((id) => nameFor(id)).join(", ")} choosing blocks…`
+                      : "Blocks being chosen…"}
+                  </Text>
+                </View>
+              )}
+              {waitingOnOtherDefenders && (
+                <View style={styles.waitingInlineCentered}>
+                  <ActivityIndicator size="small" color={Colors.textMuted} />
+                  <Text style={styles.waitingText}>
+                    Blocks sent — waiting for {(pendingBlockDefenders ?? []).map((id) => nameFor(id)).join(", ")}…
+                  </Text>
+                </View>
+              )}
+              {inAssignDamageOrder && duelCtx && myId !== duelCtx.attackerPlayerId && (
+                <View style={styles.waitingInlineCentered}>
+                  <ActivityIndicator size="small" color={Colors.textMuted} />
+                  <Text style={styles.waitingText}>Attacker is ordering damage…</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
 
