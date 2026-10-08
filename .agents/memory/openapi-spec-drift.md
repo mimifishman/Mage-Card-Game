@@ -19,3 +19,8 @@ shared game/API types), diff the spec's schemas against the corresponding
 TypeScript types in the api-server source. If you touch any type that's exposed
 over the API, update openapi.yaml in the same change and regenerate immediately
 rather than letting it drift further.
+
+**Known current drift (as of 2026-07-28):** `PendingClubDebuff.faceDamage` (and optional
+`targetRoyalId`), `GameState.blockDiamondUsedBy`, and the `royal_destroyed` LifeEvent kind
+(+ `destroyedRoyalId`) exist in `game/types.ts` but NOT in `openapi.yaml`. Mobile reads
+them via casts. Add them to the spec and regenerate before relying on generated types.
