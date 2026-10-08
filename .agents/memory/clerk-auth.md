@@ -71,6 +71,12 @@ hostUri comes from the build.js manifest rewrite), plus the Replit dev
 that domain changes). Dev does not enforce the list;
 production does.
 
+**Status 2026-10-08:** Wix DNS (the domain's DNS host; Namecheap is only the registrar)
+has all 5 Clerk CNAMEs; Clerk shows Frontend API, Account portal and Email verified, SSL
+issuing. The 3 redirect URLs are allowlisted on both instances (Native applications page).
+Production app `app_3H5T5kAA6npEJgKLnW2WuGwFcLh`, dev instance
+`ins_3H5T5lIlF49vUwQrJtWrzhbZKca`, prod instance `ins_3H5XfGQ14I2Zn7sakenSATXq1ib`.
+
 **Testing sign-in:** pre-create a `something+clerk_test@example.com` user via Backend API
 `POST https://api.clerk.com/v1/users` with the dev `sk_test`; email code is `424242`.
 Sign-up has a Turnstile captcha, so don't automate sign-up.
