@@ -1,4 +1,5 @@
 import { motion, useScroll, useTransform } from "framer-motion";
+import { Link } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import iconPath from "../../../mobile/assets/images/icon.png";
 import appStoreBadge from "../assets/app-store-badge.svg";
@@ -224,6 +225,9 @@ export default function Home() {
 
       <footer className="w-full py-8 text-center text-foreground/40 font-serif text-sm border-t border-white/5 z-10 mt-auto">
         <p>Mage Card Game &copy; {new Date().getFullYear()}</p>
+        <p className="mt-2">
+          <Link href="/privacy" className="hover:text-primary underline-offset-4 hover:underline">Privacy Policy</Link>
+        </p>
       </footer>
     </div>
   );
