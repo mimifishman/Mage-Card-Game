@@ -127,6 +127,47 @@ function getExpoPublicReplId() {
   return process.env.REPL_ID || process.env.EXPO_PUBLIC_REPL_ID;
 }
 
+function getClerkPublishableKey() {
+  return (
+    process.env.CLERK_PUBLISHABLE_KEY ||
+    process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+    ""
+  );
+}
+
+// Build-time guardrail: this script only runs for production (published)
+// builds, so the publishable key must be present and be a production
+// (pk_live_...) key. A pk_test_ key means the deployment secret is still
+// synced to the workspace (development) value; an sk_ value means a secret
+// key was pasted into the publishable-key slot (which would expose
+// credentials in the bundle); an empty value would ship a bundle whose
+// auth cannot work at all.
+function assertProductionClerkKey() {
+  const key = getClerkPublishableKey();
+  if (key.startsWith("pk_live_")) return;
+
+  let detail;
+  if (!key) {
+    detail = "CLERK_PUBLISHABLE_KEY is not set";
+  } else if (key.startsWith("pk_test_")) {
+    detail =
+      "CLERK_PUBLISHABLE_KEY is a development-instance key (pk_test_...) — " +
+      "the deployment secret is likely still synced to the workspace value";
+  } else if (key.startsWith("sk_")) {
+    detail =
+      "CLERK_PUBLISHABLE_KEY looks like a SECRET key pasted into the " +
+      "publishable-key slot";
+  } else {
+    detail = 'CLERK_PUBLISHABLE_KEY does not start with "pk_live_"';
+  }
+  exitWithError(
+    `ERROR: ${detail}. This is a production build, so it requires your ` +
+      "pk_live_... key: in the deployment's secrets settings, unsync " +
+      "CLERK_PUBLISHABLE_KEY from the workspace value and paste the " +
+      "pk_live_... value from your Clerk dashboard → API Keys.",
+  );
+}
+
 async function startMetro(expoPublicDomain, expoPublicReplId) {
   const isRunning = await checkMetroHealth();
   if (isRunning) {
@@ -140,7 +181,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
     ...process.env,
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
-    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY || process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || "",
+    EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: getClerkPublishableKey(),
   };
 
   if (expoPublicReplId) {
@@ -510,6 +551,7 @@ async function main() {
   console.log("Building static Expo Go deployment...");
 
   setupSignalHandlers();
+  assertProductionClerkKey();
 
   const domain = getDeploymentDomain();
   const expoPublicReplId = getExpoPublicReplId();
