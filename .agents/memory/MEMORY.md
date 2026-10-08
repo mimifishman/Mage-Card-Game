@@ -9,5 +9,6 @@
 - [orval codegen rebuild](api-client-codegen-rebuild.md) — after codegen, run `tsc -b lib/api-client-react lib/api-zod` or consumers read stale dist/*.d.ts (phantom type errors).
 - [Clerk auth migration](clerk-auth.md) — now EXTERNAL Clerk (user's own keys); whitelabel proxy wiring removed; don't reintroduce proxy or setupClerkWhitelabelAuth.
 - [Clerk sign-in diagnostics](clerk-signin-diagnostics.md) — needs_client_trust=first-factor email code; published Expo bakes Clerk key at build time, so a dead baked instance = slow load + all logins fail (fix: re-publish, not rollback).
+- [Expo development build](expo-dev-build.md) — Expo Go can't open SDK 54; use the EAS `development` / `development-simulator` profiles (expo-dev-client, APP_VARIANT=development → ".dev" ids). TallyBill Clerk lessons: bake pk into eas.json, custom Clerk domain for prod, allowlist native redirects.
 - [Expo web + Playwright test harness](expo-playwright-harness.md) — runTest can render a blank page for this Expo web app even when the app works fine (confirmed via direct screenshot); don't assume a real regression from one failed e2e run alone.
 - [RN `window` global pitfall](rn-window-global-pitfall.md) — `typeof window !== "undefined"` is true on native too; gate web-only browser API usage on `Platform.OS === "web"` as well.
