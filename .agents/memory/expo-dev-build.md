@@ -16,8 +16,8 @@ wall and solved it this way (its commits dee17a2 / 76428d4 / 0018033).
   profile), the app is named "Mage Card Game Dev" and the ids get a `.dev` suffix, so it can
   sit next to a store build. With APP_VARIANT unset, nothing changes.
 - `eas.json` profiles: `development` (phone, internal distribution) and
-  `development-simulator` (iOS Simulator .app). There are no preview/production profiles yet,
-  because no production Clerk key exists to bake in.
+  `development-simulator` (iOS Simulator .app). preview/production profiles now exist (Oct 2026) and bake the live key from `base`;
+  `development` overrides it with the dev pk_test. See clerk-auth.md.
 - The dev build loads JS from Metro (the Replit `dev` script), so EXPO_PUBLIC_* come from
   that script, not from eas.json.
 - `eas init` (needs the user's Expo login) writes `extra.eas.projectId` + `owner` into

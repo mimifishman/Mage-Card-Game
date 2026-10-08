@@ -37,6 +37,40 @@ Auth pane → Configure → Delete Clerk app. The user's Clerk dashboard must al
 production origin for cross-origin flows. Note: `@clerk/clerk-expo` v2 silently ignores
 `proxyUrl` on native builds — relevant only if a proxy setup ever returns.
 
+## Instances, domains, and where each key lives (Oct 2026)
+| Use | Clerk instance | Frontend API host | Keys live in |
+|---|---|---|---|
+| Development | "Mage Card Game" dev instance (app id `aac_3H5T5liWQtfjRkulmH1fLSVGP7c`) | `neat-fly-47.clerk.accounts.dev` | Replit **workspace** secrets `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` (pk_test/sk_test); eas.json `development` profile env (pk only) |
+| Production | Production instance of the same Clerk app | `clerk.magecardgame.com` (CNAME, like TallyBill's `clerk.tallybill.app`) | Replit **deployment** secrets, **unsynced** from workspace (pk_live/sk_live); eas.json `base` env (pk only) |
+
+The live publishable key is deterministic: `pk_live_` + unpadded base64 of
+`clerk.magecardgame.com$` = `pk_live_Y2xlcmsubWFnZWNhcmRnYW1lLmNvbSQ`. If the production
+domain ever changes, eas.json `base` must change with it.
+
+**Guards (ported from TallyBill):**
+- `artifacts/api-server/src/lib/clerkKeyValidation.ts` → `assertClerkKeysForProduction`,
+  called at the top of `app.ts`. With `NODE_ENV=production` (set in
+  `.replit-artifact/artifact.toml`) the server exits on missing, swapped, or `*_test_` keys.
+- `artifacts/mobile/scripts/build.js` (the Replit publish build) aborts unless the
+  publishable key starts with `pk_live_`.
+- Consequence: **republishing on Replit fails until the deployment secrets hold the live
+  pair.** That is on purpose — before this, the published app shipped the dev instance.
+
+**Native OAuth redirects** must be allowlisted on BOTH instances (Dashboard → SSO redirect
+URLs, or Backend API `POST /v1/redirect_urls`). `useOAuth` uses
+`makeRedirectUri({ path: "oauth-native-callback" })`, so the list is:
+`magecardgame://oauth-native-callback` (dev and store builds),
+`exp://mage-card-game.replit.app/ios/--/oauth-native-callback` and
+`exp://mage-card-game.replit.app/android/--/oauth-native-callback` (published static build;
+hostUri comes from the build.js manifest rewrite), plus the Replit dev
+`exp://<REPLIT_EXPO_DEV_DOMAIN>/--/oauth-native-callback` on the dev instance (re-add if
+that domain changes). Dev does not enforce the list;
+production does.
+
+**Testing sign-in:** pre-create a `something+clerk_test@example.com` user via Backend API
+`POST https://api.clerk.com/v1/users` with the dev `sk_test`; email code is `424242`.
+Sign-up has a Turnstile captcha, so don't automate sign-up.
+
 ## Env var forwarding
 The mobile dev script in `artifacts/mobile/package.json` forwards
 `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=$CLERK_PUBLISHABLE_KEY` at startup so Metro inlines it.

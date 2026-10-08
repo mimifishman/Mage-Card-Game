@@ -6,7 +6,8 @@
   "build": {
     "base": {
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "mage-card-game.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "mage-card-game.replit.app",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsubWFnZWNhcmRnYW1lLmNvbSQ"
       }
     },
     "development": {
@@ -14,7 +15,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "development"
+        "APP_VARIANT": "development",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bmVhdC1mbHktNDcuY2xlcmsuYWNjb3VudHMuZGV2JA"
       }
     },
     "development-simulator": {
@@ -22,6 +24,14 @@
       "ios": {
         "simulator": true
       }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal"
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true
     }
   }
 }
