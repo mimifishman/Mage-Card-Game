@@ -38,6 +38,10 @@ production origin for cross-origin flows. Note: `@clerk/clerk-expo` v2 silently 
 `proxyUrl` on native builds — relevant only if a proxy setup ever returns.
 
 ## Instances, domains, and where each key lives (Oct 2026)
+Both instances belong to the "Mage Card Game" application in the **client's Clerk
+account** (dashboard.clerk.com), confirmed by the user 2026-10-08. That is the intended
+owner. The only goal is "no Replit-managed Clerk"; do not move the app to another account.
+
 | Use | Clerk instance | Frontend API host | Keys live in |
 |---|---|---|---|
 | Development | "Mage Card Game" dev instance (app id `aac_3H5T5liWQtfjRkulmH1fLSVGP7c`) | `neat-fly-47.clerk.accounts.dev` | Replit **workspace** secrets `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` (pk_test/sk_test); eas.json `development` profile env (pk only) |
