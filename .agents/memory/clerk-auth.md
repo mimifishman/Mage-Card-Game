@@ -77,6 +77,20 @@ issuing. The 3 redirect URLs are allowlisted on both instances (Native applicati
 Production app `app_3H5T5kAA6npEJgKLnW2WuGwFcLh`, dev instance
 `ins_3H5T5lIlF49vUwQrJtWrzhbZKca`, prod instance `ins_3H5XfGQ14I2Zn7sakenSATXq1ib`.
 
+**Social sign-in on production (set up 2026-10-08/09, client accounts):**
+- Google: Cloud project `mage-card-game-511015` (owner `ioedu.org@gmail.com`), consent screen
+  External + **In production**, Web client "Clerk production"
+  (`663296833221-afm1jch2afcl1n4tpgpd6rii4mb7kudi.apps.googleusercontent.com`), redirect
+  `https://clerk.magecardgame.com/v1/oauth_callback`. Privacy link
+  `https://app.magecardgame.com/landing/privacy`. Secret lives only in Clerk.
+- Apple: team `LN6694N33Y` (Account Holder Jason Kipp). App ID `com.magecardgame` (Sign In
+  with Apple, primary), Services ID `com.magecardgame.signin` (domain `clerk.magecardgame.com`,
+  return URL above), email source `bounces+111461484@clkmail.magecardgame.com`, key
+  "Mage Clerk Sign In 2" Key ID `R2982YBN2B` (the .p8 lives only in Clerk). Key `9KPM26W9DD`
+  was never downloaded and is unused.
+- `app.magecardgame.com` → the Replit deployment (A `34.111.179.208` + `replit-verify` TXT in
+  Wix DNS). The landing site's privacy page is `/landing/privacy`.
+
 **Testing sign-in:** pre-create a `something+clerk_test@example.com` user via Backend API
 `POST https://api.clerk.com/v1/users` with the dev `sk_test`; email code is `424242`.
 Sign-up has a Turnstile captcha, so don't automate sign-up.
