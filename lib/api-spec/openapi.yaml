@@ -43,6 +43,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthUserEnvelope"
+  /auth/account:
+    delete:
+      tags: [Auth]
+      operationId: deleteAccount
+      summary: Permanently delete the signed-in user's account
+      description: >
+        Deletes the caller's sign-in account and game history. Solo matches are
+        deleted; matches shared with other players are ended (an in-progress 1v1
+        is forfeited to the opponent) and kept with the caller anonymised.
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+      responses:
+        "204":
+          description: Account deleted.
+        "401":
+          description: Not signed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Database step failed; nothing was deleted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Game data was deleted but the sign-in account was not; retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /login:
     get:
       tags: [Auth]

@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 
 const CONTACT_EMAIL = "ioedu.org@gmail.com";
-const LAST_UPDATED = "October 8, 2026";
+const LAST_UPDATED = "October 11, 2026";
 
 const sections: { title: string; body: React.ReactNode }[] = [
   {
@@ -101,20 +101,30 @@ const sections: { title: string; body: React.ReactNode }[] = [
     body: (
       <p>
         We keep your account and game history while your account exists. When you delete
-        your account, we delete your profile and remove your personal details from game
-        records within 30 days, except where the law requires us to keep something longer.
+        your account in the app, we delete your sign-in account, your profile and your
+        solo matches right away. Matches you played with other people stay in their
+        history, but your name and sign-in details are removed from them. If you ask us
+        by email instead, we do the same within 30 days, except where the law requires us
+        to keep something longer.
       </p>
     ),
   },
   {
     title: "Your choices and rights",
     body: (
-      <p>
-        You can ask to see, correct or delete your information, or delete your account, by
-        emailing <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. You can also
-        remove the game&rsquo;s access from your Google or Apple account settings at any
-        time.
-      </p>
+      <>
+        <p>
+          You can delete your account at any time from inside the app: in the lobby, tap the
+          settings icon, then <strong>Delete account</strong>. This deletes your account and
+          game history and cannot be undone.
+        </p>
+        <p>
+          You can also ask to see, correct or delete your information, or delete your
+          account, by emailing <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. You
+          can also remove the game&rsquo;s access from your Google or Apple account settings
+          at any time.
+        </p>
+      </>
     ),
   },
   {

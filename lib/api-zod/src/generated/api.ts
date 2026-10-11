@@ -36,6 +36,18 @@ export const GetCurrentAuthUserResponse = zod.object({
 });
 
 /**
+ * Deletes the caller's sign-in account and game history. Solo matches are deleted; matches shared with other players are ended (an in-progress 1v1 is forfeited to the opponent) and kept with the caller anonymised.
+
+ * @summary Permanently delete the signed-in user's account
+ */
+export const DeleteAccountHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Bearer session token for mobile clients."),
+});
+
+/**
  * @summary Start the browser OIDC login flow
  */
 export const BeginBrowserLoginQueryParams = zod.object({
