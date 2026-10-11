@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Mage Card Game",
-    "slug": "mobile",
+    "slug": "mage-card-game",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -43,6 +43,16 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": "https://replit.com/",
+        "headOrigin": "https://replit.com/"
+      },
+      "eas": {
+        "projectId": "847317d2-8f3d-41f7-8ea8-e3eac4d06eb0"
+      }
+    },
+    "owner": "mimifishman"
   }
 }
