@@ -30,6 +30,7 @@ import { useAuth } from "@/lib/auth";
 import Colors from "@/constants/colors";
 import { Gradients } from "@/constants/theme";
 import { BOT_PERSONAS, type BotPersonaOption } from "@/constants/botPersonas";
+import { AccountMenu } from "@/components/AccountMenu";
 
 const PERSONA_ICONS: Record<BotPersonaOption["icon"], keyof typeof MaterialCommunityIcons.glyphMap> = {
   fire: "fire",
@@ -46,6 +47,7 @@ export default function LobbyScreen() {
   const [showJoinInput, setShowJoinInput] = useState(false);
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
   const [pendingPersona, setPendingPersona] = useState<BotPersonaOption["key"] | null>(null);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   const createScale = useSharedValue(1);
   const joinScale = useSharedValue(1);
@@ -201,6 +203,17 @@ export default function LobbyScreen() {
     );
   };
 
+  const handleAccountDeleted = async () => {
+    setShowAccountMenu(false);
+    try {
+      // The server already deleted the Clerk user, so its session may be gone too.
+      await logout();
+    } catch (err) {
+      console.warn("Sign-out after account deletion failed:", err);
+    }
+    router.replace("/(auth)/login");
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -216,14 +229,35 @@ export default function LobbyScreen() {
           <Text style={styles.welcomeLabel}>Welcome back</Text>
           <Text style={styles.playerName}>{user?.displayName ?? "Mage"}</Text>
         </View>
-        <Pressable
-          onPress={logout}
-          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.6 }]}
-          testID="logout-button"
-        >
-          <Ionicons name="log-out-outline" size={22} color={Colors.textSecondary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => setShowAccountMenu(true)}
+            style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.6 }]}
+            accessibilityLabel="Account settings"
+            testID="account-button"
+          >
+            <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={logout}
+            style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.6 }]}
+            testID="logout-button"
+          >
+            <Ionicons name="log-out-outline" size={22} color={Colors.textSecondary} />
+          </Pressable>
+        </View>
       </View>
+
+      <AccountMenu
+        visible={showAccountMenu}
+        displayName={user?.displayName ?? "Mage"}
+        onClose={() => setShowAccountMenu(false)}
+        onSignOut={() => {
+          setShowAccountMenu(false);
+          logout();
+        }}
+        onDeleted={handleAccountDeleted}
+      />
 
       <ScrollView
         style={styles.scrollBody}
@@ -476,6 +510,11 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.textPrimary,
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   logoutBtn: {
     padding: 8,
