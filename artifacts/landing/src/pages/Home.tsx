@@ -227,6 +227,8 @@ export default function Home() {
         <p>Mage Card Game &copy; {new Date().getFullYear()}</p>
         <p className="mt-2">
           <Link href="/privacy" className="hover:text-primary underline-offset-4 hover:underline">Privacy Policy</Link>
+          {" · "}
+          <Link href="/support" className="hover:text-primary underline-offset-4 hover:underline">Support</Link>
         </p>
       </footer>
     </div>
