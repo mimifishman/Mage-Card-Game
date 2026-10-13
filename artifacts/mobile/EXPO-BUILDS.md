@@ -51,7 +51,7 @@ When you open the dev app, the loader gets the game code from Replit. So:
 | | iPhone | Android |
 |---|---|---|
 | Who can install | only phones on Apple's list | any phone with the link |
-| Add a new phone | yes, see [IOS-BUILDS.md](IOS-BUILDS.md) | no, just send the link |
+| Add a new phone | yes, see "Add a new iPhone" below | no, just send the link |
 | First-time phone setting | turn on Developer Mode | allow installs from the browser |
 
 ---
@@ -139,12 +139,70 @@ The dev app shows the code that is on **Replit**, not the code on GitHub.
 
 ---
 
+## Add a new iPhone
+
+An iPhone app from Expo opens only on iPhones that are on Apple's list.
+To add a phone, you put it on the list, then make a new build. Old builds do
+not open on the new phone.
+
+Android phones do not need this. Just send them the link.
+
+### Step 1: get the phone's ID
+
+Every iPhone has an ID called a **UDID** (a long code of letters and numbers).
+
+- **Easy way:** ask Claude "register a new iPhone". Claude gives you a link.
+  The phone owner opens the link on the iPhone in **Safari** and follows the
+  steps. The UDID then shows on Expo.
+- **With a Mac and a cable:** plug the iPhone into the Mac. Open **Finder** and
+  click the iPhone in the left side. Click the grey text under the phone name
+  until it shows **UDID**. Right-click it and copy it.
+
+### Step 2: add the phone on Apple's website
+
+Use the Chrome window where Jason's Apple account is signed in.
+
+1. Open https://developer.apple.com/account/resources/devices/list
+2. Click the blue **+**.
+3. Platform: **iOS**. Device Name: the owner's name, for example "Dana iPhone".
+   Device ID: paste the UDID.
+4. Click **Continue**, then **Register**.
+
+### Step 3: put the phone in both app profiles
+
+A profile is Apple's list of phones that may open one app. There is one per
+app.
+
+1. Open https://developer.apple.com/account/resources/profiles/list
+2. Click **Mage Card Game Ad Hoc** → **Edit**.
+3. Tick the new phone. Click **Save**. Click **Download**.
+4. Do the same for **Mage Card Game Dev Ad Hoc**.
+
+### Step 4: give the new profiles to Expo
+
+Ask Claude: "upload the new iPhone profiles to Expo". This step needs the
+Terminal, so Claude does it.
+
+### Step 5: make new builds and install
+
+1. Make a new test app build (and dev app build, if they need it). See "Each
+   time: make the test app" above. Choose Platform **iOS**.
+2. Send the build page link to the phone owner. They install it as in
+   "Install on the phone".
+
+Apple allows up to 100 iPhones per year.
+
+---
+
 ## If something goes wrong
 
 - **Dev app says "Failed to connect"**: Replit went to sleep. Open the project
   on Replit and run the two workflows again.
 - **iPhone: "Install" does nothing, or the app will not open**: the iPhone is
-  not on Apple's list. See "Add another iPhone" in [IOS-BUILDS.md](IOS-BUILDS.md).
+  not on Apple's list. See "Add a new iPhone" above.
+- **Website build fails at "Install dependencies"**: Expo used an old build
+  machine. `eas.json` names the machine (`image`). After an Expo SDK upgrade,
+  ask Claude to update it.
 - **Android: "App not installed"**: an older copy with a different signing key
   is on the phone. Delete the old app, then install again.
 - **The Builds page shows only one app**: clear the filters, or pick "All".

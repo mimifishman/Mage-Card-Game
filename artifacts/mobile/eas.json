@@ -6,10 +6,10 @@
   "build": {
     "base": {
       "ios": {
-        "image": "auto"
+        "image": "macos-sequoia-15.6-xcode-26.0"
       },
       "android": {
-        "image": "auto"
+        "image": "ubuntu-24.04-jdk-17-ndk-r27b"
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "mage-card-game.replit.app",
