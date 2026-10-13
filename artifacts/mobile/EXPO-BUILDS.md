@@ -56,9 +56,11 @@ When you open the dev app, the loader gets the game code from Replit. So:
 
 ---
 
-## The easy way: websites only
+## Make and install the apps
 
-You use three websites: **GitHub**, **Expo** and **Replit**. No Terminal.
+Most of the time you use only three websites: **GitHub**, **Expo** and
+**Replit**. A few jobs need the Terminal. Their steps are written right where
+you need them.
 
 ### Once only: connect Expo to GitHub
 
@@ -81,8 +83,58 @@ new app with a new name.
 
 Android needs a signing key (the "stamp"). Expo makes it during the first
 Android build of each app. This first build must start from the Terminal, so
-Expo can ask "Generate a new Android Keystore?". Answer **Yes**. See
-"Terminal: make a build" at the end. After that, use the website.
+Expo can ask you "Generate a new Android Keystore?".
+
+1. Get the Terminal ready:
+
+   1. Open the **Terminal** app on the Mac.
+   2. Turn on Node 24:
+
+      ```bash
+      eval "$(fnm env)"; fnm use 24
+      ```
+
+   3. Check the Expo login. It must say `mimifishman`. If not, run
+      `npx eas-cli@latest login`.
+
+      ```bash
+      npx eas-cli@latest whoami
+      ```
+
+   4. Get clean code from `master` in its own folder, `mage-build`.
+      **First time ever** (makes the folder):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
+      ```
+
+      **Every other time** (updates the folder):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
+      ```
+
+   5. Install the packages and go to the app folder (about 1 minute):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
+      ```
+
+   Never change files in `mage-build`. Expo uploads that folder as it is.
+
+2. Start the build. Pick the line for the app:
+
+   ```bash
+   npx eas-cli@latest build --platform android --profile preview
+   ```
+
+   ```bash
+   npx eas-cli@latest build --platform android --profile development
+   ```
+
+3. When it asks "Generate a new Android Keystore?", press **Y**, then **Enter**.
+4. When it shows a link and "See logs", the build is on Expo. You can close
+   the Terminal. From now on, use the website.
 
 iPhone does not need this. Its signing files are already on Expo.
 
@@ -94,18 +146,83 @@ iPhone does not need this. Its signing files are already on Expo.
 2. **Expo:** open https://expo.dev/accounts/mimifishman/projects/mage-card-game/builds
 3. Click **Build from GitHub**.
 4. Choose:
-   - Git ref: `master`
+   - Base directory: `artifacts/mobile`
    - Platform: **iOS** or **Android**
-   - Build profile: `preview`
-5. Start the build. Wait about 15 minutes.
+   - Git ref: `master`
+   - EAS Build profile: type `preview` (the grey "production" is only a
+     sample; never leave it empty)
+   - Environment: **Default**
+5. Click **Confirm**. Wait about 15 minutes.
 6. Do it again with the other platform, if you want both.
-7. Install it (see "Install on the phone" below).
+7. Install it (see "Install on the phone" just below).
 
 ### Each time: make the dev app (development)
 
-Only when the shell changed (see above). Otherwise skip this.
+Only when the shell changed (see "The dev app is a TV"). Otherwise skip this.
 
-Do the same steps as the test app, but choose Build profile `development`.
+Do the same steps as the test app, but type `development` as the EAS Build
+profile.
+
+### If the website build does not work: use the Terminal
+
+1. Get the Terminal ready:
+
+   1. Open the **Terminal** app on the Mac.
+   2. Turn on Node 24:
+
+      ```bash
+      eval "$(fnm env)"; fnm use 24
+      ```
+
+   3. Check the Expo login. It must say `mimifishman`. If not, run
+      `npx eas-cli@latest login`.
+
+      ```bash
+      npx eas-cli@latest whoami
+      ```
+
+   4. Get clean code from `master` in its own folder, `mage-build`.
+      **First time ever** (makes the folder):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
+      ```
+
+      **Every other time** (updates the folder):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
+      ```
+
+   5. Install the packages and go to the app folder (about 1 minute):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
+      ```
+
+   Never change files in `mage-build`. Expo uploads that folder as it is.
+
+2. Start the build. Pick the line you need:
+
+   ```bash
+   npx eas-cli@latest build --platform ios --profile preview
+   ```
+
+   ```bash
+   npx eas-cli@latest build --platform ios --profile development
+   ```
+
+   ```bash
+   npx eas-cli@latest build --platform android --profile preview
+   ```
+
+   ```bash
+   npx eas-cli@latest build --platform android --profile development
+   ```
+
+3. If it asks about an Apple login, answer **No**.
+4. When it shows a link and "See logs", the build is on Expo. You can close
+   the Terminal.
 
 ### Install on the phone
 
@@ -153,12 +270,75 @@ Android phones do not need this. Just send them the link.
 ### Step 1: get the phone's ID
 
 Every iPhone has an ID called a **UDID** (a long code of letters and numbers).
+Pick one way.
 
-- **With a link (the phone can be far away):** see "Terminal: get an iPhone's
-  ID" at the end. You send the owner a link. They open it on the iPhone.
-- **With a Mac and a cable:** plug the iPhone into the Mac. Open **Finder** and
-  click the iPhone in the left side. Click the grey text under the phone name
-  until it shows **UDID**. Right-click it and copy it.
+**Way A: with a Mac and a cable** (the phone is with you)
+
+1. Plug the iPhone into the Mac.
+2. Open **Finder**. Click the iPhone in the left side.
+3. Click the grey text under the phone name until it shows **UDID**.
+4. Right-click it and copy it.
+
+**Way B: with a link** (the phone can be far away)
+
+1. Get the Terminal ready:
+
+   1. Open the **Terminal** app on the Mac.
+   2. Turn on Node 24:
+
+      ```bash
+      eval "$(fnm env)"; fnm use 24
+      ```
+
+   3. Check the Expo login. It must say `mimifishman`. If not, run
+      `npx eas-cli@latest login`.
+
+      ```bash
+      npx eas-cli@latest whoami
+      ```
+
+   4. Get clean code from `master` in its own folder, `mage-build`.
+      **First time ever** (makes the folder):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
+      ```
+
+      **Every other time** (updates the folder):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
+      ```
+
+   5. Install the packages and go to the app folder (about 1 minute):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
+      ```
+
+   Never change files in `mage-build`. Expo uploads that folder as it is.
+
+2. Run:
+
+   ```bash
+   npx eas-cli@latest device:create
+   ```
+
+3. Answer the questions:
+   - "Log in to your Apple account?": **No**.
+   - Apple Team ID: `LN6694N33Y`.
+   - Team type, if it asks: **Individual**.
+   - "How would you like to register your devices?": **Website**.
+4. It shows a link and a QR code. Send the link to the phone owner.
+5. The owner opens the link on the iPhone in **Safari**. They install the small
+   profile it offers (Settings → **Profile Downloaded** → **Install**).
+6. See the phone's ID:
+
+   ```bash
+   npx eas-cli@latest device:list
+   ```
+
+   The new phone shows with its **UDID**. Copy it.
 
 ### Step 2: add the phone on Apple's website
 
@@ -180,16 +360,133 @@ app.
 3. Tick the new phone. Click **Save**. Click **Download**.
 4. Do the same for **Mage Card Game Dev Ad Hoc**.
 
+The two files go to your **Downloads** folder. They end in `.mobileprovision`.
+
 ### Step 4: give the new profiles to Expo
 
-See "Terminal: upload new iPhone profiles to Expo" at the end.
+1. Get the Terminal ready:
+
+   1. Open the **Terminal** app on the Mac.
+   2. Turn on Node 24:
+
+      ```bash
+      eval "$(fnm env)"; fnm use 24
+      ```
+
+   3. Check the Expo login. It must say `mimifishman`. If not, run
+      `npx eas-cli@latest login`.
+
+      ```bash
+      npx eas-cli@latest whoami
+      ```
+
+   4. Get clean code from `master` in its own folder, `mage-build`.
+      **First time ever** (makes the folder):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
+      ```
+
+      **Every other time** (updates the folder):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
+      ```
+
+   5. Install the packages and go to the app folder (about 1 minute):
+
+      ```bash
+      cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
+      ```
+
+   Never change files in `mage-build`. Expo uploads that folder as it is.
+
+**A. Test app**
+
+2. Run:
+
+   ```bash
+   npx eas-cli@latest credentials --platform ios
+   ```
+
+3. Build profile: **preview**. Log in to Apple: **No**.
+4. Choose **credentials.json** → **Download credentials from EAS to
+   credentials.json**. This makes a file `credentials.json` and a folder
+   `credentials/ios/`.
+5. Open the folder in Finder:
+
+   ```bash
+   open credentials/ios
+   ```
+
+6. It has one file that ends in `.mobileprovision`. Note its name. Delete it.
+   Put the new **Mage Card Game Ad Hoc** file from Downloads there. Rename it
+   to the old name.
+7. Run the same command again:
+
+   ```bash
+   npx eas-cli@latest credentials --platform ios
+   ```
+
+   Build profile **preview**, Apple login **No**. Choose **credentials.json** →
+   **Upload credentials from credentials.json to EAS**. If it asks the type of
+   distribution, choose **Ad Hoc**. Answer **Yes** to the questions.
+8. Check that the output says **Bundle Identifier: com.magecardgame**.
+9. Delete the files. They hold the private signing key:
+
+   ```bash
+   rm -rf credentials.json credentials
+   ```
+
+**B. Dev app**
+
+10. Run (note `APP_VARIANT=development` at the start):
+
+    ```bash
+    APP_VARIANT=development npx eas-cli@latest credentials --platform ios
+    ```
+
+11. Build profile: **development**. Log in to Apple: **No**. Choose
+    **credentials.json** → **Download credentials from EAS to
+    credentials.json**.
+12. Open the folder:
+
+    ```bash
+    open credentials/ios
+    ```
+
+    Swap the `.mobileprovision` file as in step 6, but use the **Mage Card Game
+    Dev Ad Hoc** file.
+13. Run the same command again:
+
+    ```bash
+    APP_VARIANT=development npx eas-cli@latest credentials --platform ios
+    ```
+
+    Build profile **development**, Apple login **No**. Choose
+    **credentials.json** → **Upload credentials from credentials.json to EAS**
+    → **Ad Hoc**. Answer **Yes** to the questions.
+14. Check that the output says **Bundle Identifier: com.magecardgame.dev**.
+    If it says `com.magecardgame` (no `.dev`), you forgot
+    `APP_VARIANT=development`. Then do part A again at once, to repair the
+    test app.
+15. Delete the files:
+
+    ```bash
+    rm -rf credentials.json credentials
+    ```
 
 ### Step 5: make new builds and install
 
-1. Make a new test app build (and dev app build, if they need it). See "Each
-   time: make the test app" above. Choose Platform **iOS**.
-2. Send the build page link to the phone owner. They install it as in
-   "Install on the phone".
+1. Open https://expo.dev/accounts/mimifishman/projects/mage-card-game/builds
+2. Click **Build from GitHub**. Choose Base directory `artifacts/mobile`,
+   Platform **iOS**, Git ref `master`, EAS Build profile `preview`,
+   Environment **Default**. Click **Confirm**.
+3. If the new phone also needs the dev app, do it again with profile
+   `development`.
+4. When the build finishes, send the build page link to the phone owner.
+5. The owner opens it on the iPhone in **Safari** and taps **Install**. First
+   time only: **Settings → Privacy & Security → Developer Mode** → on.
 
 Apple allows up to 100 iPhones per year.
 
@@ -200,195 +497,21 @@ Apple allows up to 100 iPhones per year.
 - **Dev app says "Failed to connect"**: Replit went to sleep. Open the project
   on Replit and run the two workflows again.
 - **iPhone: "Install" does nothing, or the app will not open**: the iPhone is
-  not on Apple's list. See "Add a new iPhone" above.
-- **Website build fails at "Install dependencies"**: Expo used an old build
-  machine. `eas.json` names the machine (`image`). See "Terminal: change the
-  build machine after an Expo upgrade" at the end.
+  not on Apple's list. Do "Add a new iPhone".
 - **Android: "App not installed"**: an older copy with a different signing key
   is on the phone. Delete the old app, then install again.
 - **The Builds page shows only one app**: clear the filters, or pick "All".
-- **"Build from GitHub" is missing**: do "Once only: connect Expo to GitHub" first.
-
----
-
-## Terminal steps
-
-You only need these for a few jobs. Each job starts with "Terminal: get
-ready".
-
-### Terminal: get ready
-
-Do this first, every time.
-
-1. Open the **Terminal** app on the Mac.
-2. Turn on Node 24:
-
-   ```bash
-   eval "$(fnm env)"; fnm use 24
-   ```
-
-3. Check the Expo login. It must say `mimifishman`:
-
-   ```bash
-   npx eas-cli@latest whoami
-   ```
-
-   If it does not, log in:
-
-   ```bash
-   npx eas-cli@latest login
-   ```
-
-4. Get clean code from `master` in its own folder, called `mage-build`.
-
-   **The first time** (makes the folder):
-
-   ```bash
-   cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
-   ```
-
-   **Every other time** (updates the folder):
-
-   ```bash
-   cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
-   ```
-
-5. Install the packages and go to the app folder. This takes about 1 minute:
-
-   ```bash
-   cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
-   ```
-
-Never change files in `mage-build`. Expo uploads that folder as it is.
-
-### Terminal: make a build
-
-Use this for the first Android build of a new app, or when the website way
-does not work. Do "Terminal: get ready" first, then pick the line you need.
-
-- iPhone: if it asks about an Apple login, answer **No**.
-- Android: if it asks "Generate a new Android Keystore?", answer **Yes**.
-
-```bash
-npx eas-cli@latest build --platform ios --profile preview
-```
-
-```bash
-npx eas-cli@latest build --platform ios --profile development
-```
-
-```bash
-npx eas-cli@latest build --platform android --profile preview
-```
-
-```bash
-npx eas-cli@latest build --platform android --profile development
-```
-
-When it shows a link and "See logs", the build is on Expo. You can close the
-Terminal.
-
-### Terminal: get an iPhone's ID
-
-Do "Terminal: get ready" first.
-
-1. Run:
-
-   ```bash
-   npx eas-cli@latest device:create
-   ```
-
-2. Answer the questions:
-   - "Log in to your Apple account?": **No**.
-   - Apple Team ID: `LN6694N33Y`.
-   - Team type, if it asks: **Individual**.
-   - "How would you like to register your devices?": **Website**.
-3. It shows a link and a QR code. Send the link to the phone owner.
-4. The owner opens the link on the iPhone in **Safari**. They tap through and
-   install the small profile it offers (Settings → **Profile Downloaded** →
-   **Install**).
-5. See the phone's ID:
-
-   ```bash
-   npx eas-cli@latest device:list
-   ```
-
-   The new phone shows with its **UDID**. Copy it for "Step 2: add the phone
-   on Apple's website".
-
-### Terminal: upload new iPhone profiles to Expo
-
-Do "Terminal: get ready" first. You need the two profiles you downloaded in
-"Step 3" (files that end in `.mobileprovision`, in your **Downloads** folder).
-
-Do it once for the test app, then once for the dev app.
-
-**A. Test app**
-
-1. Run:
-
-   ```bash
-   npx eas-cli@latest credentials --platform ios
-   ```
-
-2. Build profile: **preview**. Log in to Apple: **No**.
-3. Choose **credentials.json** → **Download credentials from EAS to
-   credentials.json**. This makes a file `credentials.json` and a folder
-   `credentials/ios/`.
-4. Open `credentials/ios/` in Finder:
-
-   ```bash
-   open credentials/ios
-   ```
-
-5. It has one file that ends in `.mobileprovision`. Note its name. Delete it.
-   Put the new **Mage Card Game Ad Hoc** profile from Downloads there. Rename
-   it to the old name.
-6. Run the same command again. Build profile **preview**, Apple login **No**.
-   Choose **credentials.json** → **Upload credentials from credentials.json
-   to EAS**. If it asks the type of distribution, choose **Ad Hoc**. Answer
-   **Yes** to the questions.
-7. Check that the output says **Bundle Identifier: com.magecardgame**.
-8. Delete the files. They hold the private signing key:
-
-   ```bash
-   rm -rf credentials.json credentials
-   ```
-
-**B. Dev app**
-
-Same steps, with two changes:
-
-- Start the command with `APP_VARIANT=development` in front, both times:
-
-  ```bash
-  APP_VARIANT=development npx eas-cli@latest credentials --platform ios
-  ```
-
-- Choose build profile **development**, and use the **Mage Card Game Dev Ad
-  Hoc** profile.
-
-Check that the output says **Bundle Identifier: com.magecardgame.dev**. If it
-says `com.magecardgame` (no `.dev`), you forgot `APP_VARIANT=development`.
-Then do part A again at once, to repair the test app.
-
-Delete the files at the end:
-
-```bash
-rm -rf credentials.json credentials
-```
-
-### Terminal: change the build machine after an Expo upgrade
-
-Only when the Expo SDK version changes (for example 54 to 55).
-
-1. Open https://docs.expo.dev/build-reference/infrastructure/
-2. Find the iOS image marked `sdk-55` (your new version). Copy its full name,
-   for example `macos-...-xcode-...`. Do the same for Android.
-3. On GitHub, open `artifacts/mobile/eas.json` and click the pencil (Edit).
-4. Under `"base"`, put the new names in `"ios": { "image": ... }` and
-   `"android": { "image": ... }`.
-5. Choose **Create a new branch and start a pull request**. Then merge it.
+- **"Build from GitHub" is missing**: do "Once only: connect Expo to GitHub".
+- **Website build fails at "Install dependencies"**: Expo used an old build
+  machine. This happens after an Expo SDK upgrade (for example 54 to 55).
+  `eas.json` names the machine. To change it:
+  1. Open https://docs.expo.dev/build-reference/infrastructure/
+  2. Find the iOS image marked `sdk-55` (your new version). Copy its full
+     name, for example `macos-...-xcode-...`. Do the same for Android.
+  3. On GitHub, open `artifacts/mobile/eas.json` and click the pencil (Edit).
+  4. Under `"base"`, put the new names in `"ios": { "image": ... }` and
+     `"android": { "image": ... }`.
+  5. Choose **Create a new branch and start a pull request**. Then merge it.
 
 For the yearly certificate renewal (before 11 Oct 2027), see
 [IOS-BUILDS.md](IOS-BUILDS.md).
