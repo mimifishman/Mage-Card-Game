@@ -1,7 +1,7 @@
 import { Link } from "wouter";
+import { CONTACT_EMAIL } from "@/lib/contact";
 
-const CONTACT_EMAIL = "ioedu.org@gmail.com";
-const LAST_UPDATED = "October 11, 2026";
+const LAST_UPDATED = "October 13, 2026";
 
 const sections: { title: string; body: React.ReactNode }[] = [
   {
