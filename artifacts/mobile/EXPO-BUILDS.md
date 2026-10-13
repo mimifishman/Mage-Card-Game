@@ -76,10 +76,13 @@ This lets Expo get the code from GitHub by itself.
 
 ### Once only: the first Android build of each app
 
+**Already done (13 Oct 2026) for both apps.** You only need this again for a
+new app with a new name.
+
 Android needs a signing key (the "stamp"). Expo makes it during the first
 Android build of each app. This first build must start from the Terminal, so
-Expo can ask "Generate a new Android Keystore?". Answer **Yes**. See "The other
-way: Terminal" at the end, or ask Claude to do it. After that, use the website.
+Expo can ask "Generate a new Android Keystore?". Answer **Yes**. See
+"Terminal: make a build" at the end. After that, use the website.
 
 iPhone does not need this. Its signing files are already on Expo.
 
@@ -151,9 +154,8 @@ Android phones do not need this. Just send them the link.
 
 Every iPhone has an ID called a **UDID** (a long code of letters and numbers).
 
-- **Easy way:** ask Claude "register a new iPhone". Claude gives you a link.
-  The phone owner opens the link on the iPhone in **Safari** and follows the
-  steps. The UDID then shows on Expo.
+- **With a link (the phone can be far away):** see "Terminal: get an iPhone's
+  ID" at the end. You send the owner a link. They open it on the iPhone.
 - **With a Mac and a cable:** plug the iPhone into the Mac. Open **Finder** and
   click the iPhone in the left side. Click the grey text under the phone name
   until it shows **UDID**. Right-click it and copy it.
@@ -180,8 +182,7 @@ app.
 
 ### Step 4: give the new profiles to Expo
 
-Ask Claude: "upload the new iPhone profiles to Expo". This step needs the
-Terminal, so Claude does it.
+See "Terminal: upload new iPhone profiles to Expo" at the end.
 
 ### Step 5: make new builds and install
 
@@ -201,8 +202,8 @@ Apple allows up to 100 iPhones per year.
 - **iPhone: "Install" does nothing, or the app will not open**: the iPhone is
   not on Apple's list. See "Add a new iPhone" above.
 - **Website build fails at "Install dependencies"**: Expo used an old build
-  machine. `eas.json` names the machine (`image`). After an Expo SDK upgrade,
-  ask Claude to update it.
+  machine. `eas.json` names the machine (`image`). See "Terminal: change the
+  build machine after an Expo upgrade" at the end.
 - **Android: "App not installed"**: an older copy with a different signing key
   is on the phone. Delete the old app, then install again.
 - **The Builds page shows only one app**: clear the filters, or pick "All".
@@ -210,57 +211,184 @@ Apple allows up to 100 iPhones per year.
 
 ---
 
-## The other way: Terminal
+## Terminal steps
 
-Use this for the first Android build, or if the website way does not work.
+You only need these for a few jobs. Each job starts with "Terminal: get
+ready".
 
-1. Turn on Node 24 and check the Expo login (it must say `mimifishman`):
+### Terminal: get ready
+
+Do this first, every time.
+
+1. Open the **Terminal** app on the Mac.
+2. Turn on Node 24:
 
    ```bash
    eval "$(fnm env)"; fnm use 24
    ```
 
+3. Check the Expo login. It must say `mimifishman`:
+
    ```bash
    npx eas-cli@latest whoami
    ```
 
-2. Get clean code from `master` in its own folder:
+   If it does not, log in:
 
    ```bash
-   cd /Users/mimifishman/Work/AIApps/Mage-Card-Game
-   git fetch origin
-   git worktree add ../mage-build origin/master
-   cd ../mage-build/artifacts/mobile
+   npx eas-cli@latest login
    ```
 
-   If `../mage-build` already exists:
+4. Get clean code from `master` in its own folder, called `mage-build`.
+
+   **The first time** (makes the folder):
 
    ```bash
-   cd /Users/mimifishman/Work/AIApps/mage-build
-   git fetch origin
-   git checkout --detach origin/master
-   cd artifacts/mobile
+   cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
    ```
 
-3. Start the build. Pick the line you need.
-   - iPhone: if it asks about an Apple login, answer **No**.
-   - Android: if it asks "Generate a new Android Keystore?", answer **Yes**.
+   **Every other time** (updates the folder):
 
    ```bash
-   npx eas-cli@latest build --platform ios --profile preview
+   cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
    ```
+
+5. Install the packages and go to the app folder. This takes about 1 minute:
 
    ```bash
-   npx eas-cli@latest build --platform ios --profile development
+   cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
    ```
+
+Never change files in `mage-build`. Expo uploads that folder as it is.
+
+### Terminal: make a build
+
+Use this for the first Android build of a new app, or when the website way
+does not work. Do "Terminal: get ready" first, then pick the line you need.
+
+- iPhone: if it asks about an Apple login, answer **No**.
+- Android: if it asks "Generate a new Android Keystore?", answer **Yes**.
+
+```bash
+npx eas-cli@latest build --platform ios --profile preview
+```
+
+```bash
+npx eas-cli@latest build --platform ios --profile development
+```
+
+```bash
+npx eas-cli@latest build --platform android --profile preview
+```
+
+```bash
+npx eas-cli@latest build --platform android --profile development
+```
+
+When it shows a link and "See logs", the build is on Expo. You can close the
+Terminal.
+
+### Terminal: get an iPhone's ID
+
+Do "Terminal: get ready" first.
+
+1. Run:
 
    ```bash
-   npx eas-cli@latest build --platform android --profile preview
+   npx eas-cli@latest device:create
    ```
+
+2. Answer the questions:
+   - "Log in to your Apple account?": **No**.
+   - Apple Team ID: `LN6694N33Y`.
+   - Team type, if it asks: **Individual**.
+   - "How would you like to register your devices?": **Website**.
+3. It shows a link and a QR code. Send the link to the phone owner.
+4. The owner opens the link on the iPhone in **Safari**. They tap through and
+   install the small profile it offers (Settings → **Profile Downloaded** →
+   **Install**).
+5. See the phone's ID:
 
    ```bash
-   npx eas-cli@latest build --platform android --profile development
+   npx eas-cli@latest device:list
    ```
 
-For new iPhones, signing files and the yearly certificate renewal, see
+   The new phone shows with its **UDID**. Copy it for "Step 2: add the phone
+   on Apple's website".
+
+### Terminal: upload new iPhone profiles to Expo
+
+Do "Terminal: get ready" first. You need the two profiles you downloaded in
+"Step 3" (files that end in `.mobileprovision`, in your **Downloads** folder).
+
+Do it once for the test app, then once for the dev app.
+
+**A. Test app**
+
+1. Run:
+
+   ```bash
+   npx eas-cli@latest credentials --platform ios
+   ```
+
+2. Build profile: **preview**. Log in to Apple: **No**.
+3. Choose **credentials.json** → **Download credentials from EAS to
+   credentials.json**. This makes a file `credentials.json` and a folder
+   `credentials/ios/`.
+4. Open `credentials/ios/` in Finder:
+
+   ```bash
+   open credentials/ios
+   ```
+
+5. It has one file that ends in `.mobileprovision`. Note its name. Delete it.
+   Put the new **Mage Card Game Ad Hoc** profile from Downloads there. Rename
+   it to the old name.
+6. Run the same command again. Build profile **preview**, Apple login **No**.
+   Choose **credentials.json** → **Upload credentials from credentials.json
+   to EAS**. If it asks the type of distribution, choose **Ad Hoc**. Answer
+   **Yes** to the questions.
+7. Check that the output says **Bundle Identifier: com.magecardgame**.
+8. Delete the files. They hold the private signing key:
+
+   ```bash
+   rm -rf credentials.json credentials
+   ```
+
+**B. Dev app**
+
+Same steps, with two changes:
+
+- Start the command with `APP_VARIANT=development` in front, both times:
+
+  ```bash
+  APP_VARIANT=development npx eas-cli@latest credentials --platform ios
+  ```
+
+- Choose build profile **development**, and use the **Mage Card Game Dev Ad
+  Hoc** profile.
+
+Check that the output says **Bundle Identifier: com.magecardgame.dev**. If it
+says `com.magecardgame` (no `.dev`), you forgot `APP_VARIANT=development`.
+Then do part A again at once, to repair the test app.
+
+Delete the files at the end:
+
+```bash
+rm -rf credentials.json credentials
+```
+
+### Terminal: change the build machine after an Expo upgrade
+
+Only when the Expo SDK version changes (for example 54 to 55).
+
+1. Open https://docs.expo.dev/build-reference/infrastructure/
+2. Find the iOS image marked `sdk-55` (your new version). Copy its full name,
+   for example `macos-...-xcode-...`. Do the same for Android.
+3. On GitHub, open `artifacts/mobile/eas.json` and click the pencil (Edit).
+4. Under `"base"`, put the new names in `"ios": { "image": ... }` and
+   `"android": { "image": ... }`.
+5. Choose **Create a new branch and start a pull request**. Then merge it.
+
+For the yearly certificate renewal (before 11 Oct 2027), see
 [IOS-BUILDS.md](IOS-BUILDS.md).
