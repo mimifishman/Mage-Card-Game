@@ -5,6 +5,12 @@
   },
   "build": {
     "base": {
+      "ios": {
+        "image": "auto"
+      },
+      "android": {
+        "image": "auto"
+      },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "mage-card-game.replit.app",
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsubWFnZWNhcmRnYW1lLmNvbSQ"
