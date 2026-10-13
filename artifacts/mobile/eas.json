@@ -39,5 +39,12 @@
       "extends": "base",
       "autoIncrement": true
     }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6822348571"
+      }
+    }
   }
 }
