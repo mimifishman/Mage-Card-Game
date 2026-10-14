@@ -226,6 +226,8 @@ export default function Home() {
       <footer className="w-full py-8 text-center text-foreground/40 font-serif text-sm border-t border-white/5 z-10 mt-auto">
         <p>Mage Card Game &copy; {new Date().getFullYear()}</p>
         <p className="mt-2">
+          <Link href="/rules" className="hover:text-primary underline-offset-4 hover:underline">How to play</Link>
+          {" · "}
           <Link href="/privacy" className="hover:text-primary underline-offset-4 hover:underline">Privacy Policy</Link>
           {" · "}
           <Link href="/support" className="hover:text-primary underline-offset-4 hover:underline">Support</Link>

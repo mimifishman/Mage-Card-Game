@@ -26,6 +26,9 @@ const sections: { title: string; body: React.ReactNode }[] = [
     body: (
       <ul>
         <li>
+          <strong>New to the game?</strong> Read <Link href="/rules">How to play</Link>.
+        </li>
+        <li>
           <strong>Play vs AI:</strong> in the lobby, tap <strong>Play vs AI</strong> and pick
           an opponent.
         </li>
