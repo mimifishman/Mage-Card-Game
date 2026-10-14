@@ -68,11 +68,15 @@ export function TextPage({
           ))}
         </div>
 
-        {children && <div className="mt-10 font-sans text-base text-foreground/85">{children}</div>}
+        {children && (
+          <div className="mt-10 font-sans text-lg text-foreground [&_a]:text-primary [&_a]:font-semibold [&_a]:underline [&_a]:underline-offset-4 [&_a:hover]:text-white">
+            {children}
+          </div>
+        )}
       </main>
 
-      <footer className="w-full py-8 text-center font-sans text-sm text-foreground/70 border-t border-white/10 z-10 mt-auto space-y-2">
-        <p className="space-x-4">
+      <footer className="w-full py-8 text-center font-sans text-sm text-foreground/75 border-t border-white/10 z-10 mt-auto space-y-3">
+        <p className="space-x-6 text-base text-foreground">
           <Link href="/rules" className="hover:text-primary underline-offset-4 hover:underline">How to play</Link>
           <Link href="/support" className="hover:text-primary underline-offset-4 hover:underline">Support</Link>
           <Link href="/privacy" className="hover:text-primary underline-offset-4 hover:underline">Privacy Policy</Link>
