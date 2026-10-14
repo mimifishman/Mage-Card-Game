@@ -15,7 +15,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#080810"
     },
     "ios": {
       "supportsTablet": false,
@@ -25,7 +25,11 @@
       }
     },
     "android": {
-      "package": "com.magecardgame"
+      "package": "com.magecardgame",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#080810"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png"
