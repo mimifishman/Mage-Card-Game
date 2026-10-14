@@ -1,9 +1,10 @@
 import { Link } from "wouter";
+import { TextPage, type TextSection } from "@/components/TextPage";
 
 // Rules mirror the game engine in artifacts/api-server/src/game. If a rule
 // changes there, change it here too.
 
-const sections: { id: string; title: string; body: React.ReactNode }[] = [
+const sections: TextSection[] = [
   {
     id: "goal",
     title: "The goal",
@@ -421,45 +422,8 @@ const sections: { id: string; title: string; body: React.ReactNode }[] = [
 
 export default function Rules() {
   return (
-    <div className="relative min-h-screen flex flex-col items-center">
-      <div className="noise-bg" />
-
-      <main className="relative z-10 w-full max-w-3xl px-6 py-16 md:py-24">
-        <Link href="/" className="font-serif text-sm tracking-[0.2em] uppercase text-primary/70 hover:text-primary">
-          &larr; Mage Card Game
-        </Link>
-
-        <h1 className="font-serif text-4xl md:text-5xl tracking-wider text-gradient-gold uppercase mt-8 mb-6">
-          How to play
-        </h1>
-
-        <nav aria-label="Sections" className="mb-12 flex flex-wrap gap-x-4 gap-y-2 font-serif text-sm text-foreground/60">
-          {sections.map((s) => (
-            <a key={s.id} href={`#${s.id}`} className="hover:text-primary underline-offset-4 hover:underline">
-              {s.title}
-            </a>
-          ))}
-        </nav>
-
-        <div className="space-y-12">
-          {sections.map((s) => (
-            <section key={s.id} id={s.id} className="scroll-mt-8">
-              <h2 className="font-serif text-2xl text-primary mb-3">{s.title}</h2>
-              <div className="font-sans text-lg leading-relaxed text-foreground/85 space-y-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:space-y-2 [&_li>ul]:mt-2 [&_a]:text-secondary [&_a]:underline [&_strong]:text-foreground [&_strong]:font-semibold [&_h3]:font-serif [&_h3]:text-xl [&_h3]:text-foreground [&_h3]:pt-3 [&_table]:w-full [&_table]:text-base [&_table]:border-collapse [&_th]:text-left [&_th]:font-serif [&_th]:text-primary/90 [&_th]:font-normal [&_th]:border-b [&_th]:border-primary/30 [&_th]:py-2 [&_th]:pr-3 [&_td]:border-b [&_td]:border-white/5 [&_td]:py-2 [&_td]:pr-3 [&_.example]:border-l-2 [&_.example]:border-secondary/60 [&_.example]:pl-4 [&_.example]:text-base [&_.example]:text-foreground/70 [&_.example]:italic">
-                {s.body}
-              </div>
-            </section>
-          ))}
-        </div>
-
-        <p className="mt-16 font-sans text-base text-foreground/60">
-          Questions? See <Link href="/support">Support</Link>.
-        </p>
-      </main>
-
-      <footer className="w-full py-8 text-center text-foreground/40 font-serif text-sm border-t border-white/5 z-10 mt-auto">
-        <p>Mage Card Game &copy; {new Date().getFullYear()}</p>
-      </footer>
-    </div>
+    <TextPage title="How to play" sections={sections} nav>
+      Questions? See <Link href="/support">Support</Link>.
+    </TextPage>
   );
 }
