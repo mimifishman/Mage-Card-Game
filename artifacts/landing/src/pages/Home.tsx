@@ -1,6 +1,6 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Link } from "wouter";
-import { QRCodeSVG } from "qrcode.react";
+import { APP_STORE_LIVE, APP_STORE_URL } from "@/lib/stores";
 import iconPath from "../../../mobile/assets/images/icon.png";
 import appStoreBadge from "../assets/app-store-badge.svg";
 import googlePlayBadge from "../assets/google-play-badge.svg";
@@ -148,79 +148,57 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Get the App Section */}
+      {/* Download Section */}
       <section className="relative w-full py-32 px-6 z-10">
         <div className="max-w-4xl mx-auto text-center mb-16">
           <h2 className="font-serif text-4xl md:text-5xl text-gradient-gold mb-4">Enter the Arena</h2>
-          <p className="font-sans text-xl text-foreground/70">The grimoire requires a vessel. Prepare your device.</p>
+          <p className="font-sans text-xl text-foreground/70">Bind the grimoire to your device and take your seat at the table.</p>
         </div>
 
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Step 1 */}
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="bg-card/50 backdrop-blur border border-primary/20 rounded-2xl p-8 flex flex-col items-center text-center relative overflow-hidden"
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
-            <div className="w-12 h-12 rounded-full border border-primary flex items-center justify-center font-serif text-2xl text-primary mb-6">1</div>
-            <h3 className="font-serif text-2xl text-foreground mb-4">Install Expo Go</h3>
-            <p className="font-sans text-foreground/60 mb-8">The arcane engine required to run the game.</p>
-            <div className="flex flex-col sm:flex-row gap-4 w-full justify-center items-center">
-              <a 
-                href="https://apps.apple.com/app/expo-go/id982107779" 
-                target="_blank" 
-                rel="noreferrer"
-                className="transition-opacity hover:opacity-80 active:opacity-60"
-                data-testid="link-app-store"
-              >
-                <img src={appStoreBadge} alt="Download on the App Store" width={162} height={48} className="h-12 w-auto" />
-              </a>
-              <a 
-                href="https://play.google.com/store/apps/details?id=host.exp.exponent" 
-                target="_blank" 
-                rel="noreferrer"
-                className="transition-opacity hover:opacity-80 active:opacity-60"
-                data-testid="link-google-play"
-              >
-                <img src={googlePlayBadge} alt="Get it on Google Play" width={162} height={48} className="h-12 w-auto" />
-              </a>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="max-w-3xl mx-auto bg-card/50 backdrop-blur border border-primary/20 rounded-2xl p-8 md:p-12 relative overflow-hidden"
+        >
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 sm:gap-6">
+            <div className="flex flex-col items-center text-center">
+              <h3 className="font-serif text-2xl text-foreground mb-2">iPhone</h3>
+              {APP_STORE_LIVE ? (
+                <>
+                  <p className="font-sans text-foreground/60 mb-6">The seal is broken. Claim it now.</p>
+                  <a
+                    href={APP_STORE_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="transition-opacity hover:opacity-80 active:opacity-60"
+                    data-testid="link-app-store"
+                  >
+                    <img src={appStoreBadge} alt="Download on the App Store" width={162} height={48} className="h-12 w-auto" />
+                  </a>
+                </>
+              ) : (
+                <>
+                  <p className="font-sans text-foreground/60 mb-6">Awaiting the gatekeepers' blessing.</p>
+                  <img src={appStoreBadge} alt="" aria-hidden="true" width={162} height={48} className="h-12 w-auto opacity-40 grayscale" />
+                  <span className="mt-4 font-serif tracking-widest text-sm uppercase text-primary" data-testid="text-app-store-soon">
+                    Coming soon
+                  </span>
+                </>
+              )}
             </div>
-          </motion.div>
 
-          {/* Step 2 */}
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.2 }}
-            className="bg-card/50 backdrop-blur border border-secondary/30 rounded-2xl p-8 flex flex-col items-center text-center relative overflow-hidden"
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-secondary to-transparent opacity-50" />
-            <div className="w-12 h-12 rounded-full border border-secondary flex items-center justify-center font-serif text-2xl text-secondary mb-6">2</div>
-            <h3 className="font-serif text-2xl text-foreground mb-4">Scan & Play</h3>
-            <p className="font-sans text-foreground/60 mb-8">Open Expo Go and scan this seal, or tap below if on mobile.</p>
-            
-            <div className="bg-[#f0f0f0] p-4 rounded-xl mb-6 violet-glow transform transition-transform hover:scale-105">
-              <QRCodeSVG 
-                value="https://mage-card-game.replit.app/mobile/" 
-                size={160}
-                bgColor="#f0f0f0"
-                fgColor="#1a1a1a"
-                level="H"
-              />
+            <div className="flex flex-col items-center text-center">
+              <h3 className="font-serif text-2xl text-foreground mb-2">Android</h3>
+              <p className="font-sans text-foreground/60 mb-6">The ritual is still being prepared.</p>
+              <img src={googlePlayBadge} alt="" aria-hidden="true" width={162} height={48} className="h-12 w-auto opacity-40 grayscale" />
+              <span className="mt-4 font-serif tracking-widest text-sm uppercase text-secondary" data-testid="text-google-play-soon">
+                Coming soon
+              </span>
             </div>
-            
-            <a 
-              href="https://mage-card-game.replit.app/mobile/"
-              className="text-secondary hover:text-secondary-foreground font-serif tracking-widest text-sm uppercase transition-colors border-b border-secondary/30 hover:border-secondary pb-1"
-              data-testid="link-direct-open"
-            >
-              Tap to open game directly
-            </a>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
       </section>
 
       <footer className="w-full py-8 text-center text-foreground/40 font-serif text-sm border-t border-white/5 z-10 mt-auto">
