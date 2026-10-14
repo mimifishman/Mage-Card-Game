@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "wouter";
-import { Coins, Dices, Flame, Snowflake, Users, type LucideIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Coins, Dices, Flame, Snowflake, Users, X, ZoomIn, type LucideIcon } from "lucide-react";
 import { APP_STORE_LIVE, APP_STORE_URL } from "@/lib/stores";
 import { SiteFooter } from "@/components/SiteFooter";
 import { cn } from "@/lib/utils";
@@ -119,6 +120,127 @@ const FLOATERS: { suit: Suit; rank: string; pos: string; rotate: number; delay: 
   { suit: "♣", rank: "J", pos: "-right-8 sm:-right-16 bottom-[4%]", rotate: -8, delay: 2.4 },
 ];
 
+function ScreenGallery() {
+  const reduceMotion = useReducedMotion();
+  const scroller = useRef<HTMLUListElement>(null);
+  const [edges, setEdges] = useState({ start: true, end: false });
+  const [open, setOpen] = useState<number | null>(null);
+
+  const updateEdges = () => {
+    const el = scroller.current;
+    if (!el) return;
+    setEdges({ start: el.scrollLeft < 8, end: el.scrollLeft + el.clientWidth > el.scrollWidth - 8 });
+  };
+  useEffect(updateEdges, []);
+
+  const scrollByPage = (dir: 1 | -1) => {
+    const el = scroller.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
+  const step = (dir: 1 | -1) => setOpen((i) => (i === null ? i : (i + dir + SCREENS.length) % SCREENS.length));
+  const current = open === null ? null : SCREENS[open];
+
+  const arrowClass =
+    "hidden sm:flex absolute top-[38%] -translate-y-1/2 z-10 w-12 h-12 items-center justify-center rounded-full border border-primary/50 bg-background/90 text-primary shadow-lg transition hover:bg-primary hover:text-primary-foreground disabled:opacity-0 disabled:pointer-events-none";
+
+  return (
+    <div className="relative max-w-6xl mx-auto">
+      <button type="button" aria-label="Previous screens" className={cn(arrowClass, "left-2")} onClick={() => scrollByPage(-1)} disabled={edges.start}>
+        <ChevronLeft className="w-6 h-6" aria-hidden="true" />
+      </button>
+      <button type="button" aria-label="More screens" className={cn(arrowClass, "right-2")} onClick={() => scrollByPage(1)} disabled={edges.end}>
+        <ChevronRight className="w-6 h-6" aria-hidden="true" />
+      </button>
+
+      <motion.ul
+        ref={scroller}
+        onScroll={updateEdges}
+        initial={reduceMotion ? false : { opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.7 }}
+        className="flex gap-6 lg:gap-8 overflow-x-auto snap-x snap-mandatory scroll-px-4 sm:scroll-px-16 px-4 sm:px-16 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {SCREENS.map((s, i) => (
+          <li key={s.title} className="snap-start shrink-0 w-[70vw] max-w-[330px] sm:w-[320px] lg:w-[340px]">
+            <button
+              type="button"
+              onClick={() => setOpen(i)}
+              className="group block w-full rounded-[2.4rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+              aria-label={`${s.title}: view full size`}
+            >
+              <PhoneFrame className="transition-transform duration-300 group-hover:-translate-y-2">
+                <img
+                  src={s.src}
+                  alt={`${s.title}: ${s.text}`}
+                  width={960}
+                  height={2086}
+                  loading="lazy"
+                  decoding="async"
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                <span className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full px-3 py-1.5 font-sans text-sm font-semibold text-primary-foreground bg-primary opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                  <ZoomIn className="w-4 h-4" aria-hidden="true" /> Zoom
+                </span>
+              </PhoneFrame>
+            </button>
+            <h3 className="mt-5 font-serif font-semibold text-xl md:text-2xl text-primary text-center">{s.title}</h3>
+            <p className="mt-1 font-sans text-base md:text-lg text-foreground text-center leading-snug">{s.text}</p>
+          </li>
+        ))}
+      </motion.ul>
+      <p className="mt-4 px-4 text-center font-sans text-base text-foreground/85">
+        <span className="sm:hidden">Swipe for more. </span>Tap a screen to see it full size.
+      </p>
+
+      <DialogPrimitive.Root open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm" />
+          <DialogPrimitive.Content
+            className="fixed inset-0 z-[61] flex flex-col items-center justify-center gap-4 p-4 outline-none"
+            onClick={(e) => e.target === e.currentTarget && setOpen(null)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight") step(1);
+              if (e.key === "ArrowLeft") step(-1);
+            }}
+          >
+            {current && (
+              <>
+                <DialogPrimitive.Title className="sr-only">{current.title}</DialogPrimitive.Title>
+                <DialogPrimitive.Description className="sr-only">{current.text}</DialogPrimitive.Description>
+                <img
+                  src={current.src}
+                  alt={`${current.title}: ${current.text}`}
+                  width={960}
+                  height={2086}
+                  className="max-h-[calc(100dvh-8.5rem)] w-auto max-w-full rounded-[1.75rem] ring-1 ring-primary/40 shadow-2xl"
+                />
+                <div className="flex items-center gap-4">
+                  <button type="button" aria-label="Previous screen" onClick={() => step(-1)} className="w-12 h-12 flex items-center justify-center rounded-full border border-primary/50 bg-background text-primary hover:bg-primary hover:text-primary-foreground">
+                    <ChevronLeft className="w-6 h-6" aria-hidden="true" />
+                  </button>
+                  <div className="text-center min-w-[12rem]">
+                    <p className="font-serif font-semibold text-xl text-primary">{current.title}</p>
+                    <p className="font-sans text-base text-white">{(open ?? 0) + 1} / {SCREENS.length}</p>
+                  </div>
+                  <button type="button" aria-label="Next screen" onClick={() => step(1)} className="w-12 h-12 flex items-center justify-center rounded-full border border-primary/50 bg-background text-primary hover:bg-primary hover:text-primary-foreground">
+                    <ChevronRight className="w-6 h-6" aria-hidden="true" />
+                  </button>
+                </div>
+                <DialogPrimitive.Close className="absolute top-4 right-4 w-12 h-12 flex items-center justify-center rounded-full bg-background/90 border border-primary/50 text-white hover:bg-primary hover:text-primary-foreground" aria-label="Close">
+                  <X className="w-6 h-6" aria-hidden="true" />
+                </DialogPrimitive.Close>
+              </>
+            )}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+    </div>
+  );
+}
+
 function SectionHeading({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="max-w-3xl mx-auto text-center mb-12 md:mb-14">
@@ -219,42 +341,11 @@ export default function Home() {
             sub="Real screens from the app. Build your Court, power it with Diamonds, and duel your way to the throne."
           />
         </div>
-
-        <div className="max-w-6xl mx-auto">
-          <ul className="flex lg:grid lg:grid-cols-5 gap-5 lg:gap-6 overflow-x-auto lg:overflow-visible snap-x snap-mandatory px-4 sm:px-6 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {SCREENS.map((s, i) => (
-              <motion.li
-                key={s.title}
-                initial={reduceMotion ? false : { opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-                transition={{ duration: 0.6, delay: i * 0.08 }}
-                className="snap-center shrink-0 w-[62vw] max-w-[250px] sm:w-[220px] lg:w-auto lg:max-w-none"
-              >
-                <PhoneFrame className="transition-transform duration-300 hover:-translate-y-2">
-                  <img
-                    src={s.src}
-                    alt={`${s.title}: ${s.text}`}
-                    width={640}
-                    height={1391}
-                    loading="lazy"
-                    decoding="async"
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                </PhoneFrame>
-                <h3 className="mt-5 font-serif font-semibold text-xl text-primary text-center">{s.title}</h3>
-                <p className="mt-1 font-sans text-base text-foreground text-center leading-snug">{s.text}</p>
-              </motion.li>
-            ))}
-          </ul>
-          <p className="lg:hidden mt-2 text-center font-sans text-base text-foreground/80" aria-hidden="true">
-            Swipe to see more &rarr;
-          </p>
-        </div>
+        <ScreenGallery />
       </section>
 
       {/* Suits */}
-      <section className="relative w-full py-20 md:py-28 px-4 sm:px-6 z-10">
+      <section className="relative w-full py-20 md:py-28 px-4 sm:px-6 z-10 overflow-x-clip">
         <SectionHeading
           title="Four suits of magic"
           sub="Every card is a spell. What it does depends on its suit."
