@@ -72,11 +72,11 @@ function PhoneFrame({ children, className }: { children: React.ReactNode; classN
   return (
     <div
       className={cn(
-        "relative rounded-[2.4rem] bg-[#0b0a10] p-[7px] ring-1 ring-primary/40 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.9)]",
+        "relative rounded-[2.5rem] p-[9px] bg-gradient-to-b from-[#76708a] via-[#3d3849] to-[#5d576d] ring-2 ring-primary/80 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.9),0_0_45px_-12px_rgba(212,175,55,0.45)]",
         className,
       )}
     >
-      <div className="relative overflow-hidden rounded-[2rem] aspect-[1320/2868] bg-black">{children}</div>
+      <div className="relative overflow-hidden rounded-[2rem] aspect-[1320/2868] bg-black ring-1 ring-black">{children}</div>
     </div>
   );
 }
@@ -168,9 +168,10 @@ function ScreenGallery() {
             <button
               type="button"
               onClick={() => setOpen(i)}
-              className="group block w-full rounded-[2.4rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+              className="group block w-full rounded-[2.75rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background"
               aria-label={`${s.title}: view full size`}
             >
+              <div className="rounded-[2.75rem] p-4 sm:p-5 border border-primary/45 bg-[radial-gradient(ellipse_at_50%_0%,#5b4694_0%,#30245a_50%,#1e1734_100%)] shadow-[0_20px_50px_-20px_rgba(0,0,0,0.8)] transition-colors group-hover:border-primary">
               <PhoneFrame className="transition-transform duration-300 group-hover:-translate-y-2">
                 <img
                   src={s.src}
@@ -185,6 +186,7 @@ function ScreenGallery() {
                   <ZoomIn className="w-4 h-4" aria-hidden="true" /> Zoom
                 </span>
               </PhoneFrame>
+              </div>
             </button>
             <h3 className="mt-5 font-serif font-semibold text-xl md:text-2xl text-primary text-center">{s.title}</h3>
             <p className="mt-1 font-sans text-base md:text-lg text-foreground text-center leading-snug">{s.text}</p>
@@ -197,7 +199,7 @@ function ScreenGallery() {
 
       <DialogPrimitive.Root open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
         <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm" />
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-[#140f1e]/95 backdrop-blur-sm" />
           <DialogPrimitive.Content
             className="fixed inset-0 z-[61] flex flex-col items-center justify-center gap-4 p-4 outline-none"
             onClick={(e) => e.target === e.currentTarget && setOpen(null)}
@@ -215,7 +217,7 @@ function ScreenGallery() {
                   alt={`${current.title}: ${current.text}`}
                   width={960}
                   height={2086}
-                  className="max-h-[calc(100dvh-8.5rem)] w-auto max-w-full rounded-[1.75rem] ring-1 ring-primary/40 shadow-2xl"
+                  className="max-h-[calc(100dvh-8.5rem)] w-auto max-w-full rounded-[2.2rem] border-[8px] border-[#4f495e] ring-2 ring-primary/80 shadow-[0_0_60px_-10px_rgba(212,175,55,0.4)]"
                 />
                 <div className="flex items-center gap-4">
                   <button type="button" aria-label="Previous screen" onClick={() => step(-1)} className="w-12 h-12 flex items-center justify-center rounded-full border border-primary/50 bg-background text-primary hover:bg-primary hover:text-primary-foreground">
@@ -334,7 +336,7 @@ export default function Home() {
       </section>
 
       {/* Screenshots */}
-      <section className="relative w-full py-20 md:py-28 z-10 bg-black/20 border-y border-primary/15">
+      <section className="relative w-full py-20 md:py-28 z-10 bg-gradient-to-b from-[#1d1530] via-[#181226] to-[#1d1530] border-y border-primary/30">
         <div className="px-4 sm:px-6">
           <SectionHeading
             title="See it in action"
