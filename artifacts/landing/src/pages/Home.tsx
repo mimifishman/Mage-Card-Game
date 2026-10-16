@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "wouter";
-import { ChevronLeft, ChevronRight, Coins, Dices, Flame, Snowflake, Users, X, ZoomIn, type LucideIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Coins, Dices, Flame, Play, Snowflake, Users, X, ZoomIn, type LucideIcon } from "lucide-react";
 import { APP_STORE_LIVE, APP_STORE_URL } from "@/lib/stores";
 import { SiteFooter } from "@/components/SiteFooter";
 import { cn } from "@/lib/utils";
@@ -243,6 +243,105 @@ function ScreenGallery() {
   );
 }
 
+// Narrated walkthrough of a full game vs Emberlord (files in public/media).
+const HOW_TO_PLAY = {
+  video: `${import.meta.env.BASE_URL}media/mage-how-to-play.mp4`,
+  poster: `${import.meta.env.BASE_URL}media/mage-how-to-play-poster.jpg`,
+  captions: `${import.meta.env.BASE_URL}media/mage-how-to-play.en.vtt`,
+};
+
+// Start times match the caption file.
+const CHAPTERS: { t: number; label: string }[] = [
+  { t: 0, label: "Sign in and the Arena" },
+  { t: 14, label: "Pick an AI opponent" },
+  { t: 25, label: "Diamonds and the Mine" },
+  { t: 31, label: "Summon your Royals" },
+  { t: 44, label: "Spades make Royals stronger" },
+  { t: 60, label: "Attack and your first duel" },
+  { t: 125, label: "Clubs hurt, Hearts heal" },
+  { t: 199, label: "Block and win a duel" },
+  { t: 238, label: "Victory" },
+];
+
+const clock = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+
+function HowToPlayVideo() {
+  const ref = useRef<HTMLVideoElement>(null);
+  const reduceMotion = useReducedMotion();
+  const [started, setStarted] = useState(false);
+
+  const jump = (t: number) => {
+    const video = ref.current;
+    if (!video) return;
+    video.currentTime = t;
+    video.play().catch(() => {});
+    video.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_1fr] gap-10 lg:gap-14 items-center">
+      <PhoneFrame className="mx-auto w-full max-w-[min(360px,calc((80vh_-_18px)*0.4609_+_18px))]">
+        <video
+          ref={ref}
+          className="absolute inset-0 w-full h-full object-cover bg-black"
+          poster={HOW_TO_PLAY.poster}
+          controls
+          playsInline
+          preload="metadata"
+          width={590}
+          height={1280}
+          aria-label="How to play Mage Card Game: a narrated full game against the AI mage Emberlord"
+          onPlay={() => setStarted(true)}
+        >
+          <source src={HOW_TO_PLAY.video} type="video/mp4" />
+          <track kind="captions" srcLang="en" label="English" src={HOW_TO_PLAY.captions} />
+        </video>
+        {!started && (
+          <button
+            type="button"
+            onClick={() => ref.current?.play().catch(() => {})}
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/45 text-white transition hover:bg-black/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+            aria-label="Play the how to play video"
+          >
+            <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_0_40px_rgba(212,175,55,0.55)]">
+              <Play className="h-9 w-9 translate-x-0.5 fill-current" aria-hidden="true" />
+            </span>
+            <span className="rounded-full bg-black/70 px-4 py-1.5 font-sans text-base font-semibold">Watch · 4:29</span>
+          </button>
+        )}
+      </PhoneFrame>
+
+      <div>
+        <h3 className="font-serif font-bold text-2xl text-white mb-2">Jump to a part</h3>
+        <p className="font-sans text-base md:text-lg text-foreground mb-5">
+          The video has sound and English captions. Tap a part to start there.
+        </p>
+        <ol className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+          {CHAPTERS.map((c) => (
+            <li key={c.t}>
+              <button
+                type="button"
+                onClick={() => jump(c.t)}
+                className="w-full flex items-center gap-3 rounded-xl border border-primary/30 bg-card/80 px-4 py-3 text-left font-sans text-base text-foreground transition hover:border-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <span className="shrink-0 w-12 font-semibold tabular-nums text-primary">{clock(c.t)}</span>
+                <span>{c.label}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <Link
+          href="/rules"
+          className="mt-6 inline-flex items-center justify-center rounded-full border border-primary/60 px-7 py-3 font-sans text-lg font-semibold text-foreground transition hover:bg-primary/15 hover:text-white"
+          data-testid="link-video-rules"
+        >
+          Read the full rules
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function SectionHeading({ title, sub }: { title: string; sub?: string }) {
   return (
     <div className="max-w-3xl mx-auto text-center mb-12 md:mb-14">
@@ -344,6 +443,15 @@ export default function Home() {
           />
         </div>
         <ScreenGallery />
+      </section>
+
+      {/* How to play video */}
+      <section id="how-to-play" className="relative w-full py-20 md:py-28 px-4 sm:px-6 z-10 scroll-mt-4">
+        <SectionHeading
+          title="How to play"
+          sub="Watch a full game against Emberlord, explained step by step. Learn the cards, the Mine, Royals and duels in under five minutes."
+        />
+        <HowToPlayVideo />
       </section>
 
       {/* Suits */}
