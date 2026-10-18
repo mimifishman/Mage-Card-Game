@@ -306,7 +306,7 @@ function HowToPlayVideo() {
             <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_0_40px_rgba(212,175,55,0.55)]">
               <Play className="h-9 w-9 translate-x-0.5 fill-current" aria-hidden="true" />
             </span>
-            <span className="rounded-full bg-black/70 px-4 py-1.5 font-sans text-base font-semibold">Watch · 4:29</span>
+            <span className="rounded-full bg-black/70 px-4 py-1.5 font-sans text-base font-semibold">Watch · 4:09</span>
           </button>
         )}
       </PhoneFrame>
