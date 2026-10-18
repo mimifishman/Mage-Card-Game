@@ -399,13 +399,13 @@ export default function Home() {
               >
                 Get the app
               </a>
-              <Link
-                href="/rules"
+              <a
+                href="#how-to-play"
                 className="inline-flex items-center justify-center rounded-full border border-primary/60 px-8 py-3.5 font-sans text-lg font-semibold text-foreground transition hover:bg-primary/15 hover:text-white"
-                data-testid="link-hero-rules"
+                data-testid="link-hero-how-to-play"
               >
                 How to play
-              </Link>
+              </a>
             </div>
           </motion.div>
 
