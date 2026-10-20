@@ -1,7 +1,7 @@
 import { TextPage, type TextSection } from "@/components/TextPage";
 import { CONTACT_EMAIL } from "@/lib/contact";
 
-const LAST_UPDATED = "October 13, 2026";
+const LAST_UPDATED = "October 20, 2026";
 
 const sections: TextSection[] = [
   {
