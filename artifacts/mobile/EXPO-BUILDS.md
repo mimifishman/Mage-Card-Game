@@ -259,236 +259,262 @@ The dev app shows the code that is on **Replit**, not the code on GitHub.
 
 ---
 
+## The Apple key (no Apple login needed)
+
+To add an iPhone or make a new certificate, Expo must talk to Apple.
+Before, this needed Jason's Apple login. Now Expo uses a **key** instead.
+The key is a small secret file.
+
+- Name on Apple: **Expo Admin**. Access: **Admin**. You find it on
+  App Store Connect → **Users and Access** → **Integrations** → **Team Keys**.
+- Key ID: `5B6UHLK7V9`
+- Issuer ID: `3f026ab2-defe-4d4a-b2ad-8383ce691847`
+- Apple team: `LN6694N33Y` (Jason Kipp, Individual)
+- The file: `~/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8` on
+  Mimi's Mac. A copy is in Mimi's password manager.
+
+Rules:
+
+- The file is a secret. Never put it on GitHub, in a chat or in an email.
+- Never put it in a project folder.
+- The other key, **Expo** (`VV4G7U8U8C`, App Manager), stays on Expo. Expo
+  uses it to send builds to the App Store. It cannot add iPhones. Leave it.
+
+**Turn on the key.** Run this in the Terminal, before the Expo commands:
+
+```bash
+export EXPO_ASC_API_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8" EXPO_ASC_KEY_ID=5B6UHLK7V9 EXPO_ASC_ISSUER_ID=3f026ab2-defe-4d4a-b2ad-8383ce691847 EXPO_APPLE_TEAM_ID=LN6694N33Y EXPO_APPLE_TEAM_TYPE=INDIVIDUAL
+```
+
+The key stays on until you close that Terminal window. While it is on,
+Expo does not ask "Log in to your Apple account?". It uses the key.
+
+**Check that the file is there:**
+
+```bash
+ls -l ~/.appstoreconnect/private_keys/
+```
+
+It must show `AuthKey_5B6UHLK7V9.p8` and `-rw-------` (only you can read it).
+
+**New Mac, or the file is gone:**
+
+1. Get the file from the password manager.
+2. Save it as `~/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8`.
+3. Lock it:
+
+   ```bash
+   chmod 700 ~/.appstoreconnect ~/.appstoreconnect/private_keys && chmod 600 ~/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8
+   ```
+
+**The file is lost, or someone else saw it:**
+
+1. App Store Connect → **Integrations** → **Team Keys**. Click **Revoke**
+   next to **Expo Admin**. (Revoke means Apple turns the key off.)
+2. Make a new key: **+**, name `Expo Admin`, Access **Admin**, **Generate**,
+   **Download**. Apple lets you download it only one time.
+3. Put it in the Mac folder and in the password manager, as above.
+4. In this guide and in [IOS-BUILDS.md](IOS-BUILDS.md), change the Key ID
+   and the file name.
+
+---
+
+## Get the Terminal ready (with the Apple key)
+
+"Add a new iPhone" and "Yearly renewal" start with these steps.
+
+1. Open the **Terminal** app on the Mac.
+2. Turn on Node 24:
+
+   ```bash
+   eval "$(fnm env)"; fnm use 24
+   ```
+
+3. Check the Expo login. It must say `mimifishman`. If not, run
+   `npx eas-cli@latest login`.
+
+   ```bash
+   npx eas-cli@latest whoami
+   ```
+
+4. Get clean code from `master` in its own folder, `mage-build`.
+   **First time ever** (makes the folder):
+
+   ```bash
+   cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
+   ```
+
+   **Every other time** (updates the folder):
+
+   ```bash
+   cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
+   ```
+
+5. Install the packages and go to the app folder (about 1 minute):
+
+   ```bash
+   cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
+   ```
+
+6. Turn on the Apple key:
+
+   ```bash
+   export EXPO_ASC_API_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8" EXPO_ASC_KEY_ID=5B6UHLK7V9 EXPO_ASC_ISSUER_ID=3f026ab2-defe-4d4a-b2ad-8383ce691847 EXPO_APPLE_TEAM_ID=LN6694N33Y EXPO_APPLE_TEAM_TYPE=INDIVIDUAL
+   ```
+
+Never change files in `mage-build`. Expo uploads that folder as it is.
+
+---
+
 ## Add a new iPhone
 
 An iPhone app from Expo opens only on iPhones that are on Apple's list.
-To add a phone, you put it on the list, then make a new build. Old builds do
-not open on the new phone.
+To add a phone:
+
+1. You put it on **Expo's** list.
+2. You make a new build with one special command. Expo then puts the phone
+   on **Apple's** list for you.
+
+Old builds do not open on the new phone. Nobody needs Jason's Apple login.
 
 Android phones do not need this. Just send them the link.
 
-### Step 1: get the phone's ID
+### Step 1: get the Terminal ready
 
-Every iPhone has an ID called a **UDID** (a long code of letters and numbers).
-Pick one way.
+Do "Get the Terminal ready (with the Apple key)" above. Do not forget step 6.
 
-**Way A: with a Mac and a cable** (the phone is with you)
+### Step 2: put the phone on Expo's list
 
-1. Plug the iPhone into the Mac.
-2. Open **Finder**. Click the iPhone in the left side.
-3. Click the grey text under the phone name until it shows **UDID**.
-4. Right-click it and copy it.
-
-**Way B: with a link** (the phone can be far away)
-
-1. Get the Terminal ready:
-
-   1. Open the **Terminal** app on the Mac.
-   2. Turn on Node 24:
-
-      ```bash
-      eval "$(fnm env)"; fnm use 24
-      ```
-
-   3. Check the Expo login. It must say `mimifishman`. If not, run
-      `npx eas-cli@latest login`.
-
-      ```bash
-      npx eas-cli@latest whoami
-      ```
-
-   4. Get clean code from `master` in its own folder, `mage-build`.
-      **First time ever** (makes the folder):
-
-      ```bash
-      cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
-      ```
-
-      **Every other time** (updates the folder):
-
-      ```bash
-      cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
-      ```
-
-   5. Install the packages and go to the app folder (about 1 minute):
-
-      ```bash
-      cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
-      ```
-
-   Never change files in `mage-build`. Expo uploads that folder as it is.
-
-2. Run:
+1. Run:
 
    ```bash
    npx eas-cli@latest device:create
    ```
 
-3. Answer the questions:
-   - "Log in to your Apple account?": **No**.
-   - Apple Team ID: `LN6694N33Y`.
-   - Team type, if it asks: **Individual**.
-   - "How would you like to register your devices?": **Website**.
-4. It shows a link and a QR code. Send the link to the phone owner.
-5. The owner opens the link on the iPhone in **Safari**. They install the small
-   profile it offers (Settings → **Profile Downloaded** → **Install**).
-6. See the phone's ID:
+2. "Would you like to use the mimifishman account?": **Yes**.
+3. "How would you like to register your devices?": pick one way.
+
+   **Website** (the phone can be far away):
+
+   1. It shows a link and a QR code. Send the link to the phone owner.
+   2. The owner opens the link on the iPhone in **Safari**.
+   3. The owner installs the small profile it offers: Settings →
+      **Profile Downloaded** → **Install**.
+   4. In the Terminal, press any key.
+
+   **Input** (you have the phone's ID already):
+
+   Every iPhone has an ID called a **UDID** (a long code). To see it:
+   plug the iPhone into the Mac, open **Finder**, click the iPhone, and
+   click the grey text under the phone name until it shows **UDID**.
+   Right-click it and copy it. Then type a name (for example "Dana iPhone")
+   and paste the UDID.
+
+4. Check that the phone is on Expo's list:
 
    ```bash
    npx eas-cli@latest device:list
    ```
 
-   The new phone shows with its **UDID**. Copy it.
+### Step 3: make the new builds
 
-### Step 2: add the phone on Apple's website
+Test app:
 
-Use the Chrome window where Jason's Apple account is signed in.
+```bash
+npx eas-cli@latest build --platform ios --profile preview --non-interactive --refresh-ad-hoc-provisioning-profile
+```
 
-1. Open https://developer.apple.com/account/resources/devices/list
-2. Click the blue **+**.
-3. Platform: **iOS**. Device Name: the owner's name, for example "Dana iPhone".
-   Device ID: paste the UDID.
-4. Click **Continue**, then **Register**.
+Dev app (only if the new phone needs it too):
 
-### Step 3: put the phone in both app profiles
+```bash
+npx eas-cli@latest build --platform ios --profile development --non-interactive --refresh-ad-hoc-provisioning-profile
+```
 
-A profile is Apple's list of phones that may open one app. There is one per
-app.
+Each command does 4 jobs and asks no questions:
 
-1. Open https://developer.apple.com/account/resources/profiles/list
-2. Click **Mage Card Game Ad Hoc** → **Edit**.
-3. Tick the new phone. Click **Save**. Click **Download**.
-4. Do the same for **Mage Card Game Dev Ad Hoc**.
+1. It puts every phone from Expo's list on Apple's list.
+2. It updates the app's profile on Apple, with all the phones. (A profile is
+   Apple's list of phones that may open one app.)
+3. It saves the new profile on Expo.
+4. It starts the build.
 
-The two files go to your **Downloads** folder. They end in `.mobileprovision`.
+When it shows a link, the build is on Expo. You can close the Terminal.
+Wait about 15 minutes.
 
-### Step 4: give the new profiles to Expo
+If it says **"Failed to provision ... of the selected devices"**: Apple is
+still checking the new phone. This can take up to 72 hours. Do Step 3 again
+later.
 
-1. Get the Terminal ready:
+From now on, website builds (**Build from GitHub**) include the new phone
+too.
 
-   1. Open the **Terminal** app on the Mac.
-   2. Turn on Node 24:
-
-      ```bash
-      eval "$(fnm env)"; fnm use 24
-      ```
-
-   3. Check the Expo login. It must say `mimifishman`. If not, run
-      `npx eas-cli@latest login`.
-
-      ```bash
-      npx eas-cli@latest whoami
-      ```
-
-   4. Get clean code from `master` in its own folder, `mage-build`.
-      **First time ever** (makes the folder):
-
-      ```bash
-      cd /Users/mimifishman/Work/AIApps/Mage-Card-Game && git fetch origin && git worktree add ../mage-build origin/master
-      ```
-
-      **Every other time** (updates the folder):
-
-      ```bash
-      cd /Users/mimifishman/Work/AIApps/mage-build && git fetch origin && git checkout --detach origin/master
-      ```
-
-   5. Install the packages and go to the app folder (about 1 minute):
-
-      ```bash
-      cd /Users/mimifishman/Work/AIApps/mage-build && pnpm install --frozen-lockfile && cd artifacts/mobile
-      ```
-
-   Never change files in `mage-build`. Expo uploads that folder as it is.
-
-**A. Test app**
-
-2. Run:
-
-   ```bash
-   npx eas-cli@latest credentials --platform ios
-   ```
-
-3. Build profile: **preview**. Log in to Apple: **No**.
-4. Choose **credentials.json** → **Download credentials from EAS to
-   credentials.json**. This makes a file `credentials.json` and a folder
-   `credentials/ios/`.
-5. Open the folder in Finder:
-
-   ```bash
-   open credentials/ios
-   ```
-
-6. It has one file that ends in `.mobileprovision`. Note its name. Delete it.
-   Put the new **Mage Card Game Ad Hoc** file from Downloads there. Rename it
-   to the old name.
-7. Run the same command again:
-
-   ```bash
-   npx eas-cli@latest credentials --platform ios
-   ```
-
-   Build profile **preview**, Apple login **No**. Choose **credentials.json** →
-   **Upload credentials from credentials.json to EAS**. If it asks the type of
-   distribution, choose **Ad Hoc**. Answer **Yes** to the questions.
-8. Check that the output says **Bundle Identifier: com.magecardgame**.
-9. Delete the files. They hold the private signing key:
-
-   ```bash
-   rm -rf credentials.json credentials
-   ```
-
-**B. Dev app**
-
-10. Run (note `APP_VARIANT=development` at the start):
-
-    ```bash
-    APP_VARIANT=development npx eas-cli@latest credentials --platform ios
-    ```
-
-11. Build profile: **development**. Log in to Apple: **No**. Choose
-    **credentials.json** → **Download credentials from EAS to
-    credentials.json**.
-12. Open the folder:
-
-    ```bash
-    open credentials/ios
-    ```
-
-    Swap the `.mobileprovision` file as in step 6, but use the **Mage Card Game
-    Dev Ad Hoc** file.
-13. Run the same command again:
-
-    ```bash
-    APP_VARIANT=development npx eas-cli@latest credentials --platform ios
-    ```
-
-    Build profile **development**, Apple login **No**. Choose
-    **credentials.json** → **Upload credentials from credentials.json to EAS**
-    → **Ad Hoc**. Answer **Yes** to the questions.
-14. Check that the output says **Bundle Identifier: com.magecardgame.dev**.
-    If it says `com.magecardgame` (no `.dev`), you forgot
-    `APP_VARIANT=development`. Then do part A again at once, to repair the
-    test app.
-15. Delete the files:
-
-    ```bash
-    rm -rf credentials.json credentials
-    ```
-
-### Step 5: make new builds and install
+### Step 4: install
 
 1. Open https://expo.dev/accounts/mimifishman/projects/mage-card-game/builds
-2. Click **Build from GitHub**. Choose Base directory `artifacts/mobile`,
-   Platform **iOS**, Git ref `master`, EAS Build profile `preview`,
-   Environment **Default**. Click **Confirm**.
-3. If the new phone also needs the dev app, do it again with profile
-   `development`.
-4. When the build finishes, send the build page link to the phone owner.
-5. The owner opens it on the iPhone in **Safari** and taps **Install**. First
-   time only: **Settings → Privacy & Security → Developer Mode** → on.
+2. When the build finishes, send the build page link to the phone owner.
+3. The owner opens it on the iPhone in **Safari** and taps **Install**.
+4. First time only: **Settings → Privacy & Security → Developer Mode** → on.
 
 Apple allows up to 100 iPhones per year.
+
+---
+
+## Yearly renewal (before 11 Oct 2027)
+
+The certificate is the "stamp" that makes the iPhone trust the app. It lasts
+one year. Apple does not make longer ones. When it ends, the **test app**
+and the **dev app** stop opening. The App Store app keeps working.
+
+Do this about one month before **11 Oct 2027**. You do not need Jason.
+
+These steps come from Expo's code (eas-cli 25.3). Nobody has run them yet,
+because they make a real certificate. Read each question before you answer.
+
+1. Do "Get the Terminal ready (with the Apple key)" above.
+2. **Test app: make the new certificate.**
+
+   ```bash
+   npx eas-cli@latest credentials --platform ios
+   ```
+
+   1. Build profile: **preview**.
+   2. Choose **Build Credentials: Manage everything needed to build your
+      project**.
+   3. Choose **Distribution Certificate: Add a new one to your account**.
+      Expo makes the certificate at Apple and keeps it.
+   4. If it asks **"Select certificates to revoke"**: do not tick any.
+      Press **Ctrl+C** and stop. Ask first. (Revoke means Apple deletes the
+      certificate. Apps signed with it stop opening at once.)
+   5. "Do you want ... to use the new Distribution Certificate?": **Yes**.
+      Expo makes a new profile for the test app.
+   6. Choose **Go back**, then **Exit**.
+
+3. **Dev app: use the same new certificate.** Note `APP_VARIANT=development`
+   at the start:
+
+   ```bash
+   APP_VARIANT=development npx eas-cli@latest credentials --platform ios
+   ```
+
+   1. Build profile: **development**.
+   2. **Build Credentials: Manage everything needed to build your project**.
+   3. **Distribution Certificate: Use an existing one for your project**.
+   4. Pick the certificate with the latest end date (in 2028).
+   5. Check that the output says `com.magecardgame.dev`.
+   6. **Go back**, then **Exit**.
+
+4. **App Store app: use the same new certificate.**
+
+   ```bash
+   npx eas-cli@latest credentials --platform ios
+   ```
+
+   Build profile **production**. Then do 2–4 and 6 from the dev app step.
+
+5. Make new builds of the test app and the dev app (**Build from GitHub** is
+   fine). Install them on every phone again.
+6. In this guide and in [IOS-BUILDS.md](IOS-BUILDS.md), change
+   "11 Oct 2027" to the new end date.
 
 ---
 
@@ -512,6 +538,8 @@ Apple allows up to 100 iPhones per year.
   4. Under `"base"`, put the new names in `"ios": { "image": ... }` and
      `"android": { "image": ... }`.
   5. Choose **Create a new branch and start a pull request**. Then merge it.
-
-For the yearly certificate renewal (before 11 Oct 2027), see
-[IOS-BUILDS.md](IOS-BUILDS.md).
+- **"not associated with Apple Team ID LN6694N33Y"** or an Apple login
+  question: the Apple key is not on. Do step 6 of "Get the Terminal ready
+  (with the Apple key)" in this Terminal window.
+- **"The App Store Connect API key in use has no Issuer ID"**: the
+  `EXPO_ASC_ISSUER_ID` part is missing. Run the whole key line again.
