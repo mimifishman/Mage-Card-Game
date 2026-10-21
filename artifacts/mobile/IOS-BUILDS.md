@@ -24,9 +24,9 @@ Both are **Ad Hoc** builds. They install only on iPhones listed in their profile
 - **Apple key for signing work:** App Store Connect team key **Expo Admin**, Key ID
   `5B6UHLK7V9`, Issuer ID `3f026ab2-defe-4d4a-b2ad-8383ce691847`, access **Admin**. The
   `.p8` file is at `~/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8` (mode 600) on
-  Mimi's Mac, with a copy in her password manager. Never in git. With it, EAS registers
-  devices, regenerates Ad Hoc profiles and creates certificates without anyone's Apple
-  login (needed because team `LN6694N33Y` is an Individual account, so Mimi cannot be
+  Mimi's Mac only. There is no other copy: if it is lost, revoke it and make a new Admin
+  key. Never in git. With it, EAS registers devices, regenerates Ad Hoc profiles and
+  creates certificates without anyone's Apple login (needed because team `LN6694N33Y` is an Individual account, so Mimi cannot be
   added to Certificates, IDs & Profiles). Tested read-only on 21 Oct 2026: it lists the
   team's certificate, devices and profiles.
 - **Apple key for uploads:** team key **Expo**, Key ID `VV4G7U8U8C`, **App Manager**,
