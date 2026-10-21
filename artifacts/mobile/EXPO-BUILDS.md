@@ -271,7 +271,7 @@ The key is a small secret file.
 - Issuer ID: `3f026ab2-defe-4d4a-b2ad-8383ce691847`
 - Apple team: `LN6694N33Y` (Jason Kipp, Individual)
 - The file: `~/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8` on
-  Mimi's Mac. A copy is in Mimi's password manager.
+  Mimi's Mac.
 
 Rules:
 
@@ -297,9 +297,9 @@ ls -l ~/.appstoreconnect/private_keys/
 
 It must show `AuthKey_5B6UHLK7V9.p8` and `-rw-------` (only you can read it).
 
-**New Mac, or the file is gone:**
+**New Mac:**
 
-1. Get the file from the password manager.
+1. Copy the file from the old Mac (AirDrop) or from a Time Machine backup.
 2. Save it as `~/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8`.
 3. Lock it:
 
@@ -307,15 +307,24 @@ It must show `AuthKey_5B6UHLK7V9.p8` and `-rw-------` (only you can read it).
    chmod 700 ~/.appstoreconnect ~/.appstoreconnect/private_keys && chmod 600 ~/.appstoreconnect/private_keys/AuthKey_5B6UHLK7V9.p8
    ```
 
+There is no other copy. If you cannot copy the file, make a new key (next part).
+
 **The file is lost, or someone else saw it:**
 
 1. App Store Connect → **Integrations** → **Team Keys**. Click **Revoke**
    next to **Expo Admin**. (Revoke means Apple turns the key off.)
 2. Make a new key: **+**, name `Expo Admin`, Access **Admin**, **Generate**,
    **Download**. Apple lets you download it only one time.
-3. Put it in the Mac folder and in the password manager, as above.
+3. Move it into the Mac folder and lock it:
+
+   ```bash
+   mkdir -p ~/.appstoreconnect/private_keys && mv ~/Downloads/AuthKey_*.p8 ~/.appstoreconnect/private_keys/ && chmod 700 ~/.appstoreconnect ~/.appstoreconnect/private_keys && chmod 600 ~/.appstoreconnect/private_keys/*.p8
+   ```
+
 4. In this guide and in [IOS-BUILDS.md](IOS-BUILDS.md), change the Key ID
    and the file name.
+
+You are Admin, so you can do this alone. It takes about 2 minutes.
 
 ---
 
